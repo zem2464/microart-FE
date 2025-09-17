@@ -1,25 +1,25 @@
-import React, { useState } from 'react';
-import { Form, Input, Button, Card, Alert, Typography } from 'antd';
-import { UserOutlined, LockOutlined } from '@ant-design/icons';
-import { useAuth } from '../contexts/AuthContext';
+import React, { useState } from "react";
+import { Form, Input, Button, Card, Alert, Typography } from "antd";
+import { UserOutlined, LockOutlined } from "@ant-design/icons";
+import { useAuth } from "../contexts/AuthContext";
 
 const { Title, Text } = Typography;
 
 const Login = () => {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const { login } = useAuth();
 
   const onFinish = async (values) => {
     setLoading(true);
-    setError('');
-    
-    const result = await login(values.email, values.password);
-    
+    setError("");
+    console.log("Received values of form: ", values);
+    const result = await login(values);
+
     if (!result.success) {
       setError(result.error);
     }
-    
+
     setLoading(false);
   };
 
@@ -30,16 +30,14 @@ const Login = () => {
           <Title level={2} className="text-gradient">
             MicroArt
           </Title>
-          <Text type="secondary">
-            Photo editing workflow management system
-          </Text>
+          <Text type="secondary">Photo editing workflow management system</Text>
         </div>
-        
+
         <Card className="card-shadow">
           <Title level={3} className="text-center mb-4">
             Sign in to your account
           </Title>
-          
+
           {error && (
             <Alert
               message={error}
@@ -47,22 +45,17 @@ const Login = () => {
               showIcon
               closable
               className="mb-4"
-              onClose={() => setError('')}
+              onClose={() => setError("")}
             />
           )}
-          
-          <Form
-            name="login"
-            onFinish={onFinish}
-            layout="vertical"
-            size="large"
-          >
+
+          <Form name="login" onFinish={onFinish} layout="vertical" size="large">
             <Form.Item
               name="email"
               label="Email"
               rules={[
-                { required: true, message: 'Please input your email!' },
-                { type: 'email', message: 'Please enter a valid email!' }
+                { required: true, message: "Please input your email!" },
+                { type: "email", message: "Please enter a valid email!" },
               ]}
             >
               <Input prefix={<UserOutlined />} placeholder="Email" />
@@ -71,15 +64,20 @@ const Login = () => {
             <Form.Item
               name="password"
               label="Password"
-              rules={[{ required: true, message: 'Please input your password!' }]}
+              rules={[
+                { required: true, message: "Please input your password!" },
+              ]}
             >
-              <Input.Password prefix={<LockOutlined />} placeholder="Password" />
+              <Input.Password
+                prefix={<LockOutlined />}
+                placeholder="Password"
+              />
             </Form.Item>
 
             <Form.Item>
-              <Button 
-                type="primary" 
-                htmlType="submit" 
+              <Button
+                type="primary"
+                htmlType="submit"
                 loading={loading}
                 className="w-full"
               >
@@ -87,11 +85,15 @@ const Login = () => {
               </Button>
             </Form.Item>
           </Form>
-          
+
           <div className="mt-4 text-center">
             <Text type="secondary" className="text-sm">
-              Demo accounts:<br />
-              <strong>admin@microart.com</strong> / <strong>manager@microart.com</strong> / <strong>employee@microart.com</strong><br />
+              Demo accounts:
+              <br />
+              <strong>admin@microart.com</strong> /{" "}
+              <strong>manager@microart.com</strong> /{" "}
+              <strong>employee@microart.com</strong>
+              <br />
               Password: <strong>password123</strong>
             </Text>
           </div>

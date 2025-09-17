@@ -1,42 +1,47 @@
-import React from 'react';
-import { Row, Col, Card, Statistic, Typography, List, Progress } from 'antd';
-import { ProjectOutlined, UserOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import React from "react";
+import { Row, Col, Card, Statistic, Typography, List, Progress } from "antd";
+import {
+  ProjectOutlined,
+  UserOutlined,
+  CheckCircleOutlined,
+  ClockCircleOutlined,
+} from "@ant-design/icons";
 
 const { Title } = Typography;
 
 const Dashboard = () => {
   const stats = [
     {
-      title: 'Total Projects',
+      title: "Total Projects",
       value: 12,
       icon: <ProjectOutlined className="text-blue-500" />,
-      color: 'blue'
+      color: "blue",
     },
     {
-      title: 'Active Users',
+      title: "Active Users",
       value: 24,
       icon: <UserOutlined className="text-green-500" />,
-      color: 'green'
+      color: "green",
     },
     {
-      title: 'Completed Tasks',
+      title: "Completed Tasks",
       value: 156,
       icon: <CheckCircleOutlined className="text-purple-500" />,
-      color: 'purple'
+      color: "purple",
     },
     {
-      title: 'Pending Tasks',
+      title: "Pending Tasks",
       value: 23,
       icon: <ClockCircleOutlined className="text-orange-500" />,
-      color: 'orange'
-    }
+      color: "orange",
+    },
   ];
 
   const recentProjects = [
-    { name: 'Wedding Photography Edit', progress: 85, status: 'In Progress' },
-    { name: 'Corporate Headshots', progress: 100, status: 'Completed' },
-    { name: 'Product Catalog Shoot', progress: 45, status: 'In Progress' },
-    { name: 'Fashion Portfolio', progress: 30, status: 'Planning' }
+    { name: "Wedding Photography Edit", progress: 85, status: "In Progress" },
+    { name: "Corporate Headshots", progress: 100, status: "Completed" },
+    { name: "Product Catalog Shoot", progress: 45, status: "In Progress" },
+    { name: "Fashion Portfolio", progress: 30, status: "Planning" },
   ];
 
   return (
@@ -44,7 +49,7 @@ const Dashboard = () => {
       <Row gutter={[16, 16]} className="mb-6">
         {stats.map((stat, index) => (
           <Col xs={24} sm={12} lg={6} key={index}>
-            <Card className="card-shadow">
+            <Card>
               <Statistic
                 title={stat.title}
                 value={stat.value}
@@ -65,8 +70,14 @@ const Dashboard = () => {
                 <List.Item>
                   <div className="w-full">
                     <div className="flex justify-between items-center mb-2">
-                      <Title level={5} className="mb-0">{project.name}</Title>
-                      <span className={`status-badge ${project.status.toLowerCase().replace(' ', '-')}`}>
+                      <Title level={5} className="mb-0">
+                        {project.name}
+                      </Title>
+                      <span
+                        className={`status-badge ${project.status
+                          .toLowerCase()
+                          .replace(" ", "-")}`}
+                      >
                         {project.status}
                       </span>
                     </div>
@@ -88,7 +99,7 @@ const Dashboard = () => {
                 </div>
                 <Progress percent={92} status="active" />
               </div>
-              
+
               <div>
                 <div className="flex justify-between mb-1">
                   <span>Storage Used</span>
@@ -96,7 +107,7 @@ const Dashboard = () => {
                 </div>
                 <Progress percent={68} />
               </div>
-              
+
               <div>
                 <div className="flex justify-between mb-1">
                   <span>Active Sessions</span>

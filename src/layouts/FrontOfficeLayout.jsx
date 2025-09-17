@@ -2,55 +2,59 @@ import React from 'react';
 import { Layout, Menu, Button, Dropdown, Avatar, Typography } from 'antd';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import {
-  DashboardOutlined,
+  CheckSquareOutlined,
   ProjectOutlined,
   UserOutlined,
-  SettingOutlined,
-  BarChartOutlined,
+  CalendarOutlined,
   LogoutOutlined,
   BellOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useReactiveVar } from '@apollo/client';
+import { userCacheVar } from '../cache/userCacheVar';
+import ViewSwitcher from '../components/ViewSwitcher';
 
 // Import pages
-import Dashboard from '../pages/BackOffice/Dashboard';
-import Projects from '../pages/BackOffice/Projects';
-import Users from '../pages/BackOffice/Users';
-import Reports from '../pages/BackOffice/Reports';
-import Settings from '../pages/BackOffice/Settings';
+import TaskBoard from '../pages/FrontOffice/TaskBoard';
+import ProjectView from '../pages/FrontOffice/ProjectView';
+import Calendar from '../pages/FrontOffice/Calendar';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
 
-const BackOfficeLayout = () => {
-  const { user, logout } = useAuth();
+const FrontOfficeLayout = () => {
+  const user = useReactiveVar(userCacheVar); // Use cache variable instead of auth context
+  const { logout } = useAuth();
   const location = useLocation();
+
+  // Allow employees and admin users (when they choose employee view)
+  const role = user?.role?.name?.toLowerCase();
+  if (role !== 'employee' && role !== 'admin') {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+          <p className="text-gray-600">You don't have permission to access this area.</p>
+        </div>
+      </div>
+    );
+  }
 
   const menuItems = [
     {
       key: '/',
-      icon: <DashboardOutlined />,
-      label: <Link to="/">Dashboard</Link>,
+      icon: <CheckSquareOutlined />,
+      label: <Link to="/">Task Board</Link>,
     },
     {
       key: '/projects',
       icon: <ProjectOutlined />,
-      label: <Link to="/projects">Projects</Link>,
+      label: <Link to="/projects">Project View</Link>,
     },
     {
-      key: '/users',
-      icon: <UserOutlined />,
-      label: <Link to="/users">Users</Link>,
-    },
-    {
-      key: '/reports',
-      icon: <BarChartOutlined />,
-      label: <Link to="/reports">Reports</Link>,
-    },
-    {
-      key: '/settings',
-      icon: <SettingOutlined />,
-      label: <Link to="/settings">Settings</Link>,
+      key: '/calendar',
+      icon: <CalendarOutlined />,
+      label: <Link to="/calendar">Calendar</Link>,
     },
   ];
 
@@ -59,11 +63,6 @@ const BackOfficeLayout = () => {
       key: 'profile',
       icon: <UserOutlined />,
       label: 'Profile',
-    },
-    {
-      key: 'settings',
-      icon: <SettingOutlined />,
-      label: 'Settings',
     },
     {
       type: 'divider',
@@ -76,6 +75,13 @@ const BackOfficeLayout = () => {
     },
   ];
 
+  const getPageTitle = () => {
+    if (location.pathname === '/') return 'Task Board';
+    if (location.pathname === '/projects') return 'Project View';
+    if (location.pathname === '/calendar') return 'Calendar';
+    return 'Dashboard';
+  };
+
   return (
     <Layout className="min-h-screen">
       <Sider
@@ -85,7 +91,7 @@ const BackOfficeLayout = () => {
       >
         <div className="p-4 border-b border-gray-200">
           <Title level={4} className="mb-0 text-gradient">
-            MicroArt BackOffice
+            MicroArt Workspace
           </Title>
         </div>
         
@@ -101,15 +107,12 @@ const BackOfficeLayout = () => {
         <Header className="bg-white border-b border-gray-200 px-6 flex justify-between items-center">
           <div>
             <Title level={4} className="mb-0">
-              {location.pathname === '/' && 'Dashboard'}
-              {location.pathname === '/projects' && 'Projects'}
-              {location.pathname === '/users' && 'Users'}
-              {location.pathname === '/reports' && 'Reports'}
-              {location.pathname === '/settings' && 'Settings'}
+              {getPageTitle()}
             </Title>
           </div>
           
           <div className="flex items-center space-x-4">
+            <ViewSwitcher size="small" />
             <Button type="text" icon={<BellOutlined />} />
             
             <Dropdown
@@ -129,11 +132,9 @@ const BackOfficeLayout = () => {
         
         <Content className="p-6 bg-gray-50">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/projects" element={<Projects />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/settings" element={<Settings />} />
+            <Route path="/" element={<TaskBoard />} />
+            <Route path="/projects" element={<ProjectView />} />
+            <Route path="/calendar" element={<Calendar />} />
           </Routes>
         </Content>
       </Layout>
@@ -141,4 +142,4 @@ const BackOfficeLayout = () => {
   );
 };
 
-export default BackOfficeLayout;
+export default FrontOfficeLayout;
