@@ -10,6 +10,7 @@ import {
   LogoutOutlined,
   BellOutlined,
   TagsOutlined,
+  SecurityScanOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
@@ -24,6 +25,7 @@ import Reports from "../pages/BackOffice/Reports";
 import Settings from "../pages/BackOffice/Settings";
 import TaskTypes from "../pages/BackOffice/TaskTypes";
 import Roles from "../pages/BackOffice/Roles";
+import AuditLogs from "../pages/BackOffice/AuditLogs";
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -44,6 +46,8 @@ const BackOfficeLayout = () => {
         return "Reports";
       case "/settings":
         return "Settings";
+      case "/audit-logs":
+        return "Audit Logs";
       default:
         return "";
     }
@@ -82,6 +86,11 @@ const BackOfficeLayout = () => {
       key: "/roles",
       icon: <UserOutlined />, // You can use a different icon if desired
       label: <Link to="/roles">Roles</Link>,
+    },
+    {
+      key: "/audit-logs",
+      icon: <SecurityScanOutlined />,
+      label: <Link to="/audit-logs">Audit Logs</Link>,
     },
     {
       key: "/settings",
@@ -155,6 +164,7 @@ const BackOfficeLayout = () => {
           <Route path="/task-types" element={<TaskTypes />} />
           <Route path="/users" element={<Users />} />
           <Route path="/roles" element={<Roles />} />
+          <Route path="/audit-logs" element={<AuditLogs />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>

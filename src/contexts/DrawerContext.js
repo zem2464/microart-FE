@@ -6,6 +6,8 @@ import TaskTypeForm from '../components/TaskTypeForm';
 import TaskTypeDetail from '../components/TaskTypeDetail';
 import RoleDetail from '../components/RoleDetail';
 import RoleForm from '../components/RoleForm';
+import UserDetail from '../components/UserDetail';
+import UserForm from '../components/UserForm';
 
 const AppDrawerContext = createContext();
 
@@ -238,7 +240,13 @@ export const AppDrawerProvider = ({ children }) => {
 						</Space>
 					}
 				>
-					<div>User Form Component (To be implemented)</div>
+					<UserForm
+						open={true}
+						user={userFormDrawer.user}
+						onClose={closeUserFormDrawer}
+						onSuccess={userFormDrawer.onSuccess}
+						mode={userFormDrawer.mode}
+					/>
 				</ModuleDrawer>
 			)}
 			{/* User Detail Drawer */}
@@ -252,7 +260,10 @@ export const AppDrawerProvider = ({ children }) => {
 					destroyOnClose
 					maskClosable
 				>
-					<div>User Detail Component (To be implemented)</div>
+					<UserDetail 
+						user={userDetailDrawer.user} 
+						onClose={closeUserDetailDrawer} 
+					/>
 				</ModuleDrawer>
 			)}
 		</AppDrawerContext.Provider>

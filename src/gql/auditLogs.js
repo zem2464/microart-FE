@@ -31,11 +31,53 @@ export const GET_AUDIT_LOGS = gql`
       action
       tableName
       recordId
-      description
-      status
-      timestamp
+      userId
       userEmail
       userRole
+      ipAddress
+      userAgent
+      requestUrl
+      requestMethod
+      oldValues
+      newValues
+      changedFields
+      description
+      metadata
+      status
+      errorMessage
+      timestamp
+      user {
+        id
+        firstName
+        lastName
+        email
+      }
+    }
+  }
+`;
+
+export const GET_AUDIT_LOG = gql`
+  query GetAuditLog($id: ID!) {
+    auditLog(id: $id) {
+      id
+      action
+      tableName
+      recordId
+      userId
+      userEmail
+      userRole
+      ipAddress
+      userAgent
+      requestUrl
+      requestMethod
+      oldValues
+      newValues
+      changedFields
+      description
+      metadata
+      status
+      errorMessage
+      timestamp
       user {
         id
         firstName
