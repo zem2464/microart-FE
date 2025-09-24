@@ -23,6 +23,7 @@ import Users from "../pages/BackOffice/Users";
 import Reports from "../pages/BackOffice/Reports";
 import Settings from "../pages/BackOffice/Settings";
 import TaskTypes from "../pages/BackOffice/TaskTypes";
+import Roles from "../pages/BackOffice/Roles";
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -78,8 +79,13 @@ const BackOfficeLayout = () => {
       label: <Link to="/reports">Reports</Link>,
     },
     {
+      key: "/roles",
+      icon: <UserOutlined />, // You can use a different icon if desired
+      label: <Link to="/roles">Roles</Link>,
+    },
+    {
       key: "/settings",
-      icon: <SettingOutlined />,
+      icon: <SettingOutlined />, 
       label: <Link to="/settings">Settings</Link>,
     },
   ];
@@ -148,6 +154,7 @@ const BackOfficeLayout = () => {
           <Route path="/projects" element={<Projects />} />
           <Route path="/task-types" element={<TaskTypes />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/roles" element={<Roles />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>

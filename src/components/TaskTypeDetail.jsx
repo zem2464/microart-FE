@@ -22,6 +22,7 @@ import { useQuery } from '@apollo/client';
 import { formatDateTime, formatSmartDate } from '../utils/dateUtils';
 import { GET_RECORD_AUDIT_LOGS } from '../gql/auditLogs';
 import { ME_QUERY } from '../gql/me';
+import { hasPermission, MODULES, MODULE_ACTIONS, generatePermission } from '../config/permissions';
 import { 
   CleanDescriptionsSection,
   CleanCollapsibleSection
@@ -73,8 +74,9 @@ const AuditLogTimeline = ({ taskTypeId, expanded }) => {
   
   if (!data?.recordAuditLogs?.length) {
     const currentUserRole = userData?.me?.role?.name;
-    const hasAuditPermission = userData?.me?.role?.permissions?.includes('auditLogs.read');
-    
+    const auditReadPermission = generatePermission(MODULES.AUDIT_LOGS, 'read');
+    const hasAuditPermission = hasPermission(userData?.me, auditReadPermission);
+
     return (
       <Empty 
         description={
