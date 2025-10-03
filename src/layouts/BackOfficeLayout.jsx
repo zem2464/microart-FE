@@ -11,6 +11,7 @@ import {
   BellOutlined,
   TagsOutlined,
   SecurityScanOutlined,
+  DollarOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
@@ -24,34 +25,15 @@ import Users from "../pages/BackOffice/Users";
 import Reports from "../pages/BackOffice/Reports";
 import Settings from "../pages/BackOffice/Settings";
 import TaskTypes from "../pages/BackOffice/TaskTypes";
+import WorkTypes from "../pages/BackOffice/WorkTypes";
+import Gradings from "../pages/BackOffice/Gradings";
 import Roles from "../pages/BackOffice/Roles";
 import AuditLogs from "../pages/BackOffice/AuditLogs";
 
-const { Header, Sider, Content } = Layout;
+const { Header, Content } = Layout;
 const { Title } = Typography;
 
 const BackOfficeLayout = () => {
-  // Helper to get page title from route
-  const getPageTitle = () => {
-    switch (location.pathname) {
-      case "/":
-        return "Dashboard";
-      case "/projects":
-        return "Projects";
-      case "/task-types":
-        return "Task Types";
-      case "/users":
-        return "Users";
-      case "/reports":
-        return "Reports";
-      case "/settings":
-        return "Settings";
-      case "/audit-logs":
-        return "Audit Logs";
-      default:
-        return "";
-    }
-  };
   const user = useReactiveVar(userCacheVar); // Use cache variable instead of auth context
   const { logout } = useAuth();
   const location = useLocation();
@@ -71,6 +53,16 @@ const BackOfficeLayout = () => {
       key: "/task-types",
       icon: <TagsOutlined />,
       label: <Link to="/task-types">Task Types</Link>,
+    },
+    {
+      key: "/work-types",
+      icon: <ProjectOutlined />,
+      label: <Link to="/work-types">Work Types</Link>,
+    },
+    {
+      key: "/gradings",
+      icon: <DollarOutlined />,
+      label: <Link to="/gradings">Gradings</Link>,
     },
     {
       key: "/users",
@@ -162,6 +154,8 @@ const BackOfficeLayout = () => {
           <Route path="/" element={<Dashboard />} />
           <Route path="/projects" element={<Projects />} />
           <Route path="/task-types" element={<TaskTypes />} />
+          <Route path="/work-types" element={<WorkTypes />} />
+          <Route path="/gradings" element={<Gradings />} />
           <Route path="/users" element={<Users />} />
           <Route path="/roles" element={<Roles />} />
           <Route path="/audit-logs" element={<AuditLogs />} />

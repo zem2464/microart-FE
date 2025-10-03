@@ -8,6 +8,10 @@ import RoleDetail from '../components/RoleDetail';
 import RoleForm from '../components/RoleForm';
 import UserDetail from '../components/UserDetail';
 import UserForm from '../components/UserForm';
+import WorkTypeForm from '../components/WorkTypeForm';
+import WorkTypeDetail from '../components/WorkTypeDetail';
+import GradingForm from '../components/GradingForm';
+import GradingDetail from '../components/GradingDetail';
 
 const AppDrawerContext = createContext();
 
@@ -50,6 +54,22 @@ export const AppDrawerProvider = ({ children }) => {
 	const showUserDetailDrawer = (user) => setUserDetailDrawer({ open: true, user });
 	const closeUserDetailDrawer = () => setUserDetailDrawer({ open: false, user: null });
 
+	// WorkType Drawers
+	const [workTypeFormDrawer, setWorkTypeFormDrawer] = useState({ open: false, workType: null, mode: 'create', onSuccess: null });
+	const [workTypeDetailDrawer, setWorkTypeDetailDrawer] = useState({ open: false, workType: null });
+	const showWorkTypeFormDrawer = (workType = null, mode = 'create', onSuccess = null) => setWorkTypeFormDrawer({ open: true, workType, mode, onSuccess });
+	const closeWorkTypeFormDrawer = () => setWorkTypeFormDrawer({ open: false, workType: null, mode: 'create', onSuccess: null });
+	const showWorkTypeDetailDrawer = (workType) => setWorkTypeDetailDrawer({ open: true, workType });
+	const closeWorkTypeDetailDrawer = () => setWorkTypeDetailDrawer({ open: false, workType: null });
+
+	// Grading Drawers
+	const [gradingFormDrawer, setGradingFormDrawer] = useState({ open: false, grading: null, mode: 'create', onSuccess: null });
+	const [gradingDetailDrawer, setGradingDetailDrawer] = useState({ open: false, grading: null });
+	const showGradingFormDrawer = (grading = null, mode = 'create', onSuccess = null) => setGradingFormDrawer({ open: true, grading, mode, onSuccess });
+	const closeGradingFormDrawer = () => setGradingFormDrawer({ open: false, grading: null, mode: 'create', onSuccess: null });
+	const showGradingDetailDrawer = (grading) => setGradingDetailDrawer({ open: true, grading });
+	const closeGradingDetailDrawer = () => setGradingDetailDrawer({ open: false, grading: null });
+
 	const value = {
 		// Role
 		showRoleFormDrawer,
@@ -71,6 +91,16 @@ export const AppDrawerProvider = ({ children }) => {
 		closeUserFormDrawer,
 		showUserDetailDrawer,
 		closeUserDetailDrawer,
+		// WorkType
+		showWorkTypeFormDrawer,
+		closeWorkTypeFormDrawer,
+		showWorkTypeDetailDrawer,
+		closeWorkTypeDetailDrawer,
+		// Grading
+		showGradingFormDrawer,
+		closeGradingFormDrawer,
+		showGradingDetailDrawer,
+		closeGradingDetailDrawer,
 	};
 
 	return (
@@ -263,6 +293,104 @@ export const AppDrawerProvider = ({ children }) => {
 					<UserDetail 
 						user={userDetailDrawer.user} 
 						onClose={closeUserDetailDrawer} 
+					/>
+				</ModuleDrawer>
+			)}
+
+			{/* WorkType Form Drawer */}
+			{workTypeFormDrawer.open && (
+				<ModuleDrawer
+					open={workTypeFormDrawer.open}
+					title={workTypeFormDrawer.mode === 'edit' ? 'Edit Work Type' : 'Add Work Type'}
+					width={700}
+					placement="right"
+					onClose={closeWorkTypeFormDrawer}
+					destroyOnClose
+					maskClosable
+					footer={
+						<Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
+							<Button onClick={closeWorkTypeFormDrawer} size="middle">Cancel</Button>
+							<Button type="primary" size="middle" onClick={() => {
+								const form = document.querySelector('form');
+								if (form) form.requestSubmit();
+							}}>
+								{workTypeFormDrawer.mode === 'edit' ? 'Update Work Type' : 'Create Work Type'}
+							</Button>
+						</Space>
+					}
+				>
+					<WorkTypeForm
+						workType={workTypeFormDrawer.workType}
+						mode={workTypeFormDrawer.mode}
+						onClose={closeWorkTypeFormDrawer}
+						onSuccess={workTypeFormDrawer.onSuccess}
+					/>
+				</ModuleDrawer>
+			)}
+
+			{/* WorkType Detail Drawer */}
+			{workTypeDetailDrawer.open && (
+				<ModuleDrawer
+					open={workTypeDetailDrawer.open}
+					title="Work Type Details"
+					width={900}
+					placement="right"
+					onClose={closeWorkTypeDetailDrawer}
+					destroyOnClose
+					maskClosable
+				>
+					<WorkTypeDetail 
+						workType={workTypeDetailDrawer.workType}
+						onEdit={() => {
+							closeWorkTypeDetailDrawer();
+							showWorkTypeFormDrawer(workTypeDetailDrawer.workType, 'edit');
+						}}
+						onClose={closeWorkTypeDetailDrawer} 
+					/>
+				</ModuleDrawer>
+			)}
+
+			{/* Grading Form Drawer */}
+			{gradingFormDrawer.open && (
+				<ModuleDrawer
+					open={gradingFormDrawer.open}
+					title={gradingFormDrawer.mode === 'edit' ? 'Edit Grading' : 'Add Grading'}
+					width={900}
+					placement="right"
+					destroyOnClose
+					onClose={closeGradingFormDrawer}
+					footer={null}
+				>
+					<GradingForm
+						grading={gradingFormDrawer.grading}
+						mode={gradingFormDrawer.mode}
+						onCancel={closeGradingFormDrawer}
+						onSuccess={() => {
+							closeGradingFormDrawer();
+							gradingFormDrawer.onSuccess?.();
+						}}
+					/>
+				</ModuleDrawer>
+			)}
+
+			{/* Grading Detail Drawer */}
+			{gradingDetailDrawer.open && (
+				<ModuleDrawer
+					open={gradingDetailDrawer.open}
+					title="Grading Details"
+					width={1000}
+					placement="right"
+					onClose={closeGradingDetailDrawer}
+					destroyOnClose
+					maskClosable
+				>
+					<GradingDetail 
+						grading={gradingDetailDrawer.grading}
+						onEdit={() => {
+							closeGradingDetailDrawer();
+							showGradingFormDrawer(gradingDetailDrawer.grading, 'edit');
+						}}
+						onClose={closeGradingDetailDrawer} 
 					/>
 				</ModuleDrawer>
 			)}

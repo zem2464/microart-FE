@@ -48,9 +48,7 @@ export const AuthProvider = ({ children }) => {
     });
 
   useEffect(() => {
-    console.log('ME query result changed:', { meResult, authError }); // Debug log
     if (meResult && meResult.me) {
-      console.log('Setting user as logged in from ME query:', meResult.me); // Debug log
       isLoggedIn(true);
       meUserData(meResult.me);
       userCacheVar(meResult.me); // Also set userCacheVar for App.js routing
@@ -269,15 +267,11 @@ export const AuthProvider = ({ children }) => {
         },
       });
 
-      console.log('Login response data:', data); // Debug log
-
       // Check the actual response structure from backend
       if (data?.login?.user) {
-        console.log('Authentication successful, setting logged in state'); // Debug log
         isLoggedIn(true);
         
         // Set user data (the refetchQueries should handle ME query too)
-        console.log('Setting user data:', data.login.user); // Debug log
         meUserData(data.login.user);
         userCacheVar(data.login.user); // Also set userCacheVar for App.js routing
         
@@ -286,12 +280,9 @@ export const AuthProvider = ({ children }) => {
           reconnectWebSocket();
         }, 1000);
         
-        console.log('Navigating to home page...'); // Debug log
         navigate("/");
         return { success: true };
       }
-      
-      console.log('Login failed - no user data in response'); // Debug log
       return { success: false, error: "No user returned" };
     } catch (err) {
       const { graphQLErrors, networkError } = err;

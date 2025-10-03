@@ -171,6 +171,7 @@ const RoleForm = ({ open, onClose, role, onSuccess }) => {
         >
           <Select.Option value="ADMIN">Admin</Select.Option>
           <Select.Option value="MANAGER">Manager</Select.Option>
+          <Select.Option value="CLIENT_MANAGER">Client Manager</Select.Option>
           <Select.Option value="USER">User</Select.Option>
         </Select>
         {/* Action buttons moved to Drawer footer */}
