@@ -7,7 +7,9 @@ import {
   UserOutlined,
   CalendarOutlined,
   LogoutOutlined,
-  BellOutlined
+  BellOutlined,
+  TeamOutlined,
+  DashboardOutlined
 } from '@ant-design/icons';
 import { useAuth } from '../contexts/AuthContext';
 import { useReactiveVar } from '@apollo/client';
@@ -18,6 +20,8 @@ import ViewSwitcher from '../components/ViewSwitcher';
 import TaskBoard from '../pages/FrontOffice/TaskBoard';
 import ProjectView from '../pages/FrontOffice/ProjectView';
 import Calendar from '../pages/FrontOffice/Calendar';
+import ClientDashboard from '../pages/FrontOffice/ClientDashboard';
+import ClientList from '../pages/FrontOffice/ClientList';
 
 const { Header, Sider, Content } = Layout;
 const { Title } = Typography;
@@ -56,6 +60,23 @@ const FrontOfficeLayout = () => {
       icon: <CalendarOutlined />,
       label: <Link to="/calendar">Calendar</Link>,
     },
+    {
+      key: 'clients',
+      icon: <TeamOutlined />,
+      label: 'Client Management',
+      children: [
+        {
+          key: '/clients/dashboard',
+          icon: <DashboardOutlined />,
+          label: <Link to="/clients/dashboard">Client Dashboard</Link>,
+        },
+        {
+          key: '/clients',
+          icon: <TeamOutlined />,
+          label: <Link to="/clients">Client List</Link>,
+        },
+      ],
+    },
   ];
 
   const userMenuItems = [
@@ -79,6 +100,8 @@ const FrontOfficeLayout = () => {
     if (location.pathname === '/') return 'Task Board';
     if (location.pathname === '/projects') return 'Project View';
     if (location.pathname === '/calendar') return 'Calendar';
+    if (location.pathname === '/clients/dashboard') return 'Client Dashboard';
+    if (location.pathname === '/clients') return 'Client Management';
     return 'Dashboard';
   };
 
@@ -135,6 +158,8 @@ const FrontOfficeLayout = () => {
             <Route path="/" element={<TaskBoard />} />
             <Route path="/projects" element={<ProjectView />} />
             <Route path="/calendar" element={<Calendar />} />
+            <Route path="/clients/dashboard" element={<ClientDashboard />} />
+            <Route path="/clients" element={<ClientList />} />
           </Routes>
         </Content>
       </Layout>

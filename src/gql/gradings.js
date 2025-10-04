@@ -72,7 +72,16 @@ export const GET_GRADING = gql`
 
 export const GET_GRADINGS_BY_WORK_TYPE = gql`
   query GetGradingsByWorkType($workTypeId: ID!) {
-    gradingsByWorkType(workTypeId: $workTypeId) {
+    gradingsByWorkType(workTypeIds: [$workTypeId]) {
+      ...GradingInfo
+    }
+  }
+  ${GRADING_FRAGMENT}
+`;
+
+export const GET_GRADINGS_BY_WORK_TYPES = gql`
+  query GetGradingsByWorkTypes($workTypeIds: [ID!]!) {
+    gradingsByWorkType(workTypeIds: $workTypeIds) {
       ...GradingInfo
     }
   }

@@ -12,6 +12,8 @@ import WorkTypeForm from '../components/WorkTypeForm';
 import WorkTypeDetail from '../components/WorkTypeDetail';
 import GradingForm from '../components/GradingForm';
 import GradingDetail from '../components/GradingDetail';
+import ClientForm from '../pages/FrontOffice/ClientForm';
+import ClientDetail from '../components/ClientDetail';
 
 const AppDrawerContext = createContext();
 
@@ -70,6 +72,14 @@ export const AppDrawerProvider = ({ children }) => {
 	const showGradingDetailDrawer = (grading) => setGradingDetailDrawer({ open: true, grading });
 	const closeGradingDetailDrawer = () => setGradingDetailDrawer({ open: false, grading: null });
 
+	// Client Drawers
+	const [clientFormDrawer, setClientFormDrawer] = useState({ open: false, client: null, mode: 'create', onSuccess: null });
+	const [clientDetailDrawer, setClientDetailDrawer] = useState({ open: false, client: null });
+	const showClientFormDrawer = (client = null, mode = 'create', onSuccess = null) => setClientFormDrawer({ open: true, client, mode, onSuccess });
+	const closeClientFormDrawer = () => setClientFormDrawer({ open: false, client: null, mode: 'create', onSuccess: null });
+	const showClientDetailDrawer = (client) => setClientDetailDrawer({ open: true, client });
+	const closeClientDetailDrawer = () => setClientDetailDrawer({ open: false, client: null });
+
 	const value = {
 		// Role
 		showRoleFormDrawer,
@@ -101,6 +111,11 @@ export const AppDrawerProvider = ({ children }) => {
 		closeGradingFormDrawer,
 		showGradingDetailDrawer,
 		closeGradingDetailDrawer,
+		// Client
+		showClientFormDrawer,
+		closeClientFormDrawer,
+		showClientDetailDrawer,
+		closeClientDetailDrawer,
 	};
 
 	return (
@@ -391,6 +406,53 @@ export const AppDrawerProvider = ({ children }) => {
 							showGradingFormDrawer(gradingDetailDrawer.grading, 'edit');
 						}}
 						onClose={closeGradingDetailDrawer} 
+					/>
+				</ModuleDrawer>
+			)}
+
+			{/* Client Form Drawer */}
+			{clientFormDrawer.open && (
+				<ModuleDrawer
+					open={clientFormDrawer.open}
+					title={clientFormDrawer.mode === 'edit' ? 'Edit Client' : 'Add Client'}
+					width={800}
+					placement="right"
+					destroyOnClose
+					onClose={closeClientFormDrawer}
+					footer={null}
+				>
+					<ClientForm
+						client={clientFormDrawer.client}
+						mode={clientFormDrawer.mode}
+						onClose={closeClientFormDrawer}
+						onSuccess={(result) => {
+							closeClientFormDrawer();
+							if (clientFormDrawer.onSuccess) {
+								clientFormDrawer.onSuccess(result);
+							}
+						}}
+					/>
+				</ModuleDrawer>
+			)}
+
+			{/* Client Detail Drawer */}
+			{clientDetailDrawer.open && (
+				<ModuleDrawer
+					open={clientDetailDrawer.open}
+					title="Client Details"
+					width={800}
+					placement="right"
+					onClose={closeClientDetailDrawer}
+					destroyOnClose
+					maskClosable
+				>
+					<ClientDetail 
+						client={clientDetailDrawer.client}
+						onEdit={(client) => {
+							closeClientDetailDrawer();
+							showClientFormDrawer(client, 'edit');
+						}}
+						onClose={closeClientDetailDrawer} 
 					/>
 				</ModuleDrawer>
 			)}

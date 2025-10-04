@@ -12,8 +12,8 @@ const UserDetail = ({ user, onClose }) => {
   };
 
   const formatCurrency = (amount, type) => {
-    if (!amount) return '$0.00';
-    return `$${Number(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${type})`;
+    if (!amount) return '₹0.00';
+    return `₹${Number(amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} (${type})`;
   };
 
   const formatPayType = (payType, salaryAmount, salaryType, hourlyRate) => {
@@ -22,7 +22,7 @@ const UserDetail = ({ user, onClose }) => {
     if (payType === 'fixed') {
       return formatCurrency(salaryAmount, salaryType);
     } else if (payType === 'hourly') {
-      return `$${Number(hourlyRate || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per hour`;
+      return `₹${Number(hourlyRate || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} per hour`;
     }
     
     return 'Not specified';
