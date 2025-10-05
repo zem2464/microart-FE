@@ -47,18 +47,21 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
 
   // Fetch related data
   const { data: workTypesData, loading: workTypesLoading } = useQuery(GET_CLIENT_WORK_TYPES, {
-    variables: { clientId: client.id }
+    variables: { clientId: client.id },
+    fetchPolicy: 'cache-and-network'
   });
 
   const { data: serviceProvidersData, loading: serviceProvidersLoading } = useQuery(GET_CLIENT_SERVICE_PROVIDERS, {
-    variables: { clientId: client.id }
+    variables: { clientId: client.id },
+    fetchPolicy: 'cache-and-network'
   });
 
   const { data: transactionsData, loading: transactionsLoading } = useQuery(GET_TRANSACTIONS_BY_CLIENT, {
     variables: { 
       clientId: client.id,
       filters: { limit: 10 } // Latest 10 transactions
-    }
+    },
+    fetchPolicy: 'cache-and-network'
   });
 
   // Helper functions

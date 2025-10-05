@@ -64,10 +64,12 @@ const ClientDashboard = () => {
     variables: {
       filters: { isActive: true },
       pagination: { page: 1, limit: 100 }
-    }
+    },
+    fetchPolicy: 'cache-and-network'
   });
 
   const { data: summaryData, loading: summaryLoading } = useQuery(GET_TRANSACTIONS_SUMMARY, {
+    fetchPolicy: 'cache-and-network',
     variables: {
       clientId: selectedClient,
       dateFrom: dateRange?.[0]?.format('YYYY-MM-DD'),
@@ -75,8 +77,12 @@ const ClientDashboard = () => {
     }
   });
 
-  const { data: pendingData, loading: pendingLoading } = useQuery(GET_PENDING_PAYMENTS);
-  const { data: overdueData, loading: overdueLoading } = useQuery(GET_OVERDUE_PAYMENTS);
+  const { data: pendingData, loading: pendingLoading } = useQuery(GET_PENDING_PAYMENTS, {
+    fetchPolicy: 'cache-and-network'
+  });
+  const { data: overdueData, loading: overdueLoading } = useQuery(GET_OVERDUE_PAYMENTS, {
+    fetchPolicy: 'cache-and-network'
+  });
 
   const clients = clientsData?.clients || [];
   const pendingPayments = pendingData?.pendingPayments || [];
@@ -104,6 +110,18 @@ const ClientDashboard = () => {
       overdueCount: overduePayments.length
     };
   }, [clients, pendingPayments, overduePayments]);
+
+  // Helper function for colors - must be defined before useMemo hooks that use it
+  const getClientTypeColor = (type) => {
+    const colors = {
+      permanent: '#1890ff',
+      walkIn: '#52c41a',
+      project: '#722ed1',
+      individual: '#fa8c16',
+      unknown: '#d9d9d9'
+    };
+    return colors[type] || '#d9d9d9';
+  };
 
   // Client type distribution for pie chart
   const clientTypeData = useMemo(() => {
@@ -135,18 +153,6 @@ const ClientDashboard = () => {
 
   // Payment methods from summary
   const paymentMethodsData = summaryData?.transactionsSummary?.paymentMethods || [];
-
-  // Helper function for colors
-  const getClientTypeColor = (type) => {
-    const colors = {
-      project: '#1890ff',
-      'walk-in': '#52c41a',
-      corporate: '#722ed1',
-      individual: '#fa8c16',
-      unknown: '#d9d9d9'
-    };
-    return colors[type] || '#d9d9d9';
-  };
 
   // Recent activities (top clients - removed balance sorting)
   const topClientsByBalance = useMemo(() => {

@@ -130,8 +130,7 @@ export const CommonTable = ({
                   placeholder={searchPlaceholder}
                   allowClear
                   onSearch={onSearch}
-                  value={searchValue}
-                  onChange={(e) => onSearch && onSearch(e.target.value)}
+                  defaultValue={searchValue}
                   style={{ width: 300 }}
                   enterButton={<SearchOutlined />}
                 />

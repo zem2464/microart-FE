@@ -74,9 +74,15 @@ export const AppDrawerProvider = ({ children }) => {
 
 	// Client Drawers
 	const [clientFormDrawer, setClientFormDrawer] = useState({ open: false, client: null, mode: 'create', onSuccess: null });
+	const [clientFormHeader, setClientFormHeader] = useState(null);
+	const [clientFormFooter, setClientFormFooter] = useState(null);
 	const [clientDetailDrawer, setClientDetailDrawer] = useState({ open: false, client: null });
 	const showClientFormDrawer = (client = null, mode = 'create', onSuccess = null) => setClientFormDrawer({ open: true, client, mode, onSuccess });
-	const closeClientFormDrawer = () => setClientFormDrawer({ open: false, client: null, mode: 'create', onSuccess: null });
+	const closeClientFormDrawer = () => {
+		setClientFormDrawer({ open: false, client: null, mode: 'create', onSuccess: null });
+		setClientFormHeader(null);
+		setClientFormFooter(null);
+	};
 	const showClientDetailDrawer = (client) => setClientDetailDrawer({ open: true, client });
 	const closeClientDetailDrawer = () => setClientDetailDrawer({ open: false, client: null });
 
@@ -414,12 +420,12 @@ export const AppDrawerProvider = ({ children }) => {
 			{clientFormDrawer.open && (
 				<ModuleDrawer
 					open={clientFormDrawer.open}
-					title={clientFormDrawer.mode === 'edit' ? 'Edit Client' : 'Add Client'}
+					title={clientFormHeader || (clientFormDrawer.mode === 'edit' ? 'Edit Client' : 'Add Client')}
 					width={800}
 					placement="right"
 					destroyOnClose
 					onClose={closeClientFormDrawer}
-					footer={null}
+					footer={clientFormFooter}
 				>
 					<ClientForm
 						client={clientFormDrawer.client}
@@ -431,6 +437,8 @@ export const AppDrawerProvider = ({ children }) => {
 								clientFormDrawer.onSuccess(result);
 							}
 						}}
+						renderHeaderInDrawer={setClientFormHeader}
+						renderFooterInDrawer={setClientFormFooter}
 					/>
 				</ModuleDrawer>
 			)}

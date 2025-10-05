@@ -7,6 +7,9 @@ export const GRADING_FRAGMENT = gql`
     name
     description
     workTypeId
+    defaultRate
+    currency
+    unit
     isActive
     createdAt
     updatedAt
@@ -38,7 +41,7 @@ export const GRADING_FRAGMENT = gql`
         id
         gradingId
         taskTypeId
-        pricePerUnit
+        employeeRate
         currency
         unit
         isActive

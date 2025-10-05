@@ -144,10 +144,29 @@ const Gradings = () => {
       ),
     },
     {
-      title: "Task Types & Pricing",
+      title: "Client Rate",
+      dataIndex: "defaultRate",
+      key: "defaultRate",
+      sorter: (a, b) => (a.defaultRate || 0) - (b.defaultRate || 0),
+      render: (defaultRate, record) => (
+        <div>
+          <div className="flex items-center space-x-1">
+            <DollarOutlined className="text-blue-500 text-xs" />
+            <Text className="text-base font-semibold" style={{ color: '#1890ff' }}>
+              ₹{(defaultRate || 0).toFixed(2)}
+            </Text>
+          </div>
+          <Text type="secondary" className="text-xs">
+            per {record.unit || 'image'}
+          </Text>
+        </div>
+      ),
+    },
+    {
+      title: "Employee Cost & Profit",
       dataIndex: "taskTypes",
-      key: "taskTypes",
-      render: (taskTypes) => {
+      key: "pricing",
+      render: (taskTypes, record) => {
         if (!taskTypes || taskTypes.length === 0) {
           return (
             <div className="text-center">
@@ -158,38 +177,43 @@ const Gradings = () => {
         }
 
         const activeTaskTypes = taskTypes.filter(tt => tt.gradingTask?.isActive);
-        const totalPrice = activeTaskTypes.reduce((sum, tt) => {
-          return sum + (tt.gradingTask?.pricePerUnit || 0);
-        }, 0);
-
-        // Calculate total INR price only
-        const inrPrice = activeTaskTypes.reduce((sum, tt) => {
-          // Only include INR prices
+        
+        // Calculate total employee cost (INR only)
+        const totalEmployeeCost = activeTaskTypes.reduce((sum, tt) => {
           if (tt.gradingTask?.currency === 'INR') {
-            return sum + (tt.gradingTask?.pricePerUnit || 0);
+            return sum + (tt.gradingTask?.employeeRate || 0);
           }
           return sum;
         }, 0);
+
+        const clientRate = record.defaultRate || 0;
+        const profitMargin = clientRate - totalEmployeeCost;
+        const profitPercentage = clientRate > 0 ? (profitMargin / clientRate * 100) : 0;
 
         return (
           <div>
             <div className="flex items-center space-x-2 mb-1">
               <TagsOutlined className="text-blue-500" />
-              <Text className="text-sm">
-                {taskTypes.length} tasks ({activeTaskTypes.length} active)
+              <Text className="text-xs">
+                {activeTaskTypes.length} active tasks
               </Text>
             </div>
             <div className="space-y-1">
-              {inrPrice > 0 ? (
-                <div className="flex items-center space-x-1">
-                  <DollarOutlined className="text-green-500 text-xs" />
-                  <Text className="text-sm font-medium">
-                    ₹{inrPrice.toFixed(2)}
-                  </Text>
-                </div>
-              ) : (
-                <Text type="secondary" className="text-sm">No INR pricing</Text>
-              )}
+              <div className="flex items-center justify-between">
+                <Text type="secondary" className="text-xs">Employee Cost:</Text>
+                <Text className="text-xs font-medium" style={{ color: '#faad14' }}>
+                  ₹{totalEmployeeCost.toFixed(2)}
+                </Text>
+              </div>
+              <div className="flex items-center justify-between">
+                <Text type="secondary" className="text-xs">Profit:</Text>
+                <Text 
+                  className="text-xs font-semibold" 
+                  style={{ color: profitMargin >= 0 ? '#52c41a' : '#ff4d4f' }}
+                >
+                  ₹{profitMargin.toFixed(2)} ({profitPercentage.toFixed(0)}%)
+                </Text>
+              </div>
             </div>
           </div>
         );

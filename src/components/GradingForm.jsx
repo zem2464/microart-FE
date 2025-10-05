@@ -74,6 +74,9 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
         name: grading.name,
         description: grading.description,
         workTypeId: grading.workTypeId,
+        defaultRate: grading.defaultRate || 0,
+        currency: grading.currency || 'INR',
+        unit: grading.unit || 'image',
         isActive: grading.isActive ?? true,
       });
 
@@ -86,7 +89,7 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
         taskTypeDescription: taskType.description || 'No description',
         taskTypeColor: taskType.color,
         taskTypeIcon: taskType.icon,
-        pricePerUnit: taskType.gradingTask?.pricePerUnit || 0,
+        employeeRate: taskType.gradingTask?.employeeRate || 0,
         currency: taskType.gradingTask?.currency || 'INR',
         unit: taskType.gradingTask?.unit || 'image',
         isActive: taskType.gradingTask?.isActive ?? true,
@@ -97,6 +100,9 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
       // Set default values for create mode
       form.setFieldsValue({
         isActive: true,
+        defaultRate: 0,
+        currency: 'INR',
+        unit: 'image',
       });
       setTaskTypePricings([]);
       setSelectedWorkType(null);
@@ -118,7 +124,7 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
           taskTypeDescription: taskType.description || 'No description',
           taskTypeColor: taskType.color,
           taskTypeIcon: taskType.icon,
-          pricePerUnit: 0,
+          employeeRate: 0,
           currency: 'INR', // Default currency, no user selection needed
           unit: 'image', // Fixed to image only
           isActive: true,
@@ -150,9 +156,9 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
   const handleSubmit = async (values) => {
     try {
       // Validate that at least one task type with pricing is added
-      const activePricings = taskTypePricings.filter(tp => tp.isActive && tp.pricePerUnit > 0);
+      const activePricings = taskTypePricings.filter(tp => tp.isActive && tp.employeeRate > 0);
       if (activePricings.length === 0) {
-        message.error('Please add at least one task type with valid pricing');
+        message.error('Please add at least one task type with valid employee rate');
         return;
       }
 
@@ -163,10 +169,13 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
         name: values.name,
         description: values.description,
         workTypeId: values.workTypeId,
+        defaultRate: parseFloat(values.defaultRate),
+        currency: values.currency || 'INR',
+        unit: values.unit || 'image',
         isActive: values.isActive,
-        taskTypePricings: taskTypePricings.map(tp => ({
+        taskTypeRates: taskTypePricings.map(tp => ({
           taskTypeId: tp.taskTypeId,
-          pricePerUnit: parseFloat(tp.pricePerUnit),
+          employeeRate: parseFloat(tp.employeeRate),
           currency: tp.currency,
           unit: tp.unit,
           isActive: tp.isActive,
@@ -260,21 +269,51 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
             />
           </Form.Item>
 
-          <Form.Item
-            label="Active Status"
-            name="isActive"
-            valuePropName="checked"
-          >
-            <Switch checkedChildren="Active" unCheckedChildren="Inactive" />
-          </Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                label={<span><span style={{ color: 'red' }}>* </span>Default Rate (Client Price per Image)</span>}
+                name="defaultRate"
+                rules={[
+                  { required: true, message: 'Please enter default rate' },
+                  { type: 'number', min: 0, message: 'Rate must be positive' },
+                ]}
+              >
+                <InputNumber
+                  placeholder="0.00"
+                  min={0}
+                  precision={2}
+                  prefix="₹"
+                  style={{ width: '100%' }}
+                  controls={true}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label="Active Status"
+                name="isActive"
+                valuePropName="checked"
+              >
+                <Switch checkedChildren="Active" unCheckedChildren="Inactive" />
+              </Form.Item>
+            </Col>
+          </Row>
         </Card>
 
-        {/* Task Pricing Configuration */}
+        {/* Task Employee Rates Configuration */}
         <Card size="small" className="mb-4">
           <Title level={5} className="mb-4 flex items-center">
             <DollarOutlined className="mr-2" />
-            Task Pricing
+            Employee Rates per Task
           </Title>
+          <Alert
+            message="Employee Rates"
+            description="Set the amount paid to employees for completing each task. These rates are separate from the client price."
+            type="info"
+            showIcon
+            className="mb-4"
+          />
 
           {/* Task Pricing List */}
           {!selectedWorkType ? (
@@ -305,11 +344,11 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
                     </Col>
                     <Col span={6}>
                       <div className="relative">
-                        <Text type="secondary" className="text-xs block mb-1">Price per image (₹)</Text>
+                        <Text type="secondary" className="text-xs block mb-1">Employee Rate (₹)</Text>
                         <InputNumber
                           placeholder="0.00"
-                          value={pricing.pricePerUnit}
-                          onChange={(value) => updateTaskTypePricing(pricing.taskTypeId, 'pricePerUnit', value)}
+                          value={pricing.employeeRate}
+                          onChange={(value) => updateTaskTypePricing(pricing.taskTypeId, 'employeeRate', value)}
                           min={0}
                           precision={2}
                           prefix="₹"
@@ -360,7 +399,7 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
             type="primary" 
             htmlType="submit" 
             loading={loading || submitting}
-            disabled={taskTypePricings.filter(tp => tp.isActive && tp.pricePerUnit > 0).length === 0}
+            disabled={taskTypePricings.filter(tp => tp.isActive && tp.employeeRate > 0).length === 0}
           >
             {mode === 'edit' ? 'Update Grading' : 'Create Grading'}
           </Button>

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { 
   Card, 
   Button, 
@@ -45,7 +45,8 @@ const ClientList = () => {
         page: pagination.current,
         limit: pagination.pageSize
       }
-    }
+    },
+    fetchPolicy: 'cache-and-network'
   });
 
   const [deleteClient] = useMutation(DELETE_CLIENT, {
@@ -61,30 +62,43 @@ const ClientList = () => {
   const clients = data?.clients || [];
   const totalCount = data?.clientsCount || 0;
 
-  // Client type colors
-  const getClientTypeColor = (type) => {
+  // Client type colors - memoized
+  const getClientTypeColor = useCallback((type) => {
     const colors = {
-      'project': 'blue',
-      'walk-in': 'green',
-      'corporate': 'purple',
-      'individual': 'orange'
+      'permanent': 'blue',
+      'walkIn': 'green'
     };
     return colors[type] || 'default';
-  };
+  }, []);
 
-  // Status colors
-  const getStatusColor = (status) => {
-    const colors = {
-      'active': 'green',
-      'inactive': 'red',
-      'suspended': 'orange',
-      'pending': 'blue'
-    };
-    return colors[status] || 'default';
-  };
+  // Action handlers - memoized to prevent re-renders (defined before columns to avoid TDZ)
+  const handleAddClient = useCallback(() => {
+    showClientFormDrawer(null, 'create', refetch);
+  }, [showClientFormDrawer, refetch]);
 
-  // Table columns configuration
-  const columns = [
+  const handleEditClient = useCallback((client) => {
+    showClientFormDrawer(client, 'edit', refetch);
+  }, [showClientFormDrawer, refetch]);
+
+  const handleViewClient = useCallback((client) => {
+    showClientDetailDrawer(client);
+  }, [showClientDetailDrawer]);
+
+  const handleDeleteClient = useCallback((client) => {
+    Modal.confirm({
+      title: 'Delete Client',
+      content: `Are you sure you want to delete ${client.companyName || client.displayName || `${client.firstName} ${client.lastName}`}?`,
+      icon: <ExclamationCircleOutlined />,
+      okText: 'Yes, Delete',
+      okType: 'danger',
+      onOk: () => {
+        deleteClient({ variables: { id: client.id } });
+      }
+    });
+  }, [deleteClient]);
+
+  // Table columns configuration - memoized to prevent re-renders
+  const columns = useMemo(() => [
     {
       title: 'Client',
       dataIndex: 'companyName',
@@ -121,15 +135,15 @@ const ClientList = () => {
       width: 120,
       render: (type) => (
         <Tag color={getClientTypeColor(type)}>
-          {type?.toUpperCase()}
+          {type === 'permanent' ? 'PERMANENT' : type === 'walkIn' ? 'WALK-IN' : type?.toUpperCase()}
         </Tag>
       ),
       filters: [
-        { text: 'Project Client', value: 'project' },
-        { text: 'Walk-in Client', value: 'walk-in' },
-        { text: 'Corporate', value: 'corporate' },
-        { text: 'Individual', value: 'individual' },
+        { text: 'Permanent Client', value: 'permanent' },
+        { text: 'Walk-in Client', value: 'walkIn' },
       ],
+      onFilter: (value, record) => record.clientType === value,
+      sorter: (a, b) => (a.clientType || '').localeCompare(b.clientType || ''),
     },
     {
       title: 'Contact Info',
@@ -140,17 +154,18 @@ const ClientList = () => {
           {record.email && (
             <div className="flex items-center text-sm text-gray-600">
               <MailOutlined className="mr-2" />
-              {record.email}
+              <span className="truncate" title={record.email}>{record.email}</span>
             </div>
           )}
-          {record.phone && (
+          {(record.contactNoWork || record.contactNoPersonal) && (
             <div className="flex items-center text-sm text-gray-600">
               <PhoneOutlined className="mr-2" />
-              {record.phone}
+              {record.contactNoWork || record.contactNoPersonal}
             </div>
           )}
         </div>
       ),
+      sorter: (a, b) => (a.email || '').localeCompare(b.email || ''),
     },
     {
       title: 'Location',
@@ -168,34 +183,84 @@ const ClientList = () => {
                 {record.state.name}
               </div>
             )}
+            {record.country?.name && !record.state && !record.city && (
+              <div className="text-xs text-gray-400">
+                {record.country.name}
+              </div>
+            )}
           </div>
         </div>
       ),
+      sorter: (a, b) => {
+        const aLoc = a.city?.name || a.state?.name || a.country?.name || '';
+        const bLoc = b.city?.name || b.state?.name || b.country?.name || '';
+        return aLoc.localeCompare(bLoc);
+      },
+    },
+    {
+      title: 'Priority',
+      dataIndex: 'priority',
+      key: 'priority',
+      width: 100,
+      render: (priority) => {
+        const color = priority === 'HIGH' ? 'red' : priority === 'MEDIUM' ? 'orange' : 'green';
+        return priority ? (
+          <Tag color={color}>
+            {priority}
+          </Tag>
+        ) : '-';
+      },
+      filters: [
+        { text: 'High', value: 'HIGH' },
+        { text: 'Medium', value: 'MEDIUM' },
+        { text: 'Low', value: 'LOW' },
+      ],
+      onFilter: (value, record) => record.priority === value,
+      sorter: (a, b) => {
+        const priorityOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+        return (priorityOrder[a.priority] || 0) - (priorityOrder[b.priority] || 0);
+      },
     },
     {
       title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
+      dataIndex: 'isActive',
+      key: 'isActive',
       width: 100,
-      render: (status) => (
-        <Tag color={getStatusColor(status)}>
-          {status?.toUpperCase()}
+      render: (isActive) => (
+        <Tag color={isActive ? 'green' : 'red'}>
+          {isActive ? 'ACTIVE' : 'INACTIVE'}
         </Tag>
       ),
       filters: [
-        { text: 'Active', value: 'active' },
-        { text: 'Inactive', value: 'inactive' },
-        { text: 'Suspended', value: 'suspended' },
-        { text: 'Pending', value: 'pending' },
+        { text: 'Active', value: true },
+        { text: 'Inactive', value: false },
       ],
+      onFilter: (value, record) => record.isActive === value,
+      sorter: (a, b) => (a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1),
     },
     {
       title: 'Created',
       dataIndex: 'createdAt',
       key: 'createdAt',
-      width: 120,
-      render: (date) => new Date(date).toLocaleDateString(),
-      sorter: true,
+      width: 150,
+      render: (date) => {
+        if (!date) return '-';
+        const parsedDate = new Date(date);
+        // Check if date is valid
+        if (isNaN(parsedDate.getTime())) return '-';
+        
+        // Format date properly
+        return parsedDate.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+      },
+      sorter: (a, b) => {
+        const dateA = new Date(a.createdAt).getTime();
+        const dateB = new Date(b.createdAt).getTime();
+        return dateA - dateB;
+      },
     },
     {
       title: 'Actions',
@@ -239,86 +304,13 @@ const ClientList = () => {
         );
       },
     },
-  ];
+  ], [getClientTypeColor, handleViewClient, handleEditClient, handleDeleteClient]);
 
-  // Search configuration
-  const searchConfig = {
-    placeholder: "Search by company name, contact person, email, phone, or client code...",
-    allowClear: true,
-    onSearch: (value) => {
-      setFilters(prev => ({ ...prev, search: value }));
-      setPagination(prev => ({ ...prev, current: 1 }));
-    },
-  };
-
-  // Filter configuration
-  const filterConfig = [
-    {
-      key: 'clientType',
-      label: 'Client Type',
-      type: 'select',
-      options: [
-        { label: 'Project Client', value: 'project' },
-        { label: 'Walk-in Client', value: 'walk-in' },
-        { label: 'Corporate', value: 'corporate' },
-        { label: 'Individual', value: 'individual' },
-      ],
-    },
-    {
-      key: 'isActive',
-      label: 'Status',
-      type: 'select',
-      options: [
-        { label: 'Active', value: true },
-        { label: 'Inactive', value: false },
-      ],
-    },
-    {
-      key: 'countryId',
-      label: 'Country',
-      type: 'select',
-      // You'll need to add countries query
-      options: [],
-    },
-    {
-      key: 'stateId',
-      label: 'State',
-      type: 'select',
-      // You'll need to add states query based on selected country
-      options: [],
-    },
-    {
-      key: 'balanceRange',
-      label: 'Balance Range',
-      type: 'range',
-    },
-  ];
-
-  // Action handlers
-  const handleAddClient = () => {
-    showClientFormDrawer(null, 'create', refetch);
-  };
-
-  const handleEditClient = (client) => {
-    showClientFormDrawer(client, 'edit', refetch);
-  };
-
-  const handleViewClient = (client) => {
-    showClientDetailDrawer(client);
-  };
-
-  const handleDeleteClient = (client) => {
-    Modal.confirm({
-      title: 'Delete Client',
-      content: `Are you sure you want to delete ${client.companyName || client.displayName || `${client.firstName} ${client.lastName}`}?`,
-      icon: <ExclamationCircleOutlined />,
-      okText: 'Yes, Delete',
-      okType: 'danger',
-      onOk: () => {
-        deleteClient({ variables: { id: client.id } });
-      }
-    });
-  };
+  // Search handler - memoized
+  const handleSearch = useCallback((value) => {
+    setFilters(prev => ({ ...prev, search: value }));
+    setPagination(prev => ({ ...prev, current: 1 }));
+  }, []);
 
   // Summary statistics
   const summaryStats = useMemo(() => {
@@ -329,6 +321,26 @@ const ClientList = () => {
       active: activeClients,
     };
   }, [clients, totalCount]);
+
+  // Memoize pagination config to prevent re-renders
+  const paginationConfig = useMemo(() => ({
+    current: pagination.current,
+    pageSize: pagination.pageSize,
+    total: totalCount,
+    showSizeChanger: true,
+    showQuickJumper: true,
+    showTotal: (total, range) => 
+      `${range[0]}-${range[1]} of ${total} clients`,
+  }), [pagination.current, pagination.pageSize, totalCount]);
+
+  // Memoize scroll config
+  const scrollConfig = useMemo(() => ({ x: 1200 }), []);
+
+  // Memoize onChange handler
+  const handleTableChange = useCallback((pagination, filters, sorter) => {
+    setPagination(pagination);
+    setFilters(prev => ({ ...prev, ...filters }));
+  }, []);
 
   return (
     <div className="p-6">
@@ -381,22 +393,11 @@ const ClientList = () => {
         columns={columns}
         dataSource={clients}
         loading={loading}
-        pagination={{
-          ...pagination,
-          total: totalCount,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          showTotal: (total, range) => 
-            `${range[0]}-${range[1]} of ${total} clients`,
-        }}
-        onChange={(pagination, filters, sorter) => {
-          setPagination(pagination);
-          setFilters(prev => ({ ...prev, ...filters }));
-        }}
-        searchConfig={searchConfig}
-        filterConfig={filterConfig}
-        onFiltersChange={setFilters}
-        scroll={{ x: 1200 }}
+        pagination={paginationConfig}
+        onChange={handleTableChange}
+        onSearch={handleSearch}
+        searchPlaceholder="Search by company name, contact person, email, phone, or client code..."
+        scroll={scrollConfig}
         size="middle"
       />
     </div>

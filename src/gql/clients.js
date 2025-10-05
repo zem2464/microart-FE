@@ -98,6 +98,7 @@ export const GET_CLIENT = gql`
       creditDays
       creditAmountLimit
       openingBalance
+      openingBalanceType
       accountMessage
       isActive
       totalBalance
@@ -129,6 +130,49 @@ export const GET_CLIENT = gql`
         }
         customGradingRate
         isActive
+      }
+      gradings {
+        id
+        gradingId
+        isDefault
+        customRate
+        currency
+        unit
+        effectiveRate
+        grading {
+          id
+          name
+          description
+          defaultRate
+          currency
+          unit
+          workTypeId
+          workType {
+            id
+            name
+          }
+          taskTypes {
+            id
+            name
+            description
+          }
+        }
+      }
+      taskPreferences {
+        id
+        gradingId
+        taskId
+        preferredUserIds
+        task {
+          id
+          name
+        }
+        preferredUsers {
+          id
+          firstName
+          lastName
+          email
+        }
       }
       serviceProviders {
         id

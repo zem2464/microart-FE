@@ -1,11 +1,35 @@
 import React from 'react';
-import { Card, Row, Col, Tag, Typography, Space, Button, Divider } from 'antd';
+import { Card, Row, Col, Tag, Typography, Space, Button, Divider, Spin } from 'antd';
 import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useQuery } from '@apollo/client';
+import { GET_CLIENT } from '../gql/clients';
 import dayjs from 'dayjs';
 
 const { Text, Title } = Typography;
 
-const ClientDetail = ({ client, onEdit, onDelete, onClose }) => {
+const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
+  // Fetch full client data with all associations
+  const { data, loading, error } = useQuery(GET_CLIENT, {
+    variables: { id: clientProp?.id },
+    skip: !clientProp?.id,
+    fetchPolicy: 'network-only' // Always fetch fresh data
+  });
+
+  // Use fetched data if available, otherwise use prop
+  const client = data?.client || clientProp;
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div>Error loading client details: {error.message}</div>;
+  }
+
   if (!client) {
     return <div>No client data available</div>;
   }
@@ -151,10 +175,229 @@ const ClientDetail = ({ client, onEdit, onDelete, onClose }) => {
         </Card>
       )}
 
+      {/* Business Details */}
+      {(client.isGstEnabled || client.panCard || client.creditDays || client.creditAmountLimit || 
+        client.openingBalance || client.accountMessage) && (
+        <Card title="Business Details" size="small" style={{ marginBottom: 16 }}>
+          <Row gutter={[16, 16]}>
+            {client.isGstEnabled && (
+              <>
+                <Col span={8}>
+                  <Text strong>GST Enabled:</Text><br />
+                  <Tag color="success">Yes</Tag>
+                </Col>
+                {client.gstNumber && (
+                  <Col span={8}>
+                    <Text strong>GST Number:</Text><br />
+                    <Text>{client.gstNumber}</Text>
+                  </Col>
+                )}
+                {client.gstRate !== null && client.gstRate !== undefined && (
+                  <Col span={8}>
+                    <Text strong>GST Rate:</Text><br />
+                    <Text>{client.gstRate}%</Text>
+                  </Col>
+                )}
+              </>
+            )}
+            {client.panCard && (
+              <Col span={8}>
+                <Text strong>PAN Card:</Text><br />
+                <Text>{client.panCard}</Text>
+              </Col>
+            )}
+            {client.creditDays !== null && client.creditDays !== undefined && (
+              <Col span={8}>
+                <Text strong>Credit Days:</Text><br />
+                <Text>{client.creditDays} days</Text>
+              </Col>
+            )}
+            {client.creditAmountLimit !== null && client.creditAmountLimit !== undefined && (
+              <Col span={8}>
+                <Text strong>Credit Limit:</Text><br />
+                <Text>₹{parseFloat(client.creditAmountLimit).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+              </Col>
+            )}
+            {client.openingBalance !== null && client.openingBalance !== undefined && (
+              <Col span={8}>
+                <Text strong>Opening Balance:</Text><br />
+                <Text style={{ color: client.openingBalance >= 0 ? 'green' : 'red' }}>
+                  ₹{parseFloat(client.openingBalance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+              </Col>
+            )}
+            {client.accountMessage && (
+              <Col span={24}>
+                <Text strong>Account Message:</Text><br />
+                <Text>{client.accountMessage}</Text>
+              </Col>
+            )}
+          </Row>
+        </Card>
+      )}
+
       {/* Notes */}
       {client.clientNotes && (
         <Card title="Notes" size="small" style={{ marginBottom: 16 }}>
           <Text>{client.clientNotes}</Text>
+        </Card>
+      )}
+
+      {/* Work Types */}
+      {client.workTypeAssociations && client.workTypeAssociations.length > 0 && (
+        <Card title="Work Types" size="small" style={{ marginBottom: 16 }}>
+          <Space wrap>
+            {client.workTypeAssociations.map(wta => (
+              <Tag key={wta.id} color="blue" style={{ marginBottom: 8 }}>
+                {wta.workType?.name || 'Unknown'}
+              </Tag>
+            ))}
+          </Space>
+        </Card>
+      )}
+
+      {/* Gradings & Pricing */}
+      {client.gradings && client.gradings.length > 0 && (
+        <Card title="Gradings & Pricing" size="small" style={{ marginBottom: 16 }}>
+          <Row gutter={[16, 16]}>
+            {client.gradings.map(grading => (
+              <Col span={24} key={grading.id}>
+                <Card 
+                  size="small" 
+                  style={{ 
+                    backgroundColor: '#f5f5f5',
+                    marginBottom: 8
+                  }}
+                >
+                  <Row gutter={[16, 8]}>
+                    <Col span={12}>
+                      <Text strong>{grading.grading?.name || 'Unknown Grading'}</Text>
+                      {grading.grading?.workType && (
+                        <>
+                          <br />
+                          <Tag color="blue" style={{ marginTop: 4 }}>
+                            {grading.grading.workType.name}
+                          </Tag>
+                        </>
+                      )}
+                      {grading.grading?.description && (
+                        <>
+                          <br />
+                          <Text type="secondary" style={{ fontSize: '12px' }}>
+                            {grading.grading.description}
+                          </Text>
+                        </>
+                      )}
+                    </Col>
+                    <Col span={6}>
+                      <Text type="secondary">Default Rate:</Text><br />
+                      <Text strong>
+                        ₹{grading.grading?.defaultRate || 0}/{grading.grading?.unit || 'unit'}
+                      </Text>
+                    </Col>
+                    <Col span={6}>
+                      {grading.customRate ? (
+                        <>
+                          <Text type="secondary">Custom Rate:</Text><br />
+                          <Text strong style={{ color: '#1890ff' }}>
+                            ₹{grading.customRate}/{grading.unit || 'unit'}
+                          </Text>
+                          <Tag color="orange" style={{ marginLeft: 8 }}>Custom</Tag>
+                        </>
+                      ) : (
+                        <>
+                          <Text type="secondary">Effective Rate:</Text><br />
+                          <Text strong>
+                            ₹{grading.effectiveRate || grading.grading?.defaultRate || 0}/{grading.unit || 'unit'}
+                          </Text>
+                        </>
+                      )}
+                    </Col>
+                  </Row>
+                </Card>
+              </Col>
+            ))}
+          </Row>
+        </Card>
+      )}
+
+      {/* Task Preferences */}
+      {client.taskPreferences && client.taskPreferences.length > 0 && (
+        <Card title="Task Preferences (Preferred Employees)" size="small" style={{ marginBottom: 16 }}>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 12 }}>
+            These employees will be auto-assigned when creating projects for this client.
+          </Text>
+          {/* Group task preferences by grading */}
+          {(() => {
+            // Group preferences by gradingId
+            const groupedPreferences = {};
+            client.taskPreferences.forEach(pref => {
+              if (!groupedPreferences[pref.gradingId]) {
+                groupedPreferences[pref.gradingId] = [];
+              }
+              groupedPreferences[pref.gradingId].push(pref);
+            });
+
+            return Object.entries(groupedPreferences).map(([gradingId, prefs]) => {
+              // Find the grading name
+              const grading = client.gradings?.find(g => g.gradingId === gradingId);
+              const gradingName = grading?.grading?.name || `Grading ${gradingId}`;
+
+              return (
+                <Card 
+                  key={gradingId}
+                  size="small" 
+                  title={gradingName}
+                  style={{ 
+                    backgroundColor: '#fafafa',
+                    marginBottom: 12
+                  }}
+                >
+                  {prefs.map(pref => (
+                    <Row key={pref.id} gutter={16} style={{ marginBottom: 8 }}>
+                      <Col span={8}>
+                        <Text strong>{pref.task?.name || 'Unknown Task'}</Text>
+                      </Col>
+                      <Col span={16}>
+                        <Space wrap size="small">
+                          {pref.preferredUsers && pref.preferredUsers.length > 0 ? (
+                            // Use preferredUsers field from the query
+                            pref.preferredUsers.map(user => (
+                              <Tag key={user.id} color="green">
+                                {user.firstName} {user.lastName}
+                              </Tag>
+                            ))
+                          ) : pref.preferredUserIds && pref.preferredUserIds.length > 0 ? (
+                            // Fallback: try to find in serviceProviders
+                            (() => {
+                              const users = pref.preferredUserIds.map(userId => {
+                                const sp = client.serviceProviders?.find(s => s.serviceProvider?.id === userId);
+                                return sp?.serviceProvider;
+                              }).filter(Boolean);
+
+                              return users.length > 0 ? (
+                                users.map(user => (
+                                  <Tag key={user.id} color="green">
+                                    {user.firstName} {user.lastName}
+                                  </Tag>
+                                ))
+                              ) : (
+                                <Text type="secondary" style={{ fontSize: '12px' }}>
+                                  {pref.preferredUserIds.length} employee(s) assigned
+                                </Text>
+                              );
+                            })()
+                          ) : (
+                            <Text type="secondary">No preferred employees</Text>
+                          )}
+                        </Space>
+                      </Col>
+                    </Row>
+                  ))}
+                </Card>
+              );
+            });
+          })()}
         </Card>
       )}
 

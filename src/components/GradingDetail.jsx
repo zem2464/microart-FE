@@ -34,17 +34,25 @@ const GradingDetail = ({ grading }) => {
   // Calculate statistics
   const totalTaskTypes = grading.taskTypes?.length || 0;
   const activeTaskTypes = grading.taskTypes?.filter(tt => tt.gradingTask?.isActive)?.length || 0;
-  const totalPrice = grading.taskTypes?.reduce((sum, tt) => {
-    return sum + (tt.gradingTask?.pricePerUnit || 0);
+  
+  // Calculate total employee rates (what we pay employees)
+  const totalEmployeeRate = grading.taskTypes?.reduce((sum, tt) => {
+    return sum + (tt.gradingTask?.employeeRate || 0);
   }, 0) || 0;
 
-  // Get total INR pricing only
-  const totalPriceINR = grading.taskTypes?.reduce((acc, tt) => {
+  // Get total INR pricing only for employee rates
+  const totalEmployeeRateINR = grading.taskTypes?.reduce((acc, tt) => {
     if (tt.gradingTask?.isActive && (tt.gradingTask.currency || 'INR') === 'INR') {
-      acc += tt.gradingTask.pricePerUnit || 0;
+      acc += tt.gradingTask.employeeRate || 0;
     }
     return acc;
   }, 0) || 0;
+
+  // Client price per image
+  const clientRate = grading.defaultRate || 0;
+  
+  // Profit margin per image
+  const profitMargin = clientRate - totalEmployeeRateINR;
 
   return (
     <div className="p-4 space-y-6">
@@ -74,40 +82,44 @@ const GradingDetail = ({ grading }) => {
         <Col span={6}>
           <Card size="small">
             <Statistic
-              title="Total Task Types"
-              value={totalTaskTypes}
-              prefix={<TagsOutlined />}
-              valueStyle={{ color: '#1890ff' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic
-              title="Active Task Types"
-              value={activeTaskTypes}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#52c41a' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic
-              title="Work Type"
-              value={grading.workType?.name || 'N/A'}
-              valueStyle={{ fontSize: '16px', color: '#722ed1' }}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic
-              title="Total Value"
-              value={totalPriceINR}
+              title="Client Rate (per image)"
+              value={clientRate}
               precision={2}
               prefix="₹"
-              valueStyle={{ fontSize: '18px', color: '#52c41a' }}
+              valueStyle={{ color: '#1890ff', fontSize: '18px' }}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card size="small">
+            <Statistic
+              title="Total Employee Cost"
+              value={totalEmployeeRateINR}
+              precision={2}
+              prefix="₹"
+              valueStyle={{ color: '#faad14', fontSize: '18px' }}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card size="small">
+            <Statistic
+              title="Profit Margin"
+              value={profitMargin}
+              precision={2}
+              prefix="₹"
+              valueStyle={{ color: profitMargin >= 0 ? '#52c41a' : '#ff4d4f', fontSize: '18px' }}
+            />
+          </Card>
+        </Col>
+        <Col span={6}>
+          <Card size="small">
+            <Statistic
+              title="Active Tasks"
+              value={activeTaskTypes}
+              suffix={`/ ${totalTaskTypes}`}
+              prefix={<CheckCircleOutlined />}
+              valueStyle={{ color: '#52c41a' }}
             />
           </Card>
         </Col>
@@ -128,6 +140,15 @@ const GradingDetail = ({ grading }) => {
           </Descriptions.Item>
           <Descriptions.Item label="Work Type">
             <Tag color="blue">{grading.workType?.name}</Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label="Client Rate">
+            <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
+              ₹{(grading.defaultRate || 0).toFixed(2)}
+            </Text>
+            <Text type="secondary"> per {grading.unit || 'image'}</Text>
+          </Descriptions.Item>
+          <Descriptions.Item label="Currency">
+            <Tag>{grading.currency || 'INR'}</Tag>
           </Descriptions.Item>
           <Descriptions.Item label="Status">
             <Badge 
@@ -163,11 +184,11 @@ const GradingDetail = ({ grading }) => {
         </Descriptions>
       </Card>
 
-      {/* Task Types & Pricing */}
+      {/* Task Types & Employee Rates */}
       <Card size="small">
         <Title level={5} className="mb-4 flex items-center">
           <TagsOutlined className="mr-2" />
-          Task Types & Pricing
+          Task Types & Employee Rates
         </Title>
 
         {(!grading.taskTypes || grading.taskTypes.length === 0) ? (
@@ -212,8 +233,9 @@ const GradingDetail = ({ grading }) => {
                     
                     <Col span={4}>
                       <div className="text-center">
+                        <Text type="secondary" className="text-xs block">Employee Rate</Text>
                         <Text strong className="text-lg">
-                          {pricingInfo?.pricePerUnit?.toFixed(2) || '0.00'}
+                          {pricingInfo?.employeeRate?.toFixed(2) || '0.00'}
                         </Text>
                         <div>
                           <Text type="secondary" className="text-sm">
@@ -261,24 +283,51 @@ const GradingDetail = ({ grading }) => {
             
             {/* Pricing Summary */}
             <div className="bg-gray-50 p-4 rounded">
-              <Title level={5} className="mb-3">Pricing Summary</Title>
+              <Title level={5} className="mb-3">Pricing Breakdown</Title>
               <Row gutter={16}>
-                <Col span={6}>
+                <Col span={8}>
                   <Statistic
-                    title="Total Price"
-                    value={totalPriceINR}
+                    title="Client Rate (per image)"
+                    value={clientRate}
                     precision={2}
                     prefix="₹"
-                    valueStyle={{ color: '#52c41a', fontSize: '18px' }}
+                    valueStyle={{ color: '#1890ff', fontSize: '18px' }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title="Total Employee Cost"
+                    value={totalEmployeeRateINR}
+                    precision={2}
+                    prefix="₹"
+                    valueStyle={{ color: '#faad14', fontSize: '18px' }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic
+                    title="Profit Margin"
+                    value={profitMargin}
+                    precision={2}
+                    prefix="₹"
+                    valueStyle={{ color: profitMargin >= 0 ? '#52c41a' : '#ff4d4f', fontSize: '18px' }}
                   />
                 </Col>
               </Row>
               
-              {totalPriceINR === 0 && (
-                <div className="text-center py-4">
+              {profitMargin < 0 && (
+                <div className="text-center py-4 mt-3">
+                  <ExclamationCircleOutlined className="text-red-500 text-2xl mb-2" />
+                  <div>
+                    <Text type="danger">Warning: Employee costs exceed client rate!</Text>
+                  </div>
+                </div>
+              )}
+              
+              {totalEmployeeRateINR === 0 && (
+                <div className="text-center py-4 mt-3">
                   <ExclamationCircleOutlined className="text-orange-500 text-2xl mb-2" />
                   <div>
-                    <Text type="secondary">No active pricing configured</Text>
+                    <Text type="secondary">No active employee rates configured</Text>
                   </div>
                 </div>
               )}
