@@ -28,6 +28,9 @@ import {
   GET_STATES, 
   GET_CITIES 
 } from '../../gql/clients';
+import { GET_WORK_TYPES } from '../../gql/workTypes';
+import { GET_USERS } from '../../gql/users';
+import { GET_GRADINGS_BY_WORK_TYPES } from '../../gql/gradings';
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -36,10 +39,10 @@ const { Step } = Steps;
 
 const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFooterInDrawer }) => {
   // Additional queries for dynamic fields
-  const { data: workTypesData } = useQuery(require('../../gql/workTypes').GET_WORK_TYPES, {
+  const { data: workTypesData } = useQuery(GET_WORK_TYPES, {
     fetchPolicy: 'network-and-cache'
   });
-  const { data: usersData } = useQuery(require('../../gql/users').GET_USERS, {
+  const { data: usersData } = useQuery(GET_USERS, {
     fetchPolicy: 'network-and-cache'
   });
   const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
@@ -50,7 +53,7 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
   const [isGSTEnabled, setIsGSTEnabled] = useState(false);
   const [hasCustomRates, setHasCustomRates] = useState(false);
   
-  const { data: gradingsData, refetch: refetchGradings } = useQuery(require('../../gql/gradings').GET_GRADINGS_BY_WORK_TYPES, {
+  const { data: gradingsData, refetch: refetchGradings } = useQuery(GET_GRADINGS_BY_WORK_TYPES, {
     variables: { workTypeIds: selectedWorkTypes },
     skip: selectedWorkTypes.length === 0,
     fetchPolicy: 'network-only' // Always fetch fresh data, especially important for edit mode
@@ -58,8 +61,8 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
 
   // Handler for work type selection
   const handleWorkTypesChange = (values) => {
-    setSelectedWorkTypes(values);
-    // Clear gradings when work types change (only when user manually changes, not during initialization)
+    // Form.Item will automatically update the form field value
+    // We only need to clear related fields when work types change
     setSelectedGradings([]);
     setGradingCustomRates({});
     setGradingTaskAssignments({});
@@ -145,6 +148,19 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
   const [selectedCountry, setSelectedCountry] = useState(null);
   const [selectedState, setSelectedState] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Watch form field values - this will re-render when the field changes
+  const formWorkTypes = Form.useWatch('workTypes', form) || [];
+  
+  // Memoize formWorkTypes to prevent unnecessary re-renders
+  const memoizedFormWorkTypes = useMemo(() => formWorkTypes, [JSON.stringify(formWorkTypes)]);
+  
+  // Sync form work types with component state for gradings query
+  useEffect(() => {
+    if (memoizedFormWorkTypes && memoizedFormWorkTypes.length > 0) {
+      setSelectedWorkTypes(memoizedFormWorkTypes);
+    }
+  }, [memoizedFormWorkTypes]);
 
   // Form layout configuration
   const formItemLayout = {
@@ -792,7 +808,7 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                     mode="multiple"
                     placeholder="Select gradings"
                     size="middle"
-                    disabled={selectedWorkTypes.length === 0}
+                    disabled={formWorkTypes.length === 0}
                     onChange={handleGradingsChange}
                   >
                     {gradingsData?.gradingsByWorkType?.map(grading => (

@@ -6,8 +6,8 @@ import {
   LOGOUT_QUERY,
   SET_INITIAL_PASSWORD_MUTATION,
   CHANGE_EXPIRE_PASSWORD_MUTATION,
-} from "../gql/auth.js";
-import { ME_QUERY } from "../gql/me.js";
+} from "../gql/auth";
+import { ME_QUERY } from "../gql/me";
 import {
   isApplicationLoading,
   isLoggedIn,
