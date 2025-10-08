@@ -186,6 +186,12 @@ export const GET_CLIENT = gql`
         assignedDate
         isActive
       }
+      leader {
+        id
+        firstName
+        lastName
+        email
+      }
       transactions {
         id
         transactionType

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Form,
   Input,
@@ -12,52 +12,61 @@ import {
   InputNumber,
   Typography,
   Space,
-  Steps
-} from 'antd';
+  Steps,
+} from "antd";
 import {
   UserOutlined,
   BankOutlined,
-  EnvironmentOutlined
-} from '@ant-design/icons';
-import { useMutation, useQuery } from '@apollo/client';
-import { 
-  CREATE_CLIENT, 
-  UPDATE_CLIENT, 
+  EnvironmentOutlined,
+} from "@ant-design/icons";
+import { useMutation, useQuery } from "@apollo/client";
+import {
+  CREATE_CLIENT,
+  UPDATE_CLIENT,
   GET_CLIENT,
-  GET_COUNTRIES, 
-  GET_STATES, 
-  GET_CITIES 
-} from '../../gql/clients';
-import { GET_WORK_TYPES } from '../../gql/workTypes';
-import { GET_USERS } from '../../gql/users';
-import { GET_GRADINGS_BY_WORK_TYPES } from '../../gql/gradings';
+  GET_COUNTRIES,
+  GET_STATES,
+  GET_CITIES,
+} from "../../gql/clients";
+import { GET_WORK_TYPES } from "../../gql/workTypes";
+import { GET_USERS } from "../../gql/users";
+import { GET_GRADINGS_BY_WORK_TYPES } from "../../gql/gradings";
 
 const { TextArea } = Input;
 const { Option } = Select;
 const { Text } = Typography;
 const { Step } = Steps;
 
-const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFooterInDrawer }) => {
+const ClientForm = ({
+  client,
+  onClose,
+  onSuccess,
+  renderHeaderInDrawer,
+  renderFooterInDrawer,
+}) => {
   // Additional queries for dynamic fields
   const { data: workTypesData } = useQuery(GET_WORK_TYPES, {
-    fetchPolicy: 'network-and-cache'
+    fetchPolicy: "network-and-cache",
   });
   const { data: usersData } = useQuery(GET_USERS, {
-    fetchPolicy: 'network-and-cache'
+    fetchPolicy: "network-and-cache",
   });
   const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
   const [selectedGradings, setSelectedGradings] = useState([]); // Changed to array for multiple selection
   const [gradingCustomRates, setGradingCustomRates] = useState({}); // Store custom rates per grading
   const [gradingTaskAssignments, setGradingTaskAssignments] = useState({}); // Store task-employee assignments per grading
-  const [clientType, setClientType] = useState('permanent'); // Track client type
+  const [clientType, setClientType] = useState("permanent"); // Track client type
   const [isGSTEnabled, setIsGSTEnabled] = useState(false);
   const [hasCustomRates, setHasCustomRates] = useState(false);
-  
-  const { data: gradingsData, refetch: refetchGradings } = useQuery(GET_GRADINGS_BY_WORK_TYPES, {
-    variables: { workTypeIds: selectedWorkTypes },
-    skip: selectedWorkTypes.length === 0,
-    fetchPolicy: 'network-only' // Always fetch fresh data, especially important for edit mode
-  });
+
+  const { data: gradingsData, refetch: refetchGradings } = useQuery(
+    GET_GRADINGS_BY_WORK_TYPES,
+    {
+      variables: { workTypeIds: selectedWorkTypes },
+      skip: selectedWorkTypes.length === 0,
+      fetchPolicy: "network-only", // Always fetch fresh data, especially important for edit mode
+    }
+  );
 
   // Handler for work type selection
   const handleWorkTypesChange = (values) => {
@@ -68,12 +77,12 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
     setGradingTaskAssignments({});
     form.setFieldsValue({ gradings: [] });
   };
-  
+
   // Handler for client type change
   const handleClientTypeChange = (value) => {
     setClientType(value);
     // Reset Business Details fields if switching to Walk-in
-    if (value === 'walkIn') {
+    if (value === "walkIn") {
       form.setFieldsValue({
         isGstEnabled: false,
         gstNumber: undefined,
@@ -82,52 +91,73 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
         creditAmountLimit: undefined,
         openingBalance: undefined,
         openingBalanceType: undefined,
-        accountMessage: undefined
+        accountMessage: undefined,
       });
     }
   };
-  
+
   // Handler for multiple grading selection
   const handleGradingsChange = (gradingIds) => {
     setSelectedGradings(gradingIds);
+    
+    // Update workTypes based on selected gradings
+    if (gradingsData?.gradingsByWorkType && gradingIds.length > 0) {
+      const selectedGradingObjects = gradingsData.gradingsByWorkType.filter(
+        (g) => gradingIds.includes(g.id)
+      );
+      
+      // Extract unique work type IDs from selected gradings
+      const workTypeIdsFromGradings = selectedGradingObjects
+        .map((g) => g.workType?.id)
+        .filter((id) => id); // Remove undefined/null values
+      
+      const uniqueWorkTypeIds = [...new Set(workTypeIdsFromGradings)];
+      
+      // Update form field and state for workTypes
+      if (uniqueWorkTypeIds.length > 0) {
+        form.setFieldsValue({ workTypes: uniqueWorkTypeIds });
+        setSelectedWorkTypes(uniqueWorkTypeIds);
+      }
+    }
+    
     // Remove custom rates for deselected gradings
     const newCustomRates = {};
-    gradingIds.forEach(id => {
+    gradingIds.forEach((id) => {
       if (gradingCustomRates[id]) {
         newCustomRates[id] = gradingCustomRates[id];
       }
     });
     setGradingCustomRates(newCustomRates);
-    
+
     // Remove task assignments for deselected gradings
     const newTaskAssignments = {};
-    gradingIds.forEach(id => {
+    gradingIds.forEach((id) => {
       if (gradingTaskAssignments[id]) {
         newTaskAssignments[id] = gradingTaskAssignments[id];
       }
     });
     setGradingTaskAssignments(newTaskAssignments);
   };
-  
+
   // Handler for custom rate change for a grading
   const handleGradingCustomRateChange = (gradingId, rate) => {
-    setGradingCustomRates(prev => ({
+    setGradingCustomRates((prev) => ({
       ...prev,
-      [gradingId]: rate
+      [gradingId]: rate,
     }));
   };
-  
+
   // Handler for task-employee assignment for a specific grading
   const handleGradingTaskAssignment = (gradingId, taskId, userIds) => {
-    setGradingTaskAssignments(prev => ({
+    setGradingTaskAssignments((prev) => ({
       ...prev,
       [gradingId]: {
         ...(prev[gradingId] || {}),
-        [taskId]: userIds
-      }
+        [taskId]: userIds,
+      },
     }));
   };
-  
+
   // Handler for GST toggle
   const handleGSTToggle = (checked) => {
     setIsGSTEnabled(checked);
@@ -135,7 +165,7 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
       form.setFieldsValue({ gstNo: undefined, gstRate: undefined });
     }
   };
-  
+
   // Handler for custom rate plan toggle
   const handleCustomRateToggle = (checked) => {
     setHasCustomRates(checked);
@@ -150,17 +180,24 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
   const [loading, setLoading] = useState(false);
 
   // Watch form field values - this will re-render when the field changes
-  const formWorkTypes = Form.useWatch('workTypes', form) || [];
-  
-  // Memoize formWorkTypes to prevent unnecessary re-renders
-  const memoizedFormWorkTypes = useMemo(() => formWorkTypes, [JSON.stringify(formWorkTypes)]);
-  
+  const formWorkTypes = Form.useWatch("workTypes", form);
+
   // Sync form work types with component state for gradings query
+  // Only update if the values actually changed to prevent infinite loops
   useEffect(() => {
-    if (memoizedFormWorkTypes && memoizedFormWorkTypes.length > 0) {
-      setSelectedWorkTypes(memoizedFormWorkTypes);
+    const workTypes = formWorkTypes || [];
+
+    // Only update if array length changed or content changed
+    if (
+      workTypes.length !== selectedWorkTypes.length ||
+      !workTypes.every((val, idx) => val === selectedWorkTypes[idx])
+    ) {
+      if (workTypes.length > 0) {
+        setSelectedWorkTypes(workTypes);
+      }
     }
-  }, [memoizedFormWorkTypes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formWorkTypes]);
 
   // Form layout configuration
   const formItemLayout = {
@@ -170,74 +207,116 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
 
   // GraphQL queries and mutations
   const { data: countriesData } = useQuery(GET_COUNTRIES, {
-    fetchPolicy: 'network-and-cache'
+    fetchPolicy: "network-and-cache",
   });
   const { data: statesData } = useQuery(GET_STATES, {
     variables: { countryId: selectedCountry },
     skip: !selectedCountry,
-    fetchPolicy: 'network-and-cache'
+    fetchPolicy: "network-and-cache",
   });
   const { data: citiesData } = useQuery(GET_CITIES, {
     variables: { stateId: selectedState },
     skip: !selectedState,
-    fetchPolicy: 'network-and-cache'
+    fetchPolicy: "network-and-cache",
   });
 
   // Fetch full client data when editing (includes workTypeAssociations, gradings, taskPreferences)
   const { data: fullClientData } = useQuery(GET_CLIENT, {
     variables: { id: client?.id },
     skip: !client?.id,
-    fetchPolicy: 'network-only'
+    fetchPolicy: "network-only",
   });
 
   const [createClient] = useMutation(CREATE_CLIENT, {
     onCompleted: () => {
-      message.success('Client created successfully');
+      message.success("Client created successfully");
       onSuccess?.();
     },
     onError: (error) => {
       message.error(error.message);
       setLoading(false);
-    }
+    },
   });
 
   const [updateClient] = useMutation(UPDATE_CLIENT, {
     onCompleted: () => {
-      message.success('Client updated successfully');
+      message.success("Client updated successfully");
       onSuccess?.();
     },
     onError: (error) => {
       message.error(error.message);
       setLoading(false);
-    }
+    },
   });
-
-
 
   // Initialize form with client data
   useEffect(() => {
     // Use full client data if available (includes workTypeAssociations, gradings, taskPreferences)
     // Otherwise use the client prop passed from the list
     const clientData = fullClientData?.client || client;
-    
+
     if (clientData) {
-      const clientType = clientData.clientType || 'permanent';
+      const clientType = clientData.clientType || "permanent";
+
+      // Extract work type IDs from workTypeAssociations or from gradings if empty
+      let workTypeIds =
+        clientData.workTypeAssociations?.map((wta) => wta.workType.id) || [];
       
-      // Extract work type IDs
-      const workTypeIds = clientData.workTypeAssociations?.map(wta => wta.workType.id) || [];
+      // If workTypeAssociations is empty, extract work types from gradings
+      if (workTypeIds.length === 0 && clientData.gradings?.length > 0) {
+        const workTypeIdsFromGradings = clientData.gradings
+          .map((g) => g.grading?.workType?.id)
+          .filter((id) => id); // Remove undefined/null values
+        
+        // Remove duplicates
+        workTypeIds = [...new Set(workTypeIdsFromGradings)];
+      }
+      
+      console.log("workTypeIds", clientData);
       
       // Extract grading IDs and custom rates
-      const gradingIds = clientData.gradings?.map(g => g.gradingId) || [];
+      const gradingIds = clientData.gradings?.map((g) => g.gradingId) || [];
       const customRates = {};
-      clientData.gradings?.forEach(g => {
+      clientData.gradings?.forEach((g) => {
         if (g.customRate) {
           customRates[g.gradingId] = g.customRate;
         }
       });
       
-      // Extract service provider IDs
-      const serviceProviderIds = clientData.serviceProviders?.map(sp => sp.serviceProvider.id) || [];
+      console.log("Custom Rates Debug:", {
+        rawGradings: clientData.gradings,
+        extractedGradingIds: gradingIds,
+        extractedCustomRates: customRates,
+        hasCustomRatesField: clientData.hasCustomRates
+      });
+
+      // Extract service provider IDs with multiple fallback strategies
+      let serviceProviderIds = [];
       
+      if (clientData.serviceProviders && Array.isArray(clientData.serviceProviders)) {
+        serviceProviderIds = clientData.serviceProviders.map((sp) => {
+          // Handle nested structure: { serviceProvider: { id: ... } }
+          if (sp.serviceProvider && sp.serviceProvider.id) {
+            return sp.serviceProvider.id;
+          }
+          // Handle direct ID structure: { id: ... }
+          if (sp.id) {
+            return sp.id;
+          }
+          // Handle string ID
+          if (typeof sp === 'string') {
+            return sp;
+          }
+          return null;
+        }).filter(id => id !== null);
+      }
+      
+      console.log("Service Providers Debug:", {
+        raw: clientData.serviceProviders,
+        extracted: serviceProviderIds,
+        length: serviceProviderIds.length
+      });
+
       // Build complete form data object
       const formData = {
         ...clientData,
@@ -246,15 +325,20 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
         stateId: clientData.state?.id,
         cityId: clientData.city?.id,
         phone: clientData.contactNoWork || clientData.phone,
-        alternatePhone: clientData.contactNoPersonal || clientData.alternatePhone,
+        alternatePhone:
+          clientData.contactNoPersonal || clientData.alternatePhone,
         workTypes: workTypeIds,
         gradings: gradingIds,
         serviceProviders: serviceProviderIds,
+        leader: clientData.leader?.id,
+        notes: clientData.clientNotes,
       };
       
+      console.log("Form Data being set:", formData);
+
       // Set all form fields in a single call
       form.setFieldsValue(formData);
-      
+
       // Update state variables
       setSelectedCountry(clientData.country?.id);
       setSelectedState(clientData.state?.id);
@@ -262,11 +346,11 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
       setSelectedWorkTypes(workTypeIds);
       setSelectedGradings(gradingIds);
       setGradingCustomRates(customRates);
-      
+
       // Initialize task preferences from client data
       if (clientData.taskPreferences && clientData.taskPreferences.length > 0) {
         const taskAssignments = {};
-        clientData.taskPreferences.forEach(pref => {
+        clientData.taskPreferences.forEach((pref) => {
           if (!taskAssignments[pref.gradingId]) {
             taskAssignments[pref.gradingId] = {};
           }
@@ -274,7 +358,7 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
         });
         setGradingTaskAssignments(taskAssignments);
       }
-      
+
       // Initialize other toggles
       if (clientData.isGstEnabled !== undefined) {
         setIsGSTEnabled(clientData.isGstEnabled);
@@ -284,8 +368,8 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
       }
     } else {
       // Set default clientType for new clients
-      form.setFieldsValue({ clientType: 'permanent' });
-      setClientType('permanent'); // Also update state
+      form.setFieldsValue({ clientType: "permanent" });
+      setClientType("permanent"); // Also update state
     }
     // Removed 'form' from dependencies to prevent infinite loops
     // Form instance is stable and accessed within the effect
@@ -296,30 +380,36 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
   // This ensures gradings query has completed before we try to set grading values
   useEffect(() => {
     const clientData = fullClientData?.client || client;
-    
+
     // Early return if no client data (e.g., adding new client)
     if (!clientData || !clientData.id) {
       return;
     }
-    
+
     // Only run this when we have client data AND gradingsData is available
     if (gradingsData?.gradingsByWorkType && selectedWorkTypes.length > 0) {
-      const gradingIds = clientData.gradings?.map(g => g.gradingId) || [];
-      
+      const gradingIds = clientData.gradings?.map((g) => g.gradingId) || [];
+
       // Skip if no gradings to populate
       if (gradingIds.length === 0) {
         return;
       }
-      
+
       // Only update if we haven't set gradings yet or if they're different
-      const currentGradings = form.getFieldValue('gradings') || [];
-      const gradingsChanged = JSON.stringify(currentGradings.sort()) !== JSON.stringify(gradingIds.sort());
-      
+      const currentGradings = form.getFieldValue("gradings") || [];
+      const gradingsChanged =
+        JSON.stringify(currentGradings.sort()) !==
+        JSON.stringify(gradingIds.sort());
+
       if (gradingsChanged) {
         // Verify that all grading IDs exist in the fetched data
-        const availableGradingIds = gradingsData.gradingsByWorkType.map(g => g.id);
-        const validGradingIds = gradingIds.filter(id => availableGradingIds.includes(id));
-        
+        const availableGradingIds = gradingsData.gradingsByWorkType.map(
+          (g) => g.id
+        );
+        const validGradingIds = gradingIds.filter((id) =>
+          availableGradingIds.includes(id)
+        );
+
         if (validGradingIds.length > 0) {
           form.setFieldsValue({ gradings: validGradingIds });
           setSelectedGradings(validGradingIds);
@@ -334,50 +424,54 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
   const handleSubmit = useCallback(async () => {
     try {
       setLoading(true);
-      
+
       // Validate ALL required fields from ALL steps
-      await form.validateFields(['clientType', 'firstName', 'email']);
-      
+      await form.validateFields(["clientType", "firstName", "email"]);
+
       // Get all form values
       const values = form.getFieldsValue(true);
-      
+
       // Debug: Log all form values to see what's being collected
-      console.log('All form values:', values);
-      
+      console.log("All form values:", values);
+
       // Ensure required fields are present
       if (!values.firstName) {
-        message.error('First name is required');
+        message.error("First name is required");
         setLoading(false);
         setCurrentStep(0); // Go back to first step
         return;
       }
-      
+
       // Transform data for backend
       const input = {
         ...values,
-        clientType: values.clientType || clientType || 'permanent',
+        clientType: values.clientType || clientType || "permanent",
         isActive: values.isActive !== false,
       };
 
       // Transform gradings - support both single ID (string) and multiple IDs (array)
       if (input.gradings) {
-        if (typeof input.gradings === 'string') {
+        if (typeof input.gradings === "string") {
           // Single grading selected (old behavior)
-          input.gradings = [{
-            gradingId: input.gradings,
-            customRate: null,
-            currency: 'INR',
-            unit: 'image'
-          }];
+          input.gradings = [
+            {
+              gradingId: input.gradings,
+              customRate: null,
+              currency: "INR",
+              unit: "image",
+            },
+          ];
         } else if (Array.isArray(input.gradings)) {
           // Multiple gradings selected - include custom rates
-          input.gradings = input.gradings.map(gradingId => {
-            const gradingData = gradingsData?.gradingsByWorkType?.find(g => g.id === gradingId);
+          input.gradings = input.gradings.map((gradingId) => {
+            const gradingData = gradingsData?.gradingsByWorkType?.find(
+              (g) => g.id === gradingId
+            );
             return {
               gradingId,
               customRate: gradingCustomRates[gradingId] || null,
-              currency: gradingData?.currency || 'INR',
-              unit: gradingData?.unit || 'image'
+              currency: gradingData?.currency || "INR",
+              unit: gradingData?.unit || "image",
             };
           });
         }
@@ -387,7 +481,10 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
       // These are preferred employees per task that will be used when creating projects
       // Format: gradingTaskAssignments = { gradingId: { taskId: [userIds] } }
       // Backend expects: taskPreferences: [{ gradingId, taskId, preferredUserIds }]
-      if (gradingTaskAssignments && Object.keys(gradingTaskAssignments).length > 0) {
+      if (
+        gradingTaskAssignments &&
+        Object.keys(gradingTaskAssignments).length > 0
+      ) {
         input.taskPreferences = [];
         Object.entries(gradingTaskAssignments).forEach(([gradingId, tasks]) => {
           Object.entries(tasks).forEach(([taskId, userIds]) => {
@@ -395,7 +492,7 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               input.taskPreferences.push({
                 gradingId,
                 taskId,
-                preferredUserIds: userIds
+                preferredUserIds: userIds,
               });
             }
           });
@@ -426,44 +523,90 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
         delete updateInput.transactions;
         delete updateInput.creator;
         delete updateInput.phone; // 'phone' is used internally, backend expects contactNoWork
-        
-        console.log('Submitting client UPDATE with input:', JSON.stringify(updateInput, null, 2));
-        await updateClient({ variables: { id: client.id, input: updateInput } });
+
+        console.log(
+          "Submitting client UPDATE with input:",
+          JSON.stringify(updateInput, null, 2)
+        );
+        await updateClient({
+          variables: { id: client.id, input: updateInput },
+        });
       } else {
-        console.log('Submitting client CREATE with input:', JSON.stringify(input, null, 2));
+        console.log(
+          "Submitting client CREATE with input:",
+          JSON.stringify(input, null, 2)
+        );
         await createClient({ variables: { input } });
       }
     } catch (error) {
-      console.error('Form validation/submission error:', error);
-      message.error('Please fill in all required fields');
+      console.error("Form validation/submission error:", error);
+      message.error("Please fill in all required fields");
       setLoading(false);
       // If validation failed, go back to the step with errors
       if (error.errorFields && error.errorFields.length > 0) {
         const firstErrorField = error.errorFields[0].name[0];
         // Determine which step has the error
-        if (['clientType', 'firstName', 'lastName', 'displayName', 'companyName', 'email', 'phone', 'alternatePhone', 'address', 'pincode', 'countryId', 'stateId', 'cityId'].includes(firstErrorField)) {
+        if (
+          [
+            "clientType",
+            "firstName",
+            "lastName",
+            "displayName",
+            "companyName",
+            "email",
+            "phone",
+            "alternatePhone",
+            "address",
+            "pincode",
+            "countryId",
+            "stateId",
+            "cityId",
+          ].includes(firstErrorField)
+        ) {
           setCurrentStep(0);
-        } else if (['isGstEnabled', 'gstNumber', 'panCard', 'creditDays', 'creditAmountLimit', 'openingBalance', 'openingBalanceType', 'accountMessage'].includes(firstErrorField)) {
+        } else if (
+          [
+            "isGstEnabled",
+            "gstNumber",
+            "panCard",
+            "creditDays",
+            "creditAmountLimit",
+            "openingBalance",
+            "openingBalanceType",
+            "accountMessage",
+          ].includes(firstErrorField)
+        ) {
           setCurrentStep(1);
         } else {
           setCurrentStep(2);
         }
       }
     }
-  }, [form, client, clientType, updateClient, createClient, setLoading, gradingsData, gradingCustomRates, gradingTaskAssignments]);
+  }, [
+    form,
+    client,
+    clientType,
+    updateClient,
+    createClient,
+    setLoading,
+    gradingsData,
+    gradingCustomRates,
+    gradingTaskAssignments,
+  ]);
 
   // Step navigation
   const nextStep = useCallback(() => {
     // Get fields for current step to validate only those
     const currentStepFields = getCurrentStepFields();
-    
-    form.validateFields(currentStepFields)
+
+    form
+      .validateFields(currentStepFields)
       .then(() => {
         setCurrentStep(currentStep + 1);
       })
       .catch((errorInfo) => {
-        console.log('Validation failed:', errorInfo);
-        message.error('Please fill in all required fields before proceeding');
+        console.log("Validation failed:", errorInfo);
+        message.error("Please fill in all required fields before proceeding");
       });
   }, [form, currentStep]);
 
@@ -475,11 +618,34 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
   const getCurrentStepFields = () => {
     switch (currentStep) {
       case 0: // Basic Information & Contact
-        return ['clientType', 'firstName', 'email', 'phone', 'address', 'countryId', 'stateId', 'cityId'];
+        return [
+          "clientType",
+          "firstName",
+          "email",
+          "phone",
+          "address",
+          "countryId",
+          "stateId",
+          "cityId",
+        ];
       case 1: // Business Details
-        return ['isGstEnabled', 'gstNumber', 'panCard', 'creditDays', 'creditAmountLimit', 'openingBalance', 'openingBalanceType'];
+        return [
+          "isGstEnabled",
+          "gstNumber",
+          "panCard",
+          "creditDays",
+          "creditAmountLimit",
+          "openingBalance",
+          "openingBalanceType",
+        ];
       case 2: // Additional Information
-        return ['priority', 'transferMode', 'colorCorrectionStyle', 'clientNotes', 'accountMessage'];
+        return [
+          "priority",
+          "transferMode",
+          "colorCorrectionStyle",
+          "clientNotes",
+          "accountMessage",
+        ];
       default:
         return [];
     }
@@ -487,7 +653,7 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
 
   // Handle country change
   const handleCountryChange = (countryId) => {
-    console.log('Country changed:', countryId);
+    console.log("Country changed:", countryId);
     setSelectedCountry(countryId);
     setSelectedState(null);
     form.setFieldsValue({ stateId: undefined, cityId: undefined });
@@ -495,37 +661,42 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
 
   // Handle state change
   const handleStateChange = (stateId) => {
-    console.log('State changed:', stateId);
+    console.log("State changed:", stateId);
     setSelectedState(stateId);
     form.setFieldsValue({ cityId: undefined });
   };
 
+  console.log("workTypes", selectedWorkTypes);
   // Step configurations - dynamic based on client type
-  const steps = useMemo(() => clientType === 'walkIn' 
-    ? [
-        {
-          title: 'Basic Information',
-          icon: <UserOutlined />
-        },
-        {
-          title: 'Contact & Location',
-          icon: <EnvironmentOutlined />
-        }
-      ]
-    : [
-        {
-          title: 'Basic Information',
-          icon: <UserOutlined />
-        },
-        {
-          title: 'Contact & Location',
-          icon: <EnvironmentOutlined />
-        },
-        {
-          title: 'Business Details',
-          icon: <BankOutlined />
-        }
-      ], [clientType]);
+  const steps = useMemo(
+    () =>
+      clientType === "walkIn"
+        ? [
+            {
+              title: "Basic Information",
+              icon: <UserOutlined />,
+            },
+            {
+              title: "Contact & Location",
+              icon: <EnvironmentOutlined />,
+            },
+          ]
+        : [
+            {
+              title: "Basic Information",
+              icon: <UserOutlined />,
+            },
+            {
+              title: "Contact & Location",
+              icon: <EnvironmentOutlined />,
+            },
+            {
+              title: "Business Details",
+              icon: <BankOutlined />,
+            },
+          ],
+    [clientType]
+  );
 
   // Step content components
   const renderStepContent = () => {
@@ -537,11 +708,17 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               <Col span={12}>
                 <Form.Item
                   name="clientType"
-                  label={<span>Client Type <span style={{ color: 'red' }}>*</span></span>}
-                  rules={[{ required: true, message: 'Please select client type!' }]}
+                  label={
+                    <span>
+                      Client Type <span style={{ color: "red" }}>*</span>
+                    </span>
+                  }
+                  rules={[
+                    { required: true, message: "Please select client type!" },
+                  ]}
                 >
-                  <Select 
-                    placeholder="Select client type" 
+                  <Select
+                    placeholder="Select client type"
                     size="middle"
                     onChange={handleClientTypeChange}
                   >
@@ -556,37 +733,40 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               <Col span={8}>
                 <Form.Item
                   name="firstName"
-                  label={<span>First Name <span style={{ color: 'red' }}>*</span></span>}
-                  rules={[{ required: true, message: 'Please enter first name!' }]}
+                  label={
+                    <span>
+                      First Name <span style={{ color: "red" }}>*</span>
+                    </span>
+                  }
+                  rules={[
+                    { required: true, message: "Please enter first name!" },
+                  ]}
                 >
                   <Input placeholder="Enter first name" size="middle" />
                 </Form.Item>
               </Col>
               <Col span={8}>
-                <Form.Item
-                  name="lastName"
-                  label="Last Name"
-                >
+                <Form.Item name="lastName" label="Last Name">
                   <Input placeholder="Enter last name" size="middle" />
                 </Form.Item>
               </Col>
               <Col span={8}>
-                <Form.Item
-                  name="displayName"
-                  label="Display Name"
-                >
-                  <Input placeholder="Enter display name (optional)" size="middle" />
+                <Form.Item name="displayName" label="Display Name">
+                  <Input
+                    placeholder="Enter display name (optional)"
+                    size="middle"
+                  />
                 </Form.Item>
               </Col>
             </Row>
 
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item
-                  name="companyName"
-                  label="Company Name"
-                >
-                  <Input placeholder="Enter company name (optional)" size="middle" />
+                <Form.Item name="companyName" label="Company Name">
+                  <Input
+                    placeholder="Enter company name (optional)"
+                    size="middle"
+                  />
                 </Form.Item>
               </Col>
               <Col span={12}>
@@ -596,18 +776,21 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                   valuePropName="checked"
                   initialValue={true}
                 >
-                  <Switch checkedChildren="Active" unCheckedChildren="Inactive" />
+                  <Switch
+                    checkedChildren="Active"
+                    unCheckedChildren="Inactive"
+                  />
                 </Form.Item>
               </Col>
             </Row>
 
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item
-                  name="contactNoWork"
-                  label="Contact No (Work)"
-                >
-                  <Input placeholder="Enter work contact number" size="middle" />
+                <Form.Item name="contactNoWork" label="Contact No (Work)">
+                  <Input
+                    placeholder="Enter work contact number"
+                    size="middle"
+                  />
                 </Form.Item>
               </Col>
               <Col span={12}>
@@ -615,7 +798,10 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                   name="contactNoPersonal"
                   label="Contact No (Personal)"
                 >
-                  <Input placeholder="Enter personal contact number" size="middle" />
+                  <Input
+                    placeholder="Enter personal contact number"
+                    size="middle"
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -629,16 +815,26 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               <Col span={12}>
                 <Form.Item
                   name="email"
-                  label={<span>Email <span style={{ color: 'red' }}>*</span></span>}
+                  label={
+                    <span>
+                      Email <span style={{ color: "red" }}>*</span>
+                    </span>
+                  }
                   rules={[
-                    { type: 'email', message: 'Please enter a valid email!' },
-                    { required: true, message: 'Please enter email!' }
+                    { type: "email", message: "Please enter a valid email!" },
+                    { required: true, message: "Please enter email!" },
                   ]}
-                  extra={client ? <Text type="secondary" style={{ fontSize: '12px' }}>Email cannot be changed after client creation</Text> : null}
+                  extra={
+                    client ? (
+                      <Text type="secondary" style={{ fontSize: "12px" }}>
+                        Email cannot be changed after client creation
+                      </Text>
+                    ) : null
+                  }
                 >
-                  <Input 
-                    placeholder="Enter email address" 
-                    size="middle" 
+                  <Input
+                    placeholder="Enter email address"
+                    size="middle"
                     disabled={!!client}
                     readOnly={!!client}
                   />
@@ -647,8 +843,14 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               <Col span={12}>
                 <Form.Item
                   name="phone"
-                  label={<span>Phone <span style={{ color: 'red' }}>*</span></span>}
-                  rules={[{ required: true, message: 'Please enter phone number!' }]}
+                  label={
+                    <span>
+                      Phone <span style={{ color: "red" }}>*</span>
+                    </span>
+                  }
+                  rules={[
+                    { required: true, message: "Please enter phone number!" },
+                  ]}
                 >
                   <Input placeholder="Enter phone number" size="middle" />
                 </Form.Item>
@@ -657,18 +859,12 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
 
             <Row gutter={16}>
               <Col span={12}>
-                <Form.Item
-                  name="alternatePhone"
-                  label="Alternate Phone"
-                >
+                <Form.Item name="alternatePhone" label="Alternate Phone">
                   <Input placeholder="Enter alternate phone" size="middle" />
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item
-                  name="website"
-                  label="Website"
-                >
+                <Form.Item name="website" label="Website">
                   <Input placeholder="Enter website URL" size="middle" />
                 </Form.Item>
               </Col>
@@ -678,8 +874,12 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
 
             <Form.Item
               name="address"
-              label={<span>Street Address <span style={{ color: 'red' }}>*</span></span>}
-              rules={[{ required: true, message: 'Please enter address!' }]}
+              label={
+                <span>
+                  Street Address <span style={{ color: "red" }}>*</span>
+                </span>
+              }
+              rules={[{ required: true, message: "Please enter address!" }]}
             >
               <TextArea rows={2} placeholder="Enter full address" />
             </Form.Item>
@@ -688,8 +888,14 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               <Col span={8}>
                 <Form.Item
                   name="countryId"
-                  label={<span>Country <span style={{ color: 'red' }}>*</span></span>}
-                  rules={[{ required: true, message: 'Please select country!' }]}
+                  label={
+                    <span>
+                      Country <span style={{ color: "red" }}>*</span>
+                    </span>
+                  }
+                  rules={[
+                    { required: true, message: "Please select country!" },
+                  ]}
                 >
                   <Select
                     placeholder="Select country"
@@ -698,7 +904,7 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                     showSearch
                     optionFilterProp="children"
                   >
-                    {countriesData?.countries?.map(country => (
+                    {countriesData?.countries?.map((country) => (
                       <Option key={country.id} value={country.id}>
                         {country.name}
                       </Option>
@@ -709,8 +915,12 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               <Col span={8}>
                 <Form.Item
                   name="stateId"
-                  label={<span>State <span style={{ color: 'red' }}>*</span></span>}
-                  rules={[{ required: true, message: 'Please select state!' }]}
+                  label={
+                    <span>
+                      State <span style={{ color: "red" }}>*</span>
+                    </span>
+                  }
+                  rules={[{ required: true, message: "Please select state!" }]}
                 >
                   <Select
                     placeholder="Select state"
@@ -719,9 +929,9 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                     disabled={!selectedCountry}
                     showSearch
                     optionFilterProp="children"
-                    value={form.getFieldValue('stateId')}
+                    value={form.getFieldValue("stateId")}
                   >
-                    {statesData?.statesByCountry?.map(state => (
+                    {statesData?.statesByCountry?.map((state) => (
                       <Option key={state.id} value={state.id}>
                         {state.name}
                       </Option>
@@ -732,8 +942,12 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               <Col span={8}>
                 <Form.Item
                   name="cityId"
-                  label={<span>City <span style={{ color: 'red' }}>*</span></span>}
-                  rules={[{ required: true, message: 'Please select city!' }]}
+                  label={
+                    <span>
+                      City <span style={{ color: "red" }}>*</span>
+                    </span>
+                  }
+                  rules={[{ required: true, message: "Please select city!" }]}
                 >
                   <Select
                     placeholder="Select city"
@@ -742,7 +956,7 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                     showSearch
                     optionFilterProp="children"
                   >
-                    {citiesData?.citiesByState?.map(city => (
+                    {citiesData?.citiesByState?.map((city) => (
                       <Option key={city.id} value={city.id}>
                         {city.name}
                       </Option>
@@ -767,8 +981,17 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               <Col span={12}>
                 <Form.Item
                   name="workTypes"
-                  label={<span>Work Types <span style={{ color: 'red' }}>*</span></span>}
-                  rules={[{ required: true, message: 'Select at least one work type!' }]}
+                  label={
+                    <span>
+                      Work Types <span style={{ color: "red" }}>*</span>
+                    </span>
+                  }
+                  rules={[
+                    {
+                      required: true,
+                      message: "Select at least one work type!",
+                    },
+                  ]}
                 >
                   <Select
                     mode="multiple"
@@ -776,14 +999,16 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                     size="middle"
                     onChange={handleWorkTypesChange}
                   >
-                    {workTypesData?.workTypes?.map(wt => (
-                      <Option key={wt.id} value={wt.id}>{wt.name}</Option>
+                    {workTypesData?.workTypes?.map((wt) => (
+                      <Option key={wt.id} value={wt.id}>
+                        {wt.name}
+                      </Option>
                     ))}
                   </Select>
                 </Form.Item>
               </Col>
             </Row>
-            
+
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
@@ -792,86 +1017,144 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                   valuePropName="checked"
                   initialValue={false}
                 >
-                  <Switch checkedChildren="Yes" unCheckedChildren="No" onChange={handleCustomRateToggle} />
+                  <Switch
+                    checkedChildren="Yes"
+                    unCheckedChildren="No"
+                    onChange={handleCustomRateToggle}
+                  />
                 </Form.Item>
               </Col>
             </Row>
-            
+
             <Row gutter={16}>
               <Col span={24}>
                 <Form.Item
                   name="gradings"
-                  label={<span>Gradings <span style={{ color: 'red' }}>*</span></span>}
-                  rules={[{ required: true, message: 'Please select at least one grading!' }]}
+                  label={
+                    <span>
+                      Gradings <span style={{ color: "red" }}>*</span>
+                    </span>
+                  }
+                  rules={[
+                    {
+                      required: true,
+                      message: "Please select at least one grading!",
+                    },
+                  ]}
                 >
                   <Select
                     mode="multiple"
                     placeholder="Select gradings"
                     size="middle"
-                    disabled={formWorkTypes.length === 0}
+                    disabled={!formWorkTypes || formWorkTypes.length === 0}
                     onChange={handleGradingsChange}
                   >
-                    {gradingsData?.gradingsByWorkType?.map(grading => (
+                    {gradingsData?.gradingsByWorkType?.map((grading) => (
                       <Option key={grading.id} value={grading.id}>
-                        {grading.name} - Default Rate: ₹{grading.defaultRate}/{grading.unit}
+                        {grading.name} - Default Rate: ₹{grading.defaultRate}/
+                        {grading.unit}
                       </Option>
                     ))}
                   </Select>
                 </Form.Item>
               </Col>
             </Row>
-            
+
             {/* Grading Details - Custom Rates and Task Assignments */}
             {selectedGradings.length > 0 && (
               <>
                 <Divider orientation="left">Grading Details</Divider>
-                {selectedGradings.map(gradingId => {
-                  const grading = gradingsData?.gradingsByWorkType?.find(g => g.id === gradingId);
+                {selectedGradings.map((gradingId) => {
+                  const grading = gradingsData?.gradingsByWorkType?.find(
+                    (g) => g.id === gradingId
+                  );
                   if (!grading) return null;
-                  
+
                   return (
-                    <div key={gradingId} style={{ marginBottom: 32, padding: 16, border: '1px solid #f0f0f0', borderRadius: 8 }}>
+                    <div
+                      key={gradingId}
+                      style={{
+                        marginBottom: 32,
+                        padding: 16,
+                        border: "1px solid #f0f0f0",
+                        borderRadius: 8,
+                      }}
+                    >
                       <Row gutter={16} style={{ marginBottom: 16 }}>
                         <Col span={24}>
-                          <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>{grading.name}</Text>
+                          <Text
+                            strong
+                            style={{ fontSize: "16px", color: "#1890ff" }}
+                          >
+                            {grading.name}
+                          </Text>
                           <Text type="secondary" style={{ marginLeft: 16 }}>
                             Default Rate: ₹{grading.defaultRate}/{grading.unit}
                           </Text>
                         </Col>
                       </Row>
-                      
+
                       {/* Custom Rate Input */}
                       {hasCustomRates && (
                         <Row gutter={16} style={{ marginBottom: 16 }}>
                           <Col span={12}>
                             <Text>Custom Rate (optional):</Text>
                             <InputNumber
-                              style={{ width: '100%', marginTop: 8 }}
+                              style={{ width: "100%", marginTop: 8 }}
                               placeholder={`Default: ₹${grading.defaultRate}`}
                               prefix="₹"
                               min={0}
                               value={gradingCustomRates[gradingId]}
-                              onChange={(value) => handleGradingCustomRateChange(gradingId, value)}
+                              onChange={(value) =>
+                                handleGradingCustomRateChange(gradingId, value)
+                              }
                             />
                           </Col>
                         </Row>
                       )}
-                      
+
                       {/* Task Employee Preferences for this Grading */}
                       {grading.taskTypes && grading.taskTypes.length > 0 && (
                         <>
-                          <Text strong style={{ display: 'block', marginTop: 16, marginBottom: 8 }}>
+                          <Text
+                            strong
+                            style={{
+                              display: "block",
+                              marginTop: 16,
+                              marginBottom: 8,
+                            }}
+                          >
                             Preferred Employees for Tasks
                           </Text>
-                          <Text type="secondary" style={{ display: 'block', marginBottom: 12, fontSize: '12px' }}>
-                            Select preferred employees for each task. These will be auto-assigned when creating projects.
+                          <Text
+                            type="secondary"
+                            style={{
+                              display: "block",
+                              marginBottom: 12,
+                              fontSize: "12px",
+                            }}
+                          >
+                            Select preferred employees for each task. These will
+                            be auto-assigned when creating projects.
                           </Text>
-                          {grading.taskTypes.map(task => (
-                            <Row key={task.id} gutter={16} style={{ marginBottom: 12 }}>
+                          {grading.taskTypes.map((task) => (
+                            <Row
+                              key={task.id}
+                              gutter={16}
+                              style={{ marginBottom: 12 }}
+                            >
                               <Col span={8}>
                                 <Text>{task.name}</Text>
                                 {task.description && (
-                                  <><br /><Text type="secondary" style={{ fontSize: '12px' }}>{task.description}</Text></>
+                                  <>
+                                    <br />
+                                    <Text
+                                      type="secondary"
+                                      style={{ fontSize: "12px" }}
+                                    >
+                                      {task.description}
+                                    </Text>
+                                  </>
                                 )}
                               </Col>
                               <Col span={16}>
@@ -879,11 +1162,21 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                                   mode="multiple"
                                   placeholder={`Select employees for ${task.name}`}
                                   size="small"
-                                  style={{ width: '100%' }}
-                                  value={gradingTaskAssignments[gradingId]?.[task.id] || []}
-                                  onChange={(userIds) => handleGradingTaskAssignment(gradingId, task.id, userIds)}
+                                  style={{ width: "100%" }}
+                                  value={
+                                    gradingTaskAssignments[gradingId]?.[
+                                      task.id
+                                    ] || []
+                                  }
+                                  onChange={(userIds) =>
+                                    handleGradingTaskAssignment(
+                                      gradingId,
+                                      task.id,
+                                      userIds
+                                    )
+                                  }
                                 >
-                                  {usersData?.users?.map(user => (
+                                  {usersData?.users?.map((user) => (
                                     <Option key={user.id} value={user.id}>
                                       {user.firstName} {user.lastName}
                                     </Option>
@@ -906,7 +1199,10 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                   name="colorCorrectionStyle"
                   label="Color Correction Style"
                 >
-                  <Input placeholder="Enter color correction style (optional)" size="middle" />
+                  <Input
+                    placeholder="Enter color correction style (optional)"
+                    size="middle"
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -916,18 +1212,21 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                   name="serviceProviders"
                   label="Service Providers (Employees)"
                 >
-                  <Select mode="multiple" placeholder="Select employees" size="middle">
-                    {usersData?.users?.map(user => (
-                      <Option key={user.id} value={user.id}>{user.firstName} {user.lastName}</Option>
+                  <Select
+                    mode="multiple"
+                    placeholder="Select employees"
+                    size="middle"
+                  >
+                    {usersData?.users?.map((user) => (
+                      <Option key={user.id} value={user.id}>
+                        {user.firstName} {user.lastName}
+                      </Option>
                     ))}
                   </Select>
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item
-                  name="transferMode"
-                  label="Transfer Mode"
-                >
+                <Form.Item name="transferMode" label="Transfer Mode">
                   <Select placeholder="Select transfer mode" size="middle">
                     <Option value="email">Email</Option>
                     <Option value="ftp">FTP</Option>
@@ -941,8 +1240,12 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               <Col span={12}>
                 <Form.Item
                   name="priority"
-                  label={<span>Priority <span style={{ color: 'red' }}>*</span></span>}
-                  rules={[{ required: true, message: 'Select priority!' }]}
+                  label={
+                    <span>
+                      Priority <span style={{ color: "red" }}>*</span>
+                    </span>
+                  }
+                  rules={[{ required: true, message: "Select priority!" }]}
                 >
                   <Select placeholder="Select priority" size="middle">
                     <Option value="A">A (Top Priority)</Option>
@@ -952,11 +1255,11 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                 </Form.Item>
               </Col>
               <Col span={12}>
-                <Form.Item
-                  name="notes"
-                  label="Client Notes"
-                >
-                  <TextArea rows={2} placeholder="Special requests or notes from client" />
+                <Form.Item name="notes" label="Client Notes">
+                  <TextArea
+                    rows={2}
+                    placeholder="Special requests or notes from client"
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -973,7 +1276,11 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                   valuePropName="checked"
                   initialValue={false}
                 >
-                  <Switch checkedChildren="Yes" unCheckedChildren="No" onChange={handleGSTToggle} />
+                  <Switch
+                    checkedChildren="Yes"
+                    unCheckedChildren="No"
+                    onChange={handleGSTToggle}
+                  />
                 </Form.Item>
               </Col>
               {isGSTEnabled && (
@@ -981,8 +1288,18 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                   <Col span={8}>
                     <Form.Item
                       name="gstNo"
-                      label={<span>GST Number <span style={{ color: 'red' }}>*</span></span>}
-                      rules={[{ required: true, message: 'GST number is required when GST is enabled!' }]}
+                      label={
+                        <span>
+                          GST Number <span style={{ color: "red" }}>*</span>
+                        </span>
+                      }
+                      rules={[
+                        {
+                          required: true,
+                          message:
+                            "GST number is required when GST is enabled!",
+                        },
+                      ]}
                     >
                       <Input placeholder="Enter GST number" size="middle" />
                     </Form.Item>
@@ -990,17 +1307,23 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                   <Col span={8}>
                     <Form.Item
                       name="gstRate"
-                      label={<span>GST Rate (%) <span style={{ color: 'red' }}>*</span></span>}
-                      rules={[{ required: true, message: 'GST rate is required!' }]}
+                      label={
+                        <span>
+                          GST Rate (%) <span style={{ color: "red" }}>*</span>
+                        </span>
+                      }
+                      rules={[
+                        { required: true, message: "GST rate is required!" },
+                      ]}
                     >
                       <InputNumber
                         placeholder="Enter GST rate"
                         size="middle"
-                        style={{ width: '100%' }}
+                        style={{ width: "100%" }}
                         min={0}
                         max={100}
-                        formatter={value => `${value}%`}
-                        parser={value => value.replace('%', '')}
+                        formatter={(value) => `${value}%`}
+                        parser={(value) => value.replace("%", "")}
                       />
                     </Form.Item>
                   </Col>
@@ -1008,10 +1331,7 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
               )}
               {!isGSTEnabled && (
                 <Col span={16}>
-                  <Form.Item
-                    name="panCard"
-                    label="PAN Card"
-                  >
+                  <Form.Item name="panCard" label="PAN Card">
                     <Input placeholder="Enter PAN card number" size="middle" />
                   </Form.Item>
                 </Col>
@@ -1019,42 +1339,37 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
             </Row>
             <Row gutter={16}>
               <Col span={8}>
-                <Form.Item
-                  name="creditDays"
-                  label="Credit in Days"
-                >
-                  <InputNumber 
-                    placeholder="Enter credit days" 
-                    size="middle" 
-                    style={{ width: '100%' }} 
+                <Form.Item name="creditDays" label="Credit in Days">
+                  <InputNumber
+                    placeholder="Enter credit days"
+                    size="middle"
+                    style={{ width: "100%" }}
                   />
                 </Form.Item>
               </Col>
               <Col span={8}>
-                <Form.Item
-                  name="creditAmount"
-                  label="Credit in Amount (₹)"
-                >
-                  <InputNumber 
-                    placeholder="Enter credit amount" 
-                    size="middle" 
-                    style={{ width: '100%' }} 
-                    formatter={value => `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} 
-                    parser={value => value.replace(/₹\s?|(,*)/g, '')} 
+                <Form.Item name="creditAmount" label="Credit in Amount (₹)">
+                  <InputNumber
+                    placeholder="Enter credit amount"
+                    size="middle"
+                    style={{ width: "100%" }}
+                    formatter={(value) =>
+                      `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
                   />
                 </Form.Item>
               </Col>
               <Col span={8}>
-                <Form.Item
-                  name="openingBalance"
-                  label="Opening Balance (₹)"
-                >
-                  <InputNumber 
-                    placeholder="Enter opening balance" 
-                    size="middle" 
-                    style={{ width: '100%' }} 
-                    formatter={value => `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')} 
-                    parser={value => value.replace(/₹\s?|(,*)/g, '')} 
+                <Form.Item name="openingBalance" label="Opening Balance (₹)">
+                  <InputNumber
+                    placeholder="Enter opening balance"
+                    size="middle"
+                    style={{ width: "100%" }}
+                    formatter={(value) =>
+                      `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                    }
+                    parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
                   />
                 </Form.Item>
               </Col>
@@ -1079,7 +1394,10 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                   name="accountMessage"
                   label="Account Related Message"
                 >
-                  <TextArea rows={2} placeholder="Message for account/credit management" />
+                  <TextArea
+                    rows={2}
+                    placeholder="Message for account/credit management"
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -1090,8 +1408,10 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
                   label="Client Leader (for transactions)"
                 >
                   <Select placeholder="Select leader" size="middle">
-                    {usersData?.users?.map(user => (
-                      <Option key={user.id} value={user.id}>{user.firstName} {user.lastName}</Option>
+                    {usersData?.users?.map((user) => (
+                      <Option key={user.id} value={user.id}>
+                        {user.firstName} {user.lastName}
+                      </Option>
                     ))}
                   </Select>
                 </Form.Item>
@@ -1106,56 +1426,65 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
   };
 
   // Expose header and footer for parent drawer
-  const renderHeader = useCallback(() => (
-    <Steps current={currentStep} size="small">
-      {steps.map(step => (
-        <Step key={step.title} title={step.title} icon={step.icon} />
-      ))}
-    </Steps>
-  ), [currentStep, steps]);
+  const renderHeader = useCallback(
+    () => (
+      <Steps current={currentStep} size="small">
+        {steps.map((step) => (
+          <Step key={step.title} title={step.title} icon={step.icon} />
+        ))}
+      </Steps>
+    ),
+    [currentStep, steps]
+  );
 
-  const renderFooter = useCallback(() => (
-    <div className="flex justify-between w-full">
-      <div>
-        {currentStep > 0 && (
-          <Button onClick={prevStep}>
-            Previous
-          </Button>
-        )}
+  const renderFooter = useCallback(
+    () => (
+      <div className="flex justify-between w-full">
+        <div>
+          {currentStep > 0 && <Button onClick={prevStep}>Previous</Button>}
+        </div>
+        <Space>
+          <Button onClick={onClose}>Cancel</Button>
+          {currentStep < steps.length - 1 ? (
+            <Button type="primary" onClick={nextStep}>
+              Next
+            </Button>
+          ) : (
+            <Button type="primary" onClick={handleSubmit} loading={loading}>
+              {client ? "Update Client" : "Create Client"}
+            </Button>
+          )}
+        </Space>
       </div>
-      <Space>
-        <Button onClick={onClose}>
-          Cancel
-        </Button>
-        {currentStep < steps.length - 1 ? (
-          <Button type="primary" onClick={nextStep}>
-            Next
-          </Button>
-        ) : (
-          <Button
-            type="primary"
-            onClick={handleSubmit}
-            loading={loading}
-          >
-            {client ? 'Update Client' : 'Create Client'}
-          </Button>
-        )}
-      </Space>
-    </div>
-  ), [currentStep, steps, loading, client, prevStep, nextStep, handleSubmit, onClose]);
+    ),
+    [
+      currentStep,
+      steps,
+      loading,
+      client,
+      prevStep,
+      nextStep,
+      handleSubmit,
+      onClose,
+    ]
+  );
 
   // Notify parent about header and footer when rendering in drawer mode
   useEffect(() => {
-    if (renderHeaderInDrawer) {
-      renderHeaderInDrawer(renderHeader());
+    if (renderHeaderInDrawer && renderHeader) {
+      const header = renderHeader();
+      renderHeaderInDrawer(header);
     }
-  }, [currentStep, clientType, renderHeaderInDrawer, renderHeader]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, clientType]);
 
   useEffect(() => {
-    if (renderFooterInDrawer) {
-      renderFooterInDrawer(renderFooter());
+    if (renderFooterInDrawer && renderFooter) {
+      const footer = renderFooter();
+      renderFooterInDrawer(footer);
     }
-  }, [currentStep, loading, clientType, renderFooterInDrawer, renderFooter]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentStep, loading, clientType]);
 
   return (
     <>
@@ -1164,8 +1493,8 @@ const ClientForm = ({ client, onClose, onSuccess, renderHeaderInDrawer, renderFo
         layout="vertical"
         requiredMark="optional"
         initialValues={{
-          clientType: 'permanent',
-          isActive: true
+          clientType: "permanent",
+          isActive: true,
         }}
         {...formItemLayout}
       >
