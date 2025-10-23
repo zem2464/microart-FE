@@ -1,5 +1,5 @@
 import React from 'react';
-import { Layout, Menu, Button, Dropdown, Avatar, Typography } from 'antd';
+import { Layout, Menu, Button, Dropdown, Avatar, Typography, Badge } from 'antd';
 import { Routes, Route, Link, useLocation } from 'react-router-dom';
 import {
   CheckSquareOutlined,
@@ -18,16 +18,16 @@ import ViewSwitcher from '../components/ViewSwitcher';
 
 // Import pages
 import TaskBoard from '../pages/FrontOffice/TaskBoard';
-import ProjectView from '../pages/FrontOffice/ProjectView';
+import ProjectManagement from '../pages/FrontOffice/ProjectManagement';
 import Calendar from '../pages/FrontOffice/Calendar';
 import ClientDashboard from '../pages/FrontOffice/ClientDashboard';
 import ClientList from '../pages/FrontOffice/ClientList';
 
-const { Header, Sider, Content } = Layout;
+const { Header, Content } = Layout;
 const { Title } = Typography;
 
 const FrontOfficeLayout = () => {
-  const user = useReactiveVar(userCacheVar); // Use cache variable instead of auth context
+  const user = useReactiveVar(userCacheVar);
   const { logout } = useAuth();
   const location = useLocation();
 
@@ -53,7 +53,7 @@ const FrontOfficeLayout = () => {
     {
       key: '/projects',
       icon: <ProjectOutlined />,
-      label: <Link to="/projects">Project View</Link>,
+      label: <Link to="/projects">Projects</Link>,
     },
     {
       key: '/calendar',
@@ -96,73 +96,77 @@ const FrontOfficeLayout = () => {
     },
   ];
 
-  const getPageTitle = () => {
-    if (location.pathname === '/') return 'Task Board';
-    if (location.pathname === '/projects') return 'Project View';
-    if (location.pathname === '/calendar') return 'Calendar';
-    if (location.pathname === '/clients/dashboard') return 'Client Dashboard';
-    if (location.pathname === '/clients') return 'Client Management';
-    return 'Dashboard';
-  };
-
   return (
-    <Layout className="min-h-screen">
-      <Sider
-        theme="light"
-        width={250}
-        className="border-r border-gray-200"
-      >
-        <div className="p-4 border-b border-gray-200">
-          <Title level={4} className="mb-0 text-gradient">
-            MicroArt Workspace
-          </Title>
+    <Layout className="min-h-screen frontoffice-layout">
+      <Header className="bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-sm">
+        {/* Title and Menu */}
+        <div className="flex items-center w-full min-w-0">
+          <div className="flex items-center mr-8">
+            <Title level={4} className="mb-0 mr-3 text-gradient">
+              MicroArt
+            </Title>
+            <Badge 
+              count="Employee" 
+              style={{ 
+                backgroundColor: '#52c41a', 
+                color: '#ffffff',
+                fontWeight: '500',
+                fontSize: '10px'
+              }} 
+            />
+          </div>
+          <Menu
+            mode="horizontal"
+            selectedKeys={[location.pathname]}
+            items={menuItems}
+            className="flex-1 border-b-0"
+            style={{ 
+              flex: 1, 
+              minWidth: 0
+            }}
+          />
         </div>
         
-        <Menu
-          mode="inline"
-          selectedKeys={[location.pathname]}
-          items={menuItems}
-          className="border-r-0"
-        />
-      </Sider>
-      
-      <Layout>
-        <Header className="bg-white border-b border-gray-200 px-6 flex justify-between items-center">
-          <div>
-            <Title level={4} className="mb-0">
-              {getPageTitle()}
-            </Title>
-          </div>
+        {/* User Controls */}
+        <div className="flex items-center space-x-4 ml-8">
+          <ViewSwitcher size="small" />
+          <Badge count={3} size="small">
+            <Button 
+              type="text" 
+              icon={<BellOutlined />} 
+            />
+          </Badge>
           
-          <div className="flex items-center space-x-4">
-            <ViewSwitcher size="small" />
-            <Button type="text" icon={<BellOutlined />} />
-            
-            <Dropdown
-              menu={{ items: userMenuItems }}
-              placement="bottomRight"
-              trigger={['click']}
-            >
-              <div className="flex items-center space-x-2 cursor-pointer">
-                <Avatar icon={<UserOutlined />} />
-                <span className="hidden md:inline">
-                  {user?.firstName} {user?.lastName}
-                </span>
-              </div>
-            </Dropdown>
-          </div>
-        </Header>
-        
-        <Content className="p-6 bg-gray-50">
+          <Dropdown
+            menu={{ items: userMenuItems }}
+            placement="bottomRight"
+            trigger={['click']}
+          >
+            <div className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 px-3 py-2 rounded-lg transition-colors">
+              <Avatar 
+                icon={<UserOutlined />} 
+                size={36}
+                className="bg-green-500"
+              />
+              <span className="font-medium text-base text-gray-800">
+                {user?.firstName} {user?.lastName}
+              </span>
+            </div>
+          </Dropdown>
+        </div>
+      </Header>
+      
+      <Content className="p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
+        <div className="w-full max-w-none mx-auto px-4">
           <Routes>
             <Route path="/" element={<TaskBoard />} />
-            <Route path="/projects" element={<ProjectView />} />
+            <Route path="/projects" element={<ProjectManagement />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/clients/dashboard" element={<ClientDashboard />} />
             <Route path="/clients" element={<ClientList />} />
           </Routes>
-        </Content>
-      </Layout>
+        </div>
+      </Content>
     </Layout>
   );
 };

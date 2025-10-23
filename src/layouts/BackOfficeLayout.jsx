@@ -1,9 +1,8 @@
 import React from "react";
-import { Layout, Menu, Button, Dropdown, Avatar, Typography } from "antd";
+import { Layout, Menu, Button, Dropdown, Avatar, Typography, Badge } from "antd";
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import {
   DashboardOutlined,
-  ProjectOutlined,
   UserOutlined,
   SettingOutlined,
   BarChartOutlined,
@@ -20,7 +19,6 @@ import ViewSwitcher from "../components/ViewSwitcher";
 
 // Page Components
 import Dashboard from "../pages/BackOffice/Dashboard";
-import Projects from "../pages/BackOffice/Projects";
 import Users from "../pages/BackOffice/Users";
 import Reports from "../pages/BackOffice/Reports";
 import Settings from "../pages/BackOffice/Settings";
@@ -45,18 +43,13 @@ const BackOfficeLayout = () => {
       label: <Link to="/">Dashboard</Link>,
     },
     {
-      key: "/projects",
-      icon: <ProjectOutlined />,
-      label: <Link to="/projects">Projects</Link>,
-    },
-    {
       key: "/task-types",
       icon: <TagsOutlined />,
       label: <Link to="/task-types">Task Types</Link>,
     },
     {
       key: "/work-types",
-      icon: <ProjectOutlined />,
+      icon: <DollarOutlined />,
       label: <Link to="/work-types">Work Types</Link>,
     },
     {
@@ -114,32 +107,56 @@ const BackOfficeLayout = () => {
   ];
 
   return (
-    <Layout>
-      <Header className="bg-white border-b border-gray-200 px-6 flex items-center justify-between">
+    <Layout className="min-h-screen backoffice-layout">
+      <Header className="bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-sm">
         {/* Title and Menu */}
-        <div className="flex items-center  w-full min-w-0">
-          <Title level={4} className="mb-0 text-gradient mt-0 mr-8 p-0">
-            MicroArt BackOffice
-          </Title>
+        <div className="flex items-center w-full min-w-0">
+          <div className="flex items-center mr-8">
+            <Title level={4} className="mb-0 mr-3 text-gradient">
+              MicroArt Admin
+            </Title>
+            <Badge 
+              count="Admin" 
+              style={{ 
+                backgroundColor: '#1890ff', 
+                color: '#ffffff',
+                fontWeight: '500',
+                fontSize: '10px'
+              }} 
+            />
+          </div>
           <Menu
             mode="horizontal"
             selectedKeys={[location.pathname]}
             items={menuItems}
             className="flex-1 border-b-0"
-            style={{ flex: 1, minWidth: 0 }}
+            style={{ 
+              flex: 1, 
+              minWidth: 0
+            }}
           />
         </div>
+        
         {/* User Controls */}
         <div className="flex items-center space-x-4 ml-8">
           <ViewSwitcher size="small" />
-          <Button type="text" icon={<BellOutlined />} />
+          <Badge count={5} size="small">
+            <Button 
+              type="text" 
+              icon={<BellOutlined />} 
+            />
+          </Badge>
           <Dropdown
             menu={{ items: userMenuItems }}
             placement="bottomRight"
             trigger={["click"]}
           >
-            <div className="flex items-center space-x-2 cursor-pointer">
-              <Avatar icon={<UserOutlined />} size={36} />
+            <div className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 px-3 py-2 rounded-lg transition-colors">
+              <Avatar 
+                icon={<UserOutlined />} 
+                size={36} 
+                className="bg-blue-500"
+              />
               <span className="font-medium text-base text-gray-800">
                 {user?.firstName} {user?.lastName}
               </span>
@@ -147,21 +164,21 @@ const BackOfficeLayout = () => {
           </Dropdown>
         </div>
       </Header>
-      {/* Page Title Bar */}
 
-      <Content className="p-6 bg-gray-50">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/projects" element={<Projects />} />
-          <Route path="/task-types" element={<TaskTypes />} />
-          <Route path="/work-types" element={<WorkTypes />} />
-          <Route path="/gradings" element={<Gradings />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/roles" element={<Roles />} />
-          <Route path="/audit-logs" element={<AuditLogs />} />
-          <Route path="/reports" element={<Reports />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
+      <Content className="p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
+        <div className="w-full max-w-none mx-auto px-4">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/task-types" element={<TaskTypes />} />
+            <Route path="/work-types" element={<WorkTypes />} />
+            <Route path="/gradings" element={<Gradings />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/roles" element={<Roles />} />
+            <Route path="/audit-logs" element={<AuditLogs />} />
+            <Route path="/reports" element={<Reports />} />
+            <Route path="/settings" element={<Settings />} />
+          </Routes>
+        </div>
       </Content>
     </Layout>
   );

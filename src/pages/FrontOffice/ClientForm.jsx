@@ -7,6 +7,7 @@ import {
   Col,
   Button,
   message,
+  Alert,
   Divider,
   Switch,
   InputNumber,
@@ -55,8 +56,10 @@ const ClientForm = ({
   const [selectedGradings, setSelectedGradings] = useState([]); // Changed to array for multiple selection
   const [gradingCustomRates, setGradingCustomRates] = useState({}); // Store custom rates per grading
   const [gradingTaskAssignments, setGradingTaskAssignments] = useState({}); // Store task-employee assignments per grading
+  const [skippedAssignments, setSkippedAssignments] = useState([]); // Store skipped invalid task assignments for inline UI
   const [clientType, setClientType] = useState("permanent"); // Track client type
   const [isGSTEnabled, setIsGSTEnabled] = useState(false);
+  const [isCreditEnabled, setIsCreditEnabled] = useState(false);
   const [hasCustomRates, setHasCustomRates] = useState(false);
 
   const { data: gradingsData, refetch: refetchGradings } = useQuery(
@@ -120,10 +123,10 @@ const ClientForm = ({
       }
     }
     
-    // Remove custom rates for deselected gradings
+    // Remove custom rates for deselected gradings, preserve explicit zero values
     const newCustomRates = {};
     gradingIds.forEach((id) => {
-      if (gradingCustomRates[id]) {
+      if (Object.prototype.hasOwnProperty.call(gradingCustomRates, id)) {
         newCustomRates[id] = gradingCustomRates[id];
       }
     });
@@ -132,7 +135,7 @@ const ClientForm = ({
     // Remove task assignments for deselected gradings
     const newTaskAssignments = {};
     gradingIds.forEach((id) => {
-      if (gradingTaskAssignments[id]) {
+      if (Object.prototype.hasOwnProperty.call(gradingTaskAssignments, id)) {
         newTaskAssignments[id] = gradingTaskAssignments[id];
       }
     });
@@ -163,6 +166,17 @@ const ClientForm = ({
     setIsGSTEnabled(checked);
     if (!checked) {
       form.setFieldsValue({ gstNo: undefined, gstRate: undefined });
+    }
+  };
+
+  // Handler for credit toggle
+  const handleCreditToggle = (checked) => {
+    setIsCreditEnabled(checked);
+    if (!checked) {
+      form.setFieldsValue({ 
+        creditDays: undefined, 
+        creditAmount: undefined 
+      });
     }
   };
 
@@ -221,10 +235,17 @@ const ClientForm = ({
   });
 
   // Fetch full client data when editing (includes workTypeAssociations, gradings, taskPreferences)
-  const { data: fullClientData } = useQuery(GET_CLIENT, {
+  const { data: fullClientData, loading: clientLoading } = useQuery(GET_CLIENT, {
     variables: { id: client?.id },
     skip: !client?.id,
     fetchPolicy: "network-only",
+  });
+
+  console.log("ClientForm Debug:", {
+    clientId: client?.id,
+    fullClientData,
+    clientLoading,
+    hasTaskPreferences: fullClientData?.client?.taskPreferences?.length || 0
   });
 
   const [createClient] = useMutation(CREATE_CLIENT, {
@@ -274,20 +295,26 @@ const ClientForm = ({
       
       console.log("workTypeIds", clientData);
       
-      // Extract grading IDs and custom rates
+      // Extract grading IDs and custom rates (preserve explicit zero values)
       const gradingIds = clientData.gradings?.map((g) => g.gradingId) || [];
       const customRates = {};
       clientData.gradings?.forEach((g) => {
-        if (g.customRate) {
+        if (g.customRate !== undefined && g.customRate !== null) {
           customRates[g.gradingId] = g.customRate;
         }
       });
       
-      console.log("Custom Rates Debug:", {
+      console.log("Grading IDs Debug:", {
         rawGradings: clientData.gradings,
         extractedGradingIds: gradingIds,
-        extractedCustomRates: customRates,
-        hasCustomRatesField: clientData.hasCustomRates
+        extractedCustomRates: customRates
+      });
+
+      console.log("Task Preferences Debug:", {
+        rawTaskPreferences: clientData.taskPreferences,
+        taskPreferencesLength: clientData.taskPreferences?.length || 0,
+        selectedGradings: gradingIds,
+        gradingCustomRates: customRates
       });
 
       // Extract service provider IDs with multiple fallback strategies
@@ -332,6 +359,7 @@ const ClientForm = ({
         serviceProviders: serviceProviderIds,
         leader: clientData.leader?.id,
         notes: clientData.clientNotes,
+        isCreditEnabled: clientData.isCreditEnabled,
       };
       
       console.log("Form Data being set:", formData);
@@ -349,19 +377,27 @@ const ClientForm = ({
 
       // Initialize task preferences from client data
       if (clientData.taskPreferences && clientData.taskPreferences.length > 0) {
+        console.log("Setting task assignments from client data:", clientData.taskPreferences);
         const taskAssignments = {};
         clientData.taskPreferences.forEach((pref) => {
+          console.log("Processing task preference:", pref);
           if (!taskAssignments[pref.gradingId]) {
             taskAssignments[pref.gradingId] = {};
           }
           taskAssignments[pref.gradingId][pref.taskId] = pref.preferredUserIds;
         });
+        console.log("Final task assignments:", taskAssignments);
         setGradingTaskAssignments(taskAssignments);
+      } else {
+        console.log("No task preferences found in client data");
       }
 
       // Initialize other toggles
       if (clientData.isGstEnabled !== undefined) {
         setIsGSTEnabled(clientData.isGstEnabled);
+      }
+      if (clientData.isCreditEnabled !== undefined) {
+        setIsCreditEnabled(clientData.isCreditEnabled);
       }
       if (clientData.hasCustomRates !== undefined) {
         setHasCustomRates(clientData.hasCustomRates);
@@ -467,12 +503,15 @@ const ClientForm = ({
             const gradingData = gradingsData?.gradingsByWorkType?.find(
               (g) => g.id === gradingId
             );
-            return {
-              gradingId,
-              customRate: gradingCustomRates[gradingId] || null,
-              currency: gradingData?.currency || "INR",
-              unit: gradingData?.unit || "image",
-            };
+              return {
+                gradingId,
+                // Preserve explicit zero rates. Only set to null when undefined.
+                customRate: Object.prototype.hasOwnProperty.call(gradingCustomRates, gradingId)
+                  ? gradingCustomRates[gradingId]
+                  : null,
+                currency: gradingData?.currency || "INR",
+                unit: gradingData?.unit || "image",
+              };
           });
         }
       }
@@ -481,13 +520,24 @@ const ClientForm = ({
       // These are preferred employees per task that will be used when creating projects
       // Format: gradingTaskAssignments = { gradingId: { taskId: [userIds] } }
       // Backend expects: taskPreferences: [{ gradingId, taskId, preferredUserIds }]
-      if (
-        gradingTaskAssignments &&
-        Object.keys(gradingTaskAssignments).length > 0
-      ) {
-        input.taskPreferences = [];
+      // Always include taskPreferences in the payload.
+      // If there are no assignments, send an empty array so backend clears preferences.
+      input.taskPreferences = [];
+      // Collect skipped invalid assignments to show a user-facing warning
+      const skippedTaskAssignments = [];
+      if (gradingTaskAssignments && Object.keys(gradingTaskAssignments).length > 0) {
         Object.entries(gradingTaskAssignments).forEach(([gradingId, tasks]) => {
           Object.entries(tasks).forEach(([taskId, userIds]) => {
+            // Validate that this taskId still exists under the grading to avoid sending invalid IDs
+            const gradingObj = gradingsData?.gradingsByWorkType?.find((g) => g.id === gradingId);
+            const availableTaskIds = gradingObj?.taskTypes?.map((t) => t.id) || [];
+            if (!availableTaskIds.includes(taskId)) {
+              // Track skipped assignment for UX feedback instead of silently skipping
+              skippedTaskAssignments.push(`${taskId} (grading ${gradingId})`);
+              console.warn(`Skipping invalid taskId ${taskId} for grading ${gradingId}`);
+              return; // skip invalid task ids
+            }
+
             if (userIds && userIds.length > 0) {
               input.taskPreferences.push({
                 gradingId,
@@ -498,6 +548,21 @@ const ClientForm = ({
           });
         });
       }
+
+      // If any assignments were skipped because the taskId is no longer valid, notify the user
+      if (skippedTaskAssignments.length > 0) {
+        const preview = skippedTaskAssignments.slice(0, 5).join(", ");
+        const more = skippedTaskAssignments.length > 5 ? ` and ${skippedTaskAssignments.length - 5} more` : "";
+        // Keep transient warning
+        message.warn(`Some task assignments were skipped because the task no longer exists: ${preview}${more}`);
+        console.info("Skipped task assignments:", skippedTaskAssignments);
+        // Save skipped assignments for inline UI so user can edit/dismiss
+        setSkippedAssignments(skippedTaskAssignments);
+      } else {
+        // Clear any previous skipped assignments
+        setSkippedAssignments([]);
+      }
+      console.log("Task Preferences being sent:", input.taskPreferences);
 
       // Remove fields that are not in the GraphQL schema or will be processed separately
       delete input.openingBalanceType; // This is handled by the backend based on openingBalance value
@@ -1064,6 +1129,36 @@ const ClientForm = ({
             {selectedGradings.length > 0 && (
               <>
                 <Divider orientation="left">Grading Details</Divider>
+                {/* Inline alert for skipped task assignments (if any) */}
+                {skippedAssignments && skippedAssignments.length > 0 && (
+                  <div style={{ marginBottom: 12 }}>
+                    <Alert
+                      type="warning"
+                      showIcon
+                      message={`Some task assignments were skipped (${skippedAssignments.length})`}
+                      description={
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ maxWidth: '80%' }}>
+                            {skippedAssignments.slice(0, 5).map((s, idx) => (
+                              <div key={s + idx} style={{ fontSize: 12 }}>{s}</div>
+                            ))}
+                            {skippedAssignments.length > 5 && (
+                              <div style={{ fontSize: 12 }}>and {skippedAssignments.length - 5} more...</div>
+                            )}
+                          </div>
+                          <div>
+                            <Button size="small" type="link" onClick={() => setCurrentStep(0)}>
+                              Edit
+                            </Button>
+                            <Button size="small" onClick={() => setSkippedAssignments([])}>
+                              Dismiss
+                            </Button>
+                          </div>
+                        </div>
+                      }
+                    />
+                  </div>
+                )}
                 {selectedGradings.map((gradingId) => {
                   const grading = gradingsData?.gradingsByWorkType?.find(
                     (g) => g.id === gradingId
@@ -1113,7 +1208,6 @@ const ClientForm = ({
                         </Row>
                       )}
 
-                      {/* Task Employee Preferences for this Grading */}
                       {grading.taskTypes && grading.taskTypes.length > 0 && (
                         <>
                           <Text
@@ -1137,7 +1231,14 @@ const ClientForm = ({
                             Select preferred employees for each task. These will
                             be auto-assigned when creating projects.
                           </Text>
-                          {grading.taskTypes.map((task) => (
+                          {grading.taskTypes.map((task) => {
+                            console.log(`Rendering task ${task.id} for grading ${gradingId}:`, {
+                              task,
+                              gradingId,
+                              currentValue: gradingTaskAssignments[gradingId]?.[task.id] || [],
+                              allAssignments: gradingTaskAssignments
+                            });
+                            return (
                             <Row
                               key={task.id}
                               gutter={16}
@@ -1184,7 +1285,8 @@ const ClientForm = ({
                                 </Select>
                               </Col>
                             </Row>
-                          ))}
+                            );
+                          })}
                         </>
                       )}
                     </div>
@@ -1283,6 +1385,20 @@ const ClientForm = ({
                   />
                 </Form.Item>
               </Col>
+              <Col span={8}>
+                <Form.Item
+                  name="isCreditEnabled"
+                  label="Credit Limit Enabled"
+                  valuePropName="checked"
+                  initialValue={false}
+                >
+                  <Switch
+                    checkedChildren="Yes"
+                    unCheckedChildren="No"
+                    onChange={handleCreditToggle}
+                  />
+                </Form.Item>
+              </Col>
               {isGSTEnabled && (
                 <>
                   <Col span={8}>
@@ -1337,29 +1453,33 @@ const ClientForm = ({
                 </Col>
               )}
             </Row>
+            {isCreditEnabled && (
+              <Row gutter={16}>
+                <Col span={8}>
+                  <Form.Item name="creditDays" label="Credit in Days">
+                    <InputNumber
+                      placeholder="Enter credit days"
+                      size="middle"
+                      style={{ width: "100%" }}
+                    />
+                  </Form.Item>
+                </Col>
+                <Col span={8}>
+                  <Form.Item name="creditAmount" label="Credit in Amount (₹)">
+                    <InputNumber
+                      placeholder="Enter credit amount"
+                      size="middle"
+                      style={{ width: "100%" }}
+                      formatter={(value) =>
+                        `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                      }
+                      parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
+                    />
+                  </Form.Item>
+                </Col>
+              </Row>
+            )}
             <Row gutter={16}>
-              <Col span={8}>
-                <Form.Item name="creditDays" label="Credit in Days">
-                  <InputNumber
-                    placeholder="Enter credit days"
-                    size="middle"
-                    style={{ width: "100%" }}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={8}>
-                <Form.Item name="creditAmount" label="Credit in Amount (₹)">
-                  <InputNumber
-                    placeholder="Enter credit amount"
-                    size="middle"
-                    style={{ width: "100%" }}
-                    formatter={(value) =>
-                      `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                    }
-                    parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
-                  />
-                </Form.Item>
-              </Col>
               <Col span={8}>
                 <Form.Item name="openingBalance" label="Opening Balance (₹)">
                   <InputNumber

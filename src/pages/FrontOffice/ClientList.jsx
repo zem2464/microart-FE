@@ -11,7 +11,10 @@ import {
   Statistic,
   Dropdown,
   message,
-  Modal 
+  Modal,
+  InputNumber,
+  Switch,
+  Tooltip 
 } from 'antd';
 import {
   PlusOutlined,
@@ -24,10 +27,13 @@ import {
   MailOutlined,
   EnvironmentOutlined,
   DollarOutlined,
-  ExclamationCircleOutlined
+  ExclamationCircleOutlined,
+  CheckOutlined,
+  CloseOutlined,
+  SaveOutlined
 } from '@ant-design/icons';
 import { useQuery, useMutation } from '@apollo/client';
-import { GET_CLIENTS, DELETE_CLIENT } from '../../gql/clients';
+import { GET_CLIENTS, DELETE_CLIENT, UPDATE_CLIENT } from '../../gql/clients';
 import CommonTable from '../../components/common/CommonTable';
 import { useAppDrawer } from '../../contexts/DrawerContext';
 
@@ -36,6 +42,10 @@ const { Title, Text } = Typography;
 const ClientList = () => {
   const [filters, setFilters] = useState({});
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+  const [editingCredit, setEditingCredit] = useState({}); // Track which credit limits are being edited
+  const [editingStatus, setEditingStatus] = useState({}); // Track which statuses are being edited
+  const [tempValues, setTempValues] = useState({}); // Store temporary edit values
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, record: null });
   const { showClientFormDrawer, showClientDetailDrawer } = useAppDrawer();
 
   const { data, loading, error, refetch } = useQuery(GET_CLIENTS, {
@@ -55,7 +65,17 @@ const ClientList = () => {
       refetch();
     },
     onError: (error) => {
-      message.error(error.message);
+      message.error(`Failed to delete client: ${error.message}`);
+    }
+  });
+
+  const [updateClient] = useMutation(UPDATE_CLIENT, {
+    onCompleted: () => {
+      message.success('Client updated successfully');
+      refetch();
+    },
+    onError: (error) => {
+      message.error(`Failed to update client: ${error.message}`);
     }
   });
 
@@ -96,6 +116,151 @@ const ClientList = () => {
       }
     });
   }, [deleteClient]);
+
+  // Inline editing handlers
+  const handleEditCredit = useCallback((clientId, currentValue) => {
+    setEditingCredit(prev => ({ ...prev, [clientId]: true }));
+    setTempValues(prev => ({ ...prev, [`credit_${clientId}`]: currentValue || 0 }));
+  }, []);
+
+  const handleCancelCreditEdit = useCallback((clientId) => {
+    setEditingCredit(prev => ({ ...prev, [clientId]: false }));
+    setTempValues(prev => {
+      const newValues = { ...prev };
+      delete newValues[`credit_${clientId}`];
+      return newValues;
+    });
+  }, []);
+
+  const handleSaveCreditEdit = useCallback(async (clientId) => {
+    const newValue = tempValues[`credit_${clientId}`];
+    if (newValue < 0) {
+      message.error('Credit limit cannot be negative');
+      return;
+    }
+
+    try {
+      await updateClient({
+        variables: {
+          id: clientId,
+          input: {
+            creditAmountLimit: parseFloat(newValue || 0)
+          }
+        }
+      });
+      setEditingCredit(prev => ({ ...prev, [clientId]: false }));
+      setTempValues(prev => {
+        const newValues = { ...prev };
+        delete newValues[`credit_${clientId}`];
+        return newValues;
+      });
+    } catch (error) {
+      message.error('Failed to update credit limit');
+    }
+  }, [tempValues, updateClient]);
+
+  const handleEditStatus = useCallback((clientId, currentValue) => {
+    setEditingStatus(prev => ({ ...prev, [clientId]: true }));
+    setTempValues(prev => ({ ...prev, [`status_${clientId}`]: currentValue }));
+  }, []);
+
+  const handleCancelStatusEdit = useCallback((clientId) => {
+    setEditingStatus(prev => ({ ...prev, [clientId]: false }));
+    setTempValues(prev => {
+      const newValues = { ...prev };
+      delete newValues[`status_${clientId}`];
+      return newValues;
+    });
+  }, []);
+
+  const handleSaveStatusEdit = useCallback(async (clientId) => {
+    const newValue = tempValues[`status_${clientId}`];
+    
+    try {
+      await updateClient({
+        variables: {
+          id: clientId,
+          input: {
+            isActive: newValue
+          }
+        }
+      });
+      setEditingStatus(prev => ({ ...prev, [clientId]: false }));
+      setTempValues(prev => {
+        const newValues = { ...prev };
+        delete newValues[`status_${clientId}`];
+        return newValues;
+      });
+    } catch (error) {
+      message.error('Failed to update client status');
+    }
+  }, [tempValues, updateClient]);
+
+  // Context menu handlers
+  const handleRowRightClick = useCallback((event, record) => {
+    console.log('Right click detected', record); // Debug log
+    event.preventDefault();
+    event.stopPropagation();
+    
+    // Calculate position to ensure menu stays within viewport
+    const menuWidth = 160;
+    const menuHeight = 120;
+    let x = event.clientX;
+    let y = event.clientY;
+    
+    // Adjust position if menu would go off screen
+    if (x + menuWidth > window.innerWidth) {
+      x = window.innerWidth - menuWidth - 10;
+    }
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 10;
+    }
+    
+    setContextMenu({
+      visible: true,
+      x: x,
+      y: y,
+      record: record
+    });
+  }, []);
+
+  const handleContextMenuClose = useCallback(() => {
+    console.log('Context menu closing'); // Debug log
+    setContextMenu({ visible: false, x: 0, y: 0, record: null });
+  }, []);
+
+  const handleContextMenuAction = useCallback((action, record) => {
+    console.log('Context menu action:', action, record); // Debug log
+    handleContextMenuClose();
+    
+    switch (action) {
+      case 'view':
+        handleViewClient(record);
+        break;
+      case 'edit':
+        handleEditClient(record);
+        break;
+      case 'delete':
+        handleDeleteClient(record);
+        break;
+      default:
+        break;
+    }
+  }, [handleViewClient, handleEditClient, handleDeleteClient, handleContextMenuClose]);
+
+  // Close context menu when clicking elsewhere
+  React.useEffect(() => {
+    const handleClickOutside = () => {
+      if (contextMenu.visible) {
+        handleContextMenuClose();
+      }
+    };
+
+    document.addEventListener('click', handleClickOutside);
+    return () => {
+      document.removeEventListener('click', handleClickOutside);
+    };
+  }, [contextMenu.visible, handleContextMenuClose]);
 
   // Table columns configuration - memoized to prevent re-renders
   const columns = useMemo(() => [
@@ -142,7 +307,11 @@ const ClientList = () => {
         { text: 'Permanent Client', value: 'permanent' },
         { text: 'Walk-in Client', value: 'walkIn' },
       ],
-      onFilter: (value, record) => record.clientType === value,
+      filterMultiple: false,
+      onFilter: (value, record) => {
+        console.log('Filter applied:', value, 'Record type:', record.clientType); // Debug log
+        return record.clientType === value;
+      },
       sorter: (a, b) => (a.clientType || '').localeCompare(b.clientType || ''),
     },
     {
@@ -198,39 +367,241 @@ const ClientList = () => {
       },
     },
     {
+      title: 'Credit Limit',
+      dataIndex: 'creditAmountLimit',
+      key: 'creditLimit',
+      width: 180,
+      render: (creditLimit, record) => {
+        const limit = parseFloat(creditLimit || 0);
+        const currentBalance = parseFloat(record.totalBalance || 0);
+        const available = limit + currentBalance;
+        const isEditing = editingCredit[record.id];
+        const tempValue = tempValues[`credit_${record.id}`];
+        
+        if (isEditing) {
+          return (
+            <div className="text-right">
+              <div className="flex items-center justify-end space-x-1">
+                <InputNumber
+                  size="small"
+                  value={tempValue}
+                  onChange={(value) => setTempValues(prev => ({ 
+                    ...prev, 
+                    [`credit_${record.id}`]: value 
+                  }))}
+                  min={0}
+                  precision={2}
+                  style={{ width: 100 }}
+                  prefix="₹"
+                />
+                <Tooltip title="Save">
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<CheckOutlined />}
+                    onClick={() => handleSaveCreditEdit(record.id)}
+                    style={{ color: '#52c41a' }}
+                  />
+                </Tooltip>
+                <Tooltip title="Cancel">
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<CloseOutlined />}
+                    onClick={() => handleCancelCreditEdit(record.id)}
+                    style={{ color: '#ff4d4f' }}
+                  />
+                </Tooltip>
+              </div>
+            </div>
+          );
+        }
+        
+        return (
+          <div className="text-right group">
+            <div 
+              className="font-medium text-gray-900 cursor-pointer hover:bg-gray-50 px-2 py-1 rounded flex items-center justify-end"
+              onClick={() => handleEditCredit(record.id, limit)}
+              title="Click to edit credit limit"
+            >
+              ₹{limit.toLocaleString('en-IN', { 
+                minimumFractionDigits: 2, 
+                maximumFractionDigits: 2 
+              })}
+              <EditOutlined className="ml-1 opacity-0 group-hover:opacity-100 text-xs" />
+            </div>
+            <div className="text-xs text-gray-500">
+              Limit
+            </div>
+            {limit > 0 && (
+              <div className={`text-xs ${available >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                ₹{Math.abs(available).toLocaleString('en-IN', { 
+                  minimumFractionDigits: 0, 
+                  maximumFractionDigits: 0 
+                })} {available >= 0 ? 'available' : 'over limit'}
+              </div>
+            )}
+          </div>
+        );
+      },
+      sorter: (a, b) => (parseFloat(a.creditAmountLimit || 0) - parseFloat(b.creditAmountLimit || 0)),
+      filters: [
+        { text: 'Has Credit Limit', value: 'hasLimit' },
+        { text: 'No Credit Limit', value: 'noLimit' },
+        { text: 'Over Limit', value: 'overLimit' },
+      ],
+      onFilter: (value, record) => {
+        const limit = parseFloat(record.creditAmountLimit || 0);
+        const currentBalance = parseFloat(record.totalBalance || 0);
+        const available = limit + currentBalance;
+        
+        if (value === 'hasLimit') return limit > 0;
+        if (value === 'noLimit') return limit === 0;
+        if (value === 'overLimit') return limit > 0 && available < 0;
+        return false;
+      },
+    },
+    {
       title: 'Priority',
       dataIndex: 'priority',
       key: 'priority',
       width: 100,
       render: (priority) => {
-        const color = priority === 'HIGH' ? 'red' : priority === 'MEDIUM' ? 'orange' : 'green';
+        const getPriorityConfig = (prio) => {
+          const upperPrio = prio?.toUpperCase();
+          switch (upperPrio) {
+            case 'A':
+            case 'HIGH':
+              return { color: 'red', text: 'A', label: 'High Priority' };
+            case 'B':
+            case 'MEDIUM':
+              return { color: 'orange', text: 'B', label: 'Medium Priority' };
+            case 'C':
+            case 'LOW':
+              return { color: 'green', text: 'C', label: 'Low Priority' };
+            default:
+              return { color: 'default', text: prio || '-', label: 'Unknown' };
+          }
+        };
+
+        const config = getPriorityConfig(priority);
+        
         return priority ? (
-          <Tag color={color}>
-            {priority}
+          <Tag 
+            color={config.color}
+            title={config.label}
+            style={{ fontWeight: 'bold', minWidth: '24px', textAlign: 'center' }}
+          >
+            {config.text}
           </Tag>
         ) : '-';
       },
       filters: [
-        { text: 'High', value: 'HIGH' },
-        { text: 'Medium', value: 'MEDIUM' },
-        { text: 'Low', value: 'LOW' },
+        { text: 'A - High Priority', value: 'HIGH' },
+        { text: 'A - High Priority', value: 'A' },
+        { text: 'B - Medium Priority', value: 'MEDIUM' },
+        { text: 'B - Medium Priority', value: 'B' },
+        { text: 'C - Low Priority', value: 'LOW' },
+        { text: 'C - Low Priority', value: 'C' },
       ],
-      onFilter: (value, record) => record.priority === value,
+      onFilter: (value, record) => {
+        const recordPriority = record.priority?.toUpperCase();
+        const filterValue = value?.toUpperCase();
+        
+        // Handle both old format (HIGH/MEDIUM/LOW) and new format (A/B/C)
+        if (filterValue === 'HIGH' || filterValue === 'A') {
+          return recordPriority === 'HIGH' || recordPriority === 'A';
+        }
+        if (filterValue === 'MEDIUM' || filterValue === 'B') {
+          return recordPriority === 'MEDIUM' || recordPriority === 'B';
+        }
+        if (filterValue === 'LOW' || filterValue === 'C') {
+          return recordPriority === 'LOW' || recordPriority === 'C';
+        }
+        return record.priority === value;
+      },
       sorter: (a, b) => {
-        const priorityOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
-        return (priorityOrder[a.priority] || 0) - (priorityOrder[b.priority] || 0);
+        const getPriorityValue = (prio) => {
+          const upperPrio = prio?.toUpperCase();
+          switch (upperPrio) {
+            case 'A':
+            case 'HIGH':
+              return 3;
+            case 'B':
+            case 'MEDIUM':
+              return 2;
+            case 'C':
+            case 'LOW':
+              return 1;
+            default:
+              return 0;
+          }
+        };
+        
+        return getPriorityValue(a.priority) - getPriorityValue(b.priority);
       },
     },
     {
       title: 'Status',
       dataIndex: 'isActive',
       key: 'isActive',
-      width: 100,
-      render: (isActive) => (
-        <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? 'ACTIVE' : 'INACTIVE'}
-        </Tag>
-      ),
+      width: 130,
+      render: (isActive, record) => {
+        const isEditing = editingStatus[record.id];
+        const tempValue = tempValues[`status_${record.id}`];
+        
+        if (isEditing) {
+          return (
+            <div className="flex items-center space-x-2">
+              <Switch
+                checked={tempValue}
+                onChange={(checked) => setTempValues(prev => ({ 
+                  ...prev, 
+                  [`status_${record.id}`]: checked 
+                }))}
+                size="small"
+                checkedChildren="Active"
+                unCheckedChildren="Inactive"
+              />
+              <div className="flex space-x-1">
+                <Tooltip title="Save">
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<CheckOutlined />}
+                    onClick={() => handleSaveStatusEdit(record.id)}
+                    style={{ color: '#52c41a' }}
+                  />
+                </Tooltip>
+                <Tooltip title="Cancel">
+                  <Button 
+                    type="text" 
+                    size="small" 
+                    icon={<CloseOutlined />}
+                    onClick={() => handleCancelStatusEdit(record.id)}
+                    style={{ color: '#ff4d4f' }}
+                  />
+                </Tooltip>
+              </div>
+            </div>
+          );
+        }
+        
+        return (
+          <div className="group">
+            <div 
+              className="cursor-pointer hover:bg-gray-50 px-2 py-1 rounded flex items-center justify-between"
+              onClick={() => handleEditStatus(record.id, isActive)}
+              title="Click to edit status"
+            >
+              <Tag color={isActive ? 'green' : 'red'}>
+                {isActive ? 'ACTIVE' : 'INACTIVE'}
+              </Tag>
+              <EditOutlined className="opacity-0 group-hover:opacity-100 text-xs ml-1" />
+            </div>
+          </div>
+        );
+      },
       filters: [
         { text: 'Active', value: true },
         { text: 'Inactive', value: false },
@@ -238,73 +609,58 @@ const ClientList = () => {
       onFilter: (value, record) => record.isActive === value,
       sorter: (a, b) => (a.isActive === b.isActive ? 0 : a.isActive ? -1 : 1),
     },
-    {
-      title: 'Created',
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      width: 150,
-      render: (date) => {
-        if (!date) return '-';
-        const parsedDate = new Date(date);
-        // Check if date is valid
-        if (isNaN(parsedDate.getTime())) return '-';
-        
-        // Format date properly
-        return parsedDate.toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric'
-        });
-      },
-      sorter: (a, b) => {
-        const dateA = new Date(a.createdAt).getTime();
-        const dateB = new Date(b.createdAt).getTime();
-        return dateA - dateB;
-      },
-    },
+    // Actions column with direct action buttons
     {
       title: 'Actions',
       key: 'actions',
-      width: 120,
+      width: 140,
       fixed: 'right',
-      render: (_, record) => {
-        const menuItems = [
-          {
-            key: 'view',
-            icon: <EyeOutlined />,
-            label: 'View Details',
-            onClick: () => handleViewClient(record),
-          },
-          {
-            key: 'edit',
-            icon: <EditOutlined />,
-            label: 'Edit Client',
-            onClick: () => handleEditClient(record),
-          },
-          {
-            type: 'divider',
-          },
-          {
-            key: 'delete',
-            icon: <DeleteOutlined />,
-            label: 'Delete Client',
-            danger: true,
-            onClick: () => handleDeleteClient(record),
-          },
-        ];
-
-        return (
-          <Dropdown
-            menu={{ items: menuItems }}
-            trigger={['click']}
-            placement="bottomRight"
-          >
-            <Button type="text" icon={<MoreOutlined />} />
-          </Dropdown>
-        );
-      },
+      render: (_, record) => (
+        <Space size={4}>
+          <Tooltip title="View Details">
+            <Button 
+              type="text" 
+              size="small"
+              icon={<EyeOutlined />}
+              onClick={() => handleViewClient(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Edit Client">
+            <Button 
+              type="text" 
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => handleEditClient(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Delete Client">
+            <Button 
+              type="text" 
+              size="small"
+              icon={<DeleteOutlined />}
+              onClick={() => handleDeleteClient(record)}
+              danger
+            />
+          </Tooltip>
+        </Space>
+      ),
     },
-  ], [getClientTypeColor, handleViewClient, handleEditClient, handleDeleteClient]);
+  ], [
+    getClientTypeColor, 
+    handleViewClient, 
+    handleEditClient, 
+    handleDeleteClient,
+    editingCredit,
+    editingStatus,
+    tempValues,
+    setTempValues,
+    handleEditCredit,
+    handleCancelCreditEdit,
+    handleSaveCreditEdit,
+    handleEditStatus,
+    handleCancelStatusEdit,
+    handleSaveStatusEdit
+  ]);
 
   // Search handler - memoized
   const handleSearch = useCallback((value) => {
@@ -316,9 +672,43 @@ const ClientList = () => {
   const summaryStats = useMemo(() => {
     const activeClients = clients.filter(c => c.isActive === true).length;
     
+    // Calculate current balances
+    const totalCreditBalance = clients.reduce((sum, client) => {
+      const balance = parseFloat(client.totalBalance || 0);
+      return sum + (balance > 0 ? balance : 0);
+    }, 0);
+    
+    const totalAmountDue = clients.reduce((sum, client) => {
+      const balance = parseFloat(client.totalBalance || 0);
+      return sum + (balance < 0 ? Math.abs(balance) : 0);
+    }, 0);
+    
+    // Calculate credit limits
+    const totalCreditLimits = clients.reduce((sum, client) => {
+      const limit = parseFloat(client.creditAmountLimit || 0);
+      return sum + limit;
+    }, 0);
+    
+    const clientsWithCreditLimit = clients.filter(c => parseFloat(c.creditAmountLimit || 0) > 0).length;
+    const clientsOverLimit = clients.filter(c => {
+      const limit = parseFloat(c.creditAmountLimit || 0);
+      const balance = parseFloat(c.totalBalance || 0);
+      return limit > 0 && (limit + balance) < 0;
+    }).length;
+    
+    const clientsWithCredit = clients.filter(c => parseFloat(c.totalBalance || 0) > 0).length;
+    const clientsWithDue = clients.filter(c => parseFloat(c.totalBalance || 0) < 0).length;
+    
     return {
       total: totalCount,
       active: activeClients,
+      totalCreditBalance,
+      totalAmountDue,
+      totalCreditLimits,
+      clientsWithCreditLimit,
+      clientsOverLimit,
+      clientsWithCredit,
+      clientsWithDue
     };
   }, [clients, totalCount]);
 
@@ -365,7 +755,7 @@ const ClientList = () => {
 
         {/* Summary Cards */}
         <Row gutter={16} className="mb-6">
-          <Col xs={24} sm={6}>
+          <Col xs={24} sm={6} lg={4}>
             <Card>
               <Statistic
                 title="Total Clients"
@@ -374,7 +764,7 @@ const ClientList = () => {
               />
             </Card>
           </Col>
-          <Col xs={24} sm={6}>
+          <Col xs={24} sm={6} lg={4}>
             <Card>
               <Statistic
                 title="Active Clients"
@@ -383,13 +773,66 @@ const ClientList = () => {
               />
             </Card>
           </Col>
-
-
+          <Col xs={24} sm={6} lg={4}>
+            <Card>
+              <Statistic
+                title="Total Credit Limits"
+                value={summaryStats.totalCreditLimits}
+                prefix="₹"
+                precision={0}
+                valueStyle={{ color: '#1890ff' }}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                {summaryStats.clientsWithCreditLimit} clients with limits
+              </div>
+            </Card>
+          </Col>
+          <Col xs={24} sm={6} lg={4}>
+            <Card>
+              <Statistic
+                title="Credit Available"
+                value={summaryStats.totalCreditBalance}
+                prefix="₹"
+                precision={2}
+                valueStyle={{ color: '#52c41a' }}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                {summaryStats.clientsWithCredit} clients with credit
+              </div>
+            </Card>
+          </Col>
+          <Col xs={24} sm={6} lg={4}>
+            <Card>
+              <Statistic
+                title="Amount Due"
+                value={summaryStats.totalAmountDue}
+                prefix="₹"
+                precision={2}
+                valueStyle={{ color: '#ff4d4f' }}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                {summaryStats.clientsWithDue} clients with dues
+              </div>
+            </Card>
+          </Col>
+          <Col xs={24} sm={6} lg={4}>
+            <Card>
+              <Statistic
+                title="Over Limit"
+                value={summaryStats.clientsOverLimit}
+                valueStyle={{ color: '#ff4d4f' }}
+              />
+              <div className="text-xs text-gray-500 mt-1">
+                Clients exceeding limits
+              </div>
+            </Card>
+          </Col>
         </Row>
       </div>
 
       {/* Main Table */}
       <CommonTable
+        className="client-table"
         columns={columns}
         dataSource={clients}
         loading={loading}

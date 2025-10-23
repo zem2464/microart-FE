@@ -12,6 +12,7 @@ import WorkTypeForm from '../components/WorkTypeForm';
 import WorkTypeDetail from '../components/WorkTypeDetail';
 import GradingForm from '../components/GradingForm';
 import GradingDetail from '../components/GradingDetail';
+import ProjectForm from '../components/ProjectForm';
 import ClientForm from '../pages/FrontOffice/ClientForm';
 import ClientDetail from '../components/ClientDetail';
 
@@ -252,7 +253,12 @@ export const AppDrawerProvider = ({ children }) => {
 						</Space>
 					}
 				>
-					<div>Project Form Component (To be implemented)</div>
+					<ProjectForm
+						project={projectFormDrawer.project}
+						mode={projectFormDrawer.mode}
+						onClose={closeProjectFormDrawer}
+						onSuccess={projectFormDrawer.onSuccess}
+					/>
 				</ModuleDrawer>
 			)}
 			{/* Project Detail Drawer */}
@@ -475,5 +481,7 @@ export const useAppDrawer = () => {
 	}
 	return context;
 };
+
+export { AppDrawerContext };
 
 
