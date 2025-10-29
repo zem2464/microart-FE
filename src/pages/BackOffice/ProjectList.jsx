@@ -134,6 +134,9 @@ const ProjectList = () => {
 
   // Effects
   useEffect(() => {
+    // Debug: log GraphQL response to help diagnose empty table
+    if (projectsData) console.debug('GET_PROJECTS response:', projectsData);
+
     if (projectsData?.projects) {
       setProjects(projectsData.projects.projects);
       setPagination(prev => ({
@@ -144,19 +147,22 @@ const ProjectList = () => {
   }, [projectsData]);
 
   // Status and Priority configurations
-  const statusConfig = {
-    DRAFT: { color: 'orange', text: 'Draft' },
-    ACTIVE: { color: 'green', text: 'Active' },
-    COMPLETED: { color: 'blue', text: 'Completed' },
-    CANCELLED: { color: 'red', text: 'Cancelled' },
-    ON_HOLD: { color: 'purple', text: 'On Hold' }
+  // Map backend status codes to display label and color
+  const STATUS_MAP = {
+    draft: { label: 'Draft', color: 'orange' },
+    in_progress: { label: 'In Progress', color: 'blue' },
+    completed: { label: 'Completed', color: 'green' },
+    cancelled: { label: 'Cancelled', color: 'red' },
+    active: { label: 'Active', color: 'green' },
+    on_hold: { label: 'On Hold', color: 'purple' }
   };
 
-  const priorityConfig = {
-    LOW: { color: 'green', text: 'Low' },
-    MEDIUM: { color: 'orange', text: 'Medium' },
-    HIGH: { color: 'red', text: 'High' },
-    URGENT: { color: 'volcano', text: 'Urgent' }
+  // Map backend priority codes (A/B/C) to labels/colors
+  const PRIORITY_MAP = {
+    A: { label: 'High', color: 'red' },
+    B: { label: 'Medium', color: 'orange' },
+    C: { label: 'Low', color: 'green' },
+    URGENT: { label: 'Urgent', color: 'volcano' }
   };
 
   // Table columns
@@ -165,37 +171,29 @@ const ProjectList = () => {
       title: 'Project Code',
       dataIndex: 'projectCode',
       key: 'projectCode',
-      width: 120,
-      fixed: 'left',
-      sorter: true,
-      render: (text) => <Text strong>{text}</Text>
-    },
-    {
-      title: 'Project Code',
-      dataIndex: 'projectCode',
-      key: 'projectCode',
-      render: (text) => <Text code>{text}</Text>,
       width: 200,
       sorter: true,
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip title={text}>
-          <Text>{text}</Text>
+          <Text strong>{text}</Text>
         </Tooltip>
       )
     },
     {
       title: 'Client',
-      dataIndex: ['client', 'name'],
+      dataIndex: ['client'],
       key: 'client',
       width: 150,
       sorter: true,
-      render: (text, record) => (
-        <div>
-          <div><Text strong>{text}</Text></div>
-          <div><Text type="secondary" style={{ fontSize: '12px' }}>{record.client?.code}</Text></div>
-        </div>
-      )
+      render: (_, record) => {
+        const client = record.client || {};
+        return (
+          <div>
+            <div><Text strong>{client.clientCode}</Text></div>
+          </div>
+        );
+      }
     },
     {
       title: 'Work Type',
@@ -213,7 +211,7 @@ const ProjectList = () => {
       render: (text, record) => (
         <div>
           <div>{text}</div>
-          <div><Text type="secondary" style={{ fontSize: '12px' }}>${record.grading?.defaultRate}</Text></div>
+          <div><Text type="secondary" style={{ fontSize: '12px' }}>₹{record.grading?.defaultRate}</Text></div>
         </div>
       )
     },
@@ -243,30 +241,32 @@ const ProjectList = () => {
       dataIndex: 'status',
       key: 'status',
       width: 100,
-      filters: Object.keys(statusConfig).map(key => ({ 
-        text: statusConfig[key].text, 
-        value: key 
+      filters: Object.keys(STATUS_MAP).map(key => ({
+        text: STATUS_MAP[key].label,
+        value: key
       })),
-      render: (status) => (
-        <Tag color={statusConfig[status]?.color || 'default'}>
-          {statusConfig[status]?.text || status}
-        </Tag>
-      )
+      render: (status) => {
+        const s = STATUS_MAP[(status || '').toString()];
+        const label = s ? s.label : (status || 'Unknown');
+        const color = s ? s.color : 'default';
+        return <Tag color={color}>{label}</Tag>;
+      }
     },
     {
       title: 'Priority',
       dataIndex: 'priority',
       key: 'priority',
       width: 100,
-      filters: Object.keys(priorityConfig).map(key => ({ 
-        text: priorityConfig[key].text, 
-        value: key 
+      filters: Object.keys(PRIORITY_MAP).map(key => ({
+        text: PRIORITY_MAP[key].label,
+        value: key
       })),
-      render: (priority) => (
-        <Tag color={priorityConfig[priority]?.color || 'default'}>
-          {priorityConfig[priority]?.text || priority}
-        </Tag>
-      )
+      render: (priority) => {
+        const p = PRIORITY_MAP[(priority || '').toString()];
+        const label = p ? p.label : (priority || 'N/A');
+        const color = p ? p.color : 'default';
+        return <Tag color={color}>{label}</Tag>;
+      }
     },
     {
       title: 'Deadline',
@@ -299,7 +299,7 @@ const ProjectList = () => {
               onClick={() => handleEdit(record)}
             />
           </Tooltip>
-          {record.status === 'DRAFT' && (
+          { (record.status || '').toString() === 'draft' && (
             <Tooltip title="Activate Project">
               <Button 
                 type="link" 
@@ -423,9 +423,9 @@ const ProjectList = () => {
   // Statistics
   const projectStats = {
     total: pagination.totalItems,
-    active: projects.filter(p => p.status === 'ACTIVE').length,
-    draft: projects.filter(p => p.status === 'DRAFT').length,
-    completed: projects.filter(p => p.status === 'COMPLETED').length
+    active: projects.filter(p => ['in_progress', 'active'].includes((p.status || '').toString())).length,
+    draft: projects.filter(p => (p.status || '').toString() === 'draft').length,
+    completed: projects.filter(p => (p.status || '').toString() === 'completed').length
   };
 
   if (projectsError) {
@@ -593,20 +593,39 @@ const ProjectViewContent = ({ project }) => {
   if (!project) return null;
 
   return (
-    <div>
-      <Row gutter={[16, 16]}>
+        <div>
+          <Row gutter={[16, 16]}>
+            <Col span={12}>
+              <div><Text strong>Project Code:</Text> {project.projectCode}</div>
+              <div><Text strong>Project Code:</Text> {project.projectCode}</div>
+              <div>
+                <Text strong>Client:</Text>{' '}
+                {(() => {
+                  const c = project.client || {};
+                  const name = c.displayName || [c.firstName, c.lastName].filter(Boolean).join(' ') || c.companyName || '';
+                  return `${name} ${c.clientCode ? `(${c.clientCode})` : ''}`;
+                })()}
+              </div>
+              <div><Text strong>Work Type:</Text> {project.workType?.name}</div>
+              <div><Text strong>Grading:</Text> {project.grading?.name} (₹{project.grading?.defaultRate})</div>
+            </Col>
         <Col span={12}>
-          <div><Text strong>Project Code:</Text> {project.projectCode}</div>
-          <div><Text strong>Project Code:</Text> {project.projectCode}</div>
-          <div><Text strong>Client:</Text> {project.client?.name} ({project.client?.code})</div>
-          <div><Text strong>Work Type:</Text> {project.workType?.name}</div>
-          <div><Text strong>Grading:</Text> {project.grading?.name} (${project.grading?.defaultRate})</div>
-        </Col>
-        <Col span={12}>
-          <div><Text strong>Status:</Text> <Tag color="blue">{project.status}</Tag></div>
-          <div><Text strong>Priority:</Text> <Tag color="orange">{project.priority}</Tag></div>
+          <div>
+            <Text strong>Status:</Text>{' '}
+            {(() => {
+              const s = STATUS_MAP[(project.status || '').toString()];
+              return <Tag color={s ? s.color : 'default'}>{s ? s.label : project.status}</Tag>;
+            })()}
+          </div>
+          <div>
+            <Text strong>Priority:</Text>{' '}
+            {(() => {
+              const p = PRIORITY_MAP[(project.priority || '').toString()];
+              return <Tag color={p ? p.color : 'default'}>{p ? p.label : project.priority}</Tag>;
+            })()}
+          </div>
           <div><Text strong>Quantity:</Text> {project.imageQuantity} images</div>
-          <div><Text strong>Estimated Cost:</Text> ${project.estimatedCost}</div>
+          <div><Text strong>Estimated Cost:</Text> ₹{project.estimatedCost}</div>
           <div><Text strong>Deadline:</Text> {project.deadlineDate ? dayjs(project.deadlineDate).format('YYYY-MM-DD') : 'Not set'}</div>
         </Col>
       </Row>
@@ -658,7 +677,7 @@ const ProjectForm = ({ form, onFinish, clients, workTypes, gradings, mode }) => 
             <Select placeholder="Select client" showSearch>
               {clients.map(client => (
                 <Option key={client.id} value={client.id}>
-                  {client.name} ({client.code})
+                  {client.clientCode}
                 </Option>
               ))}
             </Select>
@@ -691,7 +710,7 @@ const ProjectForm = ({ form, onFinish, clients, workTypes, gradings, mode }) => 
             <Select placeholder="Select grading">
               {gradings.map(grading => (
                 <Option key={grading.id} value={grading.id}>
-                  {grading.name} (${grading.defaultRate})
+                  {grading.name} (₹{grading.defaultRate})
                 </Option>
               ))}
             </Select>

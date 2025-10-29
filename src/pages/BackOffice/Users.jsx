@@ -122,9 +122,9 @@ const Users = () => {
           {record.isEmployee && (
             <div style={{ color: '#666', fontSize: '12px' }}>
               {record.payType === 'fixed' ? (
-                record.salaryAmount ? `$${Number(record.salaryAmount).toLocaleString()} (${record.salaryType})` : 'Salary not set'
+                record.salaryAmount ? `₹${Number(record.salaryAmount).toLocaleString()} (${record.salaryType})` : 'Salary not set'
               ) : record.payType === 'hourly' ? (
-                record.hourlyRate ? `$${Number(record.hourlyRate).toLocaleString()}/hr` : 'Rate not set'
+                record.hourlyRate ? `₹${Number(record.hourlyRate).toLocaleString()}/hr` : 'Rate not set'
               ) : (
                 'Pay type not set'
               )}

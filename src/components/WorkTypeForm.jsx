@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Form, Input, Switch, Select, Button, Space, Card, Typography, Tag, InputNumber, message } from 'antd';
+import { Form, Input, Switch, Select, Button, Space, Card, Typography, Tag, InputNumber, message, Divider } from 'antd';
 import { DeleteOutlined, DragOutlined } from '@ant-design/icons';
 import { useMutation, useQuery } from '@apollo/client';
 import { useReactiveVar } from '@apollo/client';
@@ -7,6 +7,7 @@ import { userCacheVar } from '../cache/userCacheVar';
 import { CREATE_WORK_TYPE, UPDATE_WORK_TYPE, GET_WORK_TYPES } from '../gql/workTypes';
 import { GET_ACTIVE_TASK_TYPES } from '../gql/taskTypes';
 import { hasPermission, MODULES, generatePermission } from '../config/permissions';
+import CustomFieldsManager from './CustomFieldsManager';
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -14,7 +15,6 @@ const { Option } = Select;
 
 const WorkTypeForm = ({ workType, mode, onClose, onSuccess }) => {
   const [form] = Form.useForm();
-  const [loading, setLoading] = useState(false);
   const [selectedTaskTypes, setSelectedTaskTypes] = useState([]);
   const userData = useReactiveVar(userCacheVar);
 
@@ -87,8 +87,6 @@ const WorkTypeForm = ({ workType, mode, onClose, onSuccess }) => {
       return;
     }
 
-    setLoading(true);
-
     try {
       const input = {
         name: values.name,
@@ -101,11 +99,10 @@ const WorkTypeForm = ({ workType, mode, onClose, onSuccess }) => {
         })),
       };
 
-      let result;
       if (mode === 'create') {
-        result = await createWorkType({ variables: { input } });
+        await createWorkType({ variables: { input } });
       } else {
-        result = await updateWorkType({ variables: { id: workType.id, input } });
+        await updateWorkType({ variables: { id: workType.id, input } });
       }
 
       // Note: Success message, onSuccess callback, and onClose are handled by Apollo onCompleted
@@ -132,8 +129,6 @@ const WorkTypeForm = ({ workType, mode, onClose, onSuccess }) => {
       }
       
       message.error(`Failed to ${mode} work type: ${errorMessage}`);
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -439,6 +434,15 @@ const WorkTypeForm = ({ workType, mode, onClose, onSuccess }) => {
           </div>
         )}
       </div>
+
+      <Divider />
+
+      {/* Custom Fields Configuration */}
+      <CustomFieldsManager 
+        workTypeId={workType?.id || null}
+        disabled={!hasCurrentPermission}
+      />
+
     </Form>
   );
 };

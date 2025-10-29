@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Card, Typography, Space, Tag, Descriptions, Switch, Button, Table, message } from 'antd';
-import { EditOutlined, TagsOutlined, CheckCircleOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
+import { Card, Typography, Space, Tag, Descriptions, Switch, Button, Table, message, Tooltip } from 'antd';
+import { EditOutlined, TagsOutlined, CheckCircleOutlined, ExclamationCircleOutlined, SettingOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { useMutation, useReactiveVar } from '@apollo/client';
 import { userCacheVar } from '../cache/userCacheVar';
 import { UPDATE_WORK_TYPE, GET_WORK_TYPES } from '../gql/workTypes';
@@ -166,6 +166,14 @@ const WorkTypeDetail = ({ workType, onEdit, onClose }) => {
           <Descriptions.Item label="Total Task Types">
             <Text strong>{workType.taskTypes?.length || 0}</Text>
           </Descriptions.Item>
+          <Descriptions.Item label="Custom Fields">
+            <Text strong>{workType.customFields?.filter(field => field.isActive).length || 0}</Text>
+            {workType.customFields?.length > 0 && workType.customFields.some(field => !field.isActive) && (
+              <Text type="secondary" className="ml-2">
+                ({workType.customFields.filter(field => !field.isActive).length} inactive)
+              </Text>
+            )}
+          </Descriptions.Item>
         </Descriptions>
       </Card>
 
@@ -191,6 +199,106 @@ const WorkTypeDetail = ({ workType, onEdit, onClose }) => {
           <div className="text-center py-8 text-gray-500">
             <TagsOutlined className="text-4xl mb-2" />
             <div>No task types configured</div>
+          </div>
+        )}
+      </Card>
+
+      {/* Custom Fields Configuration */}
+      <Card 
+        title={
+          <Space>
+            <SettingOutlined />
+            <span>Custom Fields</span>
+            <Tag color="green">{workType.customFields?.length || 0} fields</Tag>
+          </Space>
+        }
+      >
+        {workType.customFields && workType.customFields.length > 0 ? (
+          <div className="space-y-4">
+            {workType.customFields
+              .filter(field => field.isActive)
+              .sort((a, b) => a.displayOrder - b.displayOrder)
+              .map((field) => (
+                <Card key={field.id} size="small" className="bg-gray-50">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <div className="flex items-center space-x-2 mb-2">
+                        <Text strong className="text-base">{field.fieldName}</Text>
+                        <Tag color="blue">{field.fieldType}</Tag>
+                        {field.isRequired && <Tag color="red">Required</Tag>}
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <Text type="secondary">Field Key:</Text>
+                          <div className="font-mono bg-white px-2 py-1 rounded border mt-1">
+                            {field.fieldKey}
+                          </div>
+                        </div>
+                        
+                        {field.placeholder && (
+                          <div>
+                            <Text type="secondary">Placeholder:</Text>
+                            <div className="mt-1">{field.placeholder}</div>
+                          </div>
+                        )}
+                        
+                        {field.defaultValue && (
+                          <div>
+                            <Text type="secondary">Default Value:</Text>
+                            <div className="mt-1">{field.defaultValue}</div>
+                          </div>
+                        )}
+                        
+                        {field.helpText && (
+                          <div className="col-span-2">
+                            <Text type="secondary">Help Text:</Text>
+                            <div className="mt-1 text-gray-600">{field.helpText}</div>
+                          </div>
+                        )}
+                        
+                        {field.options && field.options.length > 0 && (
+                          <div className="col-span-2">
+                            <Text type="secondary">Options:</Text>
+                            <div className="mt-1 space-x-1">
+                              {field.options.map((option, idx) => (
+                                <Tag key={idx} className="mb-1">
+                                  {option.label}
+                                  {option.value !== option.label && (
+                                    <span className="text-gray-500 ml-1">({option.value})</span>
+                                  )}
+                                </Tag>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {field.validation && (
+                          <div className="col-span-2">
+                            <Text type="secondary">
+                              Validation Rules:
+                              <Tooltip title="JSON validation configuration">
+                                <QuestionCircleOutlined className="ml-1" />
+                              </Tooltip>
+                            </Text>
+                            <div className="font-mono bg-white px-2 py-1 rounded border mt-1 text-xs">
+                              {JSON.stringify(field.validation, null, 2)}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-gray-500">
+            <SettingOutlined className="text-4xl mb-2" />
+            <div>No custom fields configured</div>
+            <Text type="secondary" className="text-sm">
+              Custom fields will appear here when they are added to this work type
+            </Text>
           </div>
         )}
       </Card>

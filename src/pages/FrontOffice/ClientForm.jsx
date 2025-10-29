@@ -29,6 +29,7 @@ import {
   GET_STATES,
   GET_CITIES,
 } from "../../gql/clients";
+import { buildGradingsPayload } from "./clientFormUtils";
 import { GET_WORK_TYPES } from "../../gql/workTypes";
 import { GET_USERS } from "../../gql/users";
 import { GET_GRADINGS_BY_WORK_TYPES } from "../../gql/gradings";
@@ -62,24 +63,41 @@ const ClientForm = ({
   const [isCreditEnabled, setIsCreditEnabled] = useState(false);
   const [hasCustomRates, setHasCustomRates] = useState(false);
 
-  const { data: gradingsData, refetch: refetchGradings } = useQuery(
-    GET_GRADINGS_BY_WORK_TYPES,
-    {
-      variables: { workTypeIds: selectedWorkTypes },
-      skip: selectedWorkTypes.length === 0,
-      fetchPolicy: "network-only", // Always fetch fresh data, especially important for edit mode
-    }
-  );
+  const { data: gradingsData } = useQuery(GET_GRADINGS_BY_WORK_TYPES, {
+    variables: { workTypeIds: selectedWorkTypes },
+    skip: selectedWorkTypes.length === 0,
+    fetchPolicy: "network-only", // Always fetch fresh data, especially important for edit mode
+  });
 
   // Handler for work type selection
   const handleWorkTypesChange = (values) => {
-    // Form.Item will automatically update the form field value
-    // We only need to clear related fields when work types change
-    setSelectedGradings([]);
-    setGradingCustomRates({});
-    setGradingTaskAssignments({});
-    form.setFieldsValue({ gradings: [] });
+    console.log("WorkTypes changed to:", values);
+
+    // Update state immediately
+    setSelectedWorkTypes(values);
+
+    // Also update form value to keep them in sync
+    form.setFieldsValue({ workTypes: values });
+
+    // Only clear gradings if work types actually changed to prevent unnecessary resets
+    const currentWorkTypes = selectedWorkTypes || [];
+    const workTypesChanged =
+      JSON.stringify(currentWorkTypes.sort()) !== JSON.stringify(values.sort());
+
+    if (workTypesChanged) {
+      // Clear related grading data when work types change
+      setSelectedGradings([]);
+      setGradingCustomRates({});
+      setGradingTaskAssignments({});
+      form.setFieldsValue({ gradings: [] });
+
+      console.log("Cleared gradings due to work type change");
+    }
   };
+
+  useEffect(() => {
+    console.log("Grading Custom Rates updated: ", gradingCustomRates);
+  }, [gradingCustomRates]);
 
   // Handler for client type change
   const handleClientTypeChange = (value) => {
@@ -101,28 +119,12 @@ const ClientForm = ({
 
   // Handler for multiple grading selection
   const handleGradingsChange = (gradingIds) => {
+    console.log("Gradings changed to:", gradingIds);
     setSelectedGradings(gradingIds);
-    
-    // Update workTypes based on selected gradings
-    if (gradingsData?.gradingsByWorkType && gradingIds.length > 0) {
-      const selectedGradingObjects = gradingsData.gradingsByWorkType.filter(
-        (g) => gradingIds.includes(g.id)
-      );
-      
-      // Extract unique work type IDs from selected gradings
-      const workTypeIdsFromGradings = selectedGradingObjects
-        .map((g) => g.workType?.id)
-        .filter((id) => id); // Remove undefined/null values
-      
-      const uniqueWorkTypeIds = [...new Set(workTypeIdsFromGradings)];
-      
-      // Update form field and state for workTypes
-      if (uniqueWorkTypeIds.length > 0) {
-        form.setFieldsValue({ workTypes: uniqueWorkTypeIds });
-        setSelectedWorkTypes(uniqueWorkTypeIds);
-      }
-    }
-    
+
+    // Also update form value to keep them in sync
+    form.setFieldsValue({ gradings: gradingIds });
+
     // Remove custom rates for deselected gradings, preserve explicit zero values
     const newCustomRates = {};
     gradingIds.forEach((id) => {
@@ -144,6 +146,7 @@ const ClientForm = ({
 
   // Handler for custom rate change for a grading
   const handleGradingCustomRateChange = (gradingId, rate) => {
+    console.log("Updating custom rate for grading", gradingId, "to", rate);
     setGradingCustomRates((prev) => ({
       ...prev,
       [gradingId]: rate,
@@ -173,9 +176,9 @@ const ClientForm = ({
   const handleCreditToggle = (checked) => {
     setIsCreditEnabled(checked);
     if (!checked) {
-      form.setFieldsValue({ 
-        creditDays: undefined, 
-        creditAmount: undefined 
+      form.setFieldsValue({
+        creditDays: undefined,
+        creditAmount: undefined,
       });
     }
   };
@@ -206,9 +209,8 @@ const ClientForm = ({
       workTypes.length !== selectedWorkTypes.length ||
       !workTypes.every((val, idx) => val === selectedWorkTypes[idx])
     ) {
-      if (workTypes.length > 0) {
-        setSelectedWorkTypes(workTypes);
-      }
+      console.log("Syncing selectedWorkTypes from form watch:", workTypes);
+      setSelectedWorkTypes(workTypes);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formWorkTypes]);
@@ -235,17 +237,20 @@ const ClientForm = ({
   });
 
   // Fetch full client data when editing (includes workTypeAssociations, gradings, taskPreferences)
-  const { data: fullClientData, loading: clientLoading } = useQuery(GET_CLIENT, {
-    variables: { id: client?.id },
-    skip: !client?.id,
-    fetchPolicy: "network-only",
-  });
+  const { data: fullClientData, loading: clientLoading } = useQuery(
+    GET_CLIENT,
+    {
+      variables: { id: client?.id },
+      skip: !client?.id,
+      fetchPolicy: "network-only",
+    }
+  );
 
   console.log("ClientForm Debug:", {
     clientId: client?.id,
     fullClientData,
     clientLoading,
-    hasTaskPreferences: fullClientData?.client?.taskPreferences?.length || 0
+    hasTaskPreferences: fullClientData?.client?.taskPreferences?.length || 0,
   });
 
   const [createClient] = useMutation(CREATE_CLIENT, {
@@ -282,19 +287,19 @@ const ClientForm = ({
       // Extract work type IDs from workTypeAssociations or from gradings if empty
       let workTypeIds =
         clientData.workTypeAssociations?.map((wta) => wta.workType.id) || [];
-      
+
       // If workTypeAssociations is empty, extract work types from gradings
       if (workTypeIds.length === 0 && clientData.gradings?.length > 0) {
         const workTypeIdsFromGradings = clientData.gradings
           .map((g) => g.grading?.workType?.id)
           .filter((id) => id); // Remove undefined/null values
-        
+
         // Remove duplicates
         workTypeIds = [...new Set(workTypeIdsFromGradings)];
       }
-      
+
       console.log("workTypeIds", clientData);
-      
+
       // Extract grading IDs and custom rates (preserve explicit zero values)
       const gradingIds = clientData.gradings?.map((g) => g.gradingId) || [];
       const customRates = {};
@@ -303,45 +308,50 @@ const ClientForm = ({
           customRates[g.gradingId] = g.customRate;
         }
       });
-      
+
       console.log("Grading IDs Debug:", {
         rawGradings: clientData.gradings,
         extractedGradingIds: gradingIds,
-        extractedCustomRates: customRates
+        extractedCustomRates: customRates,
       });
 
       console.log("Task Preferences Debug:", {
         rawTaskPreferences: clientData.taskPreferences,
         taskPreferencesLength: clientData.taskPreferences?.length || 0,
         selectedGradings: gradingIds,
-        gradingCustomRates: customRates
+        gradingCustomRates: customRates,
       });
 
       // Extract service provider IDs with multiple fallback strategies
       let serviceProviderIds = [];
-      
-      if (clientData.serviceProviders && Array.isArray(clientData.serviceProviders)) {
-        serviceProviderIds = clientData.serviceProviders.map((sp) => {
-          // Handle nested structure: { serviceProvider: { id: ... } }
-          if (sp.serviceProvider && sp.serviceProvider.id) {
-            return sp.serviceProvider.id;
-          }
-          // Handle direct ID structure: { id: ... }
-          if (sp.id) {
-            return sp.id;
-          }
-          // Handle string ID
-          if (typeof sp === 'string') {
-            return sp;
-          }
-          return null;
-        }).filter(id => id !== null);
+
+      if (
+        clientData.serviceProviders &&
+        Array.isArray(clientData.serviceProviders)
+      ) {
+        serviceProviderIds = clientData.serviceProviders
+          .map((sp) => {
+            // Handle nested structure: { serviceProvider: { id: ... } }
+            if (sp.serviceProvider && sp.serviceProvider.id) {
+              return sp.serviceProvider.id;
+            }
+            // Handle direct ID structure: { id: ... }
+            if (sp.id) {
+              return sp.id;
+            }
+            // Handle string ID
+            if (typeof sp === "string") {
+              return sp;
+            }
+            return null;
+          })
+          .filter((id) => id !== null);
       }
-      
+
       console.log("Service Providers Debug:", {
         raw: clientData.serviceProviders,
         extracted: serviceProviderIds,
-        length: serviceProviderIds.length
+        length: serviceProviderIds.length,
       });
 
       // Build complete form data object
@@ -361,7 +371,7 @@ const ClientForm = ({
         notes: clientData.clientNotes,
         isCreditEnabled: clientData.isCreditEnabled,
       };
-      
+
       console.log("Form Data being set:", formData);
 
       // Set all form fields in a single call
@@ -377,7 +387,10 @@ const ClientForm = ({
 
       // Initialize task preferences from client data
       if (clientData.taskPreferences && clientData.taskPreferences.length > 0) {
-        console.log("Setting task assignments from client data:", clientData.taskPreferences);
+        console.log(
+          "Setting task assignments from client data:",
+          clientData.taskPreferences
+        );
         const taskAssignments = {};
         clientData.taskPreferences.forEach((pref) => {
           console.log("Processing task preference:", pref);
@@ -447,6 +460,7 @@ const ClientForm = ({
         );
 
         if (validGradingIds.length > 0) {
+          console.log("Setting gradings from client data:", validGradingIds);
           form.setFieldsValue({ gradings: validGradingIds });
           setSelectedGradings(validGradingIds);
         }
@@ -454,7 +468,7 @@ const ClientForm = ({
     }
     // Removed 'form' from dependencies to prevent infinite loops
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gradingsData, selectedWorkTypes, client, fullClientData]);
+  }, [gradingsData, selectedWorkTypes, client?.id, fullClientData?.client?.id]);
 
   // Handle form submission
   const handleSubmit = useCallback(async () => {
@@ -469,7 +483,10 @@ const ClientForm = ({
 
       // Debug: Log all form values to see what's being collected
       console.log("All form values:", values);
-
+      console.log(
+        "Grading Custom Rates updated: update function",
+        gradingCustomRates
+      );
       // Ensure required fields are present
       if (!values.firstName) {
         message.error("First name is required");
@@ -498,21 +515,17 @@ const ClientForm = ({
             },
           ];
         } else if (Array.isArray(input.gradings)) {
-          // Multiple gradings selected - include custom rates
-          input.gradings = input.gradings.map((gradingId) => {
-            const gradingData = gradingsData?.gradingsByWorkType?.find(
-              (g) => g.id === gradingId
-            );
-              return {
-                gradingId,
-                // Preserve explicit zero rates. Only set to null when undefined.
-                customRate: Object.prototype.hasOwnProperty.call(gradingCustomRates, gradingId)
-                  ? gradingCustomRates[gradingId]
-                  : null,
-                currency: gradingData?.currency || "INR",
-                unit: gradingData?.unit || "image",
-              };
-          });
+          // Use helper to normalize grading items (strings or objects) into full grading payloads
+          // Import kept at top of file
+          console.log("*-*-*-*-*--*-*-*1111", input.gradings);
+          console.log("*-*-*-*-*--*-*-*1111", gradingCustomRates);
+
+          input.gradings = buildGradingsPayload(
+            input.gradings,
+            gradingCustomRates,
+            gradingsData
+          );
+          console.log("*-*-*-*-*--*-*-*", input.gradings);
         }
       }
 
@@ -525,16 +538,24 @@ const ClientForm = ({
       input.taskPreferences = [];
       // Collect skipped invalid assignments to show a user-facing warning
       const skippedTaskAssignments = [];
-      if (gradingTaskAssignments && Object.keys(gradingTaskAssignments).length > 0) {
+      if (
+        gradingTaskAssignments &&
+        Object.keys(gradingTaskAssignments).length > 0
+      ) {
         Object.entries(gradingTaskAssignments).forEach(([gradingId, tasks]) => {
           Object.entries(tasks).forEach(([taskId, userIds]) => {
             // Validate that this taskId still exists under the grading to avoid sending invalid IDs
-            const gradingObj = gradingsData?.gradingsByWorkType?.find((g) => g.id === gradingId);
-            const availableTaskIds = gradingObj?.taskTypes?.map((t) => t.id) || [];
+            const gradingObj = gradingsData?.gradingsByWorkType?.find(
+              (g) => g.id === gradingId
+            );
+            const availableTaskIds =
+              gradingObj?.taskTypes?.map((t) => t.id) || [];
             if (!availableTaskIds.includes(taskId)) {
               // Track skipped assignment for UX feedback instead of silently skipping
               skippedTaskAssignments.push(`${taskId} (grading ${gradingId})`);
-              console.warn(`Skipping invalid taskId ${taskId} for grading ${gradingId}`);
+              console.warn(
+                `Skipping invalid taskId ${taskId} for grading ${gradingId}`
+              );
               return; // skip invalid task ids
             }
 
@@ -552,9 +573,14 @@ const ClientForm = ({
       // If any assignments were skipped because the taskId is no longer valid, notify the user
       if (skippedTaskAssignments.length > 0) {
         const preview = skippedTaskAssignments.slice(0, 5).join(", ");
-        const more = skippedTaskAssignments.length > 5 ? ` and ${skippedTaskAssignments.length - 5} more` : "";
+        const more =
+          skippedTaskAssignments.length > 5
+            ? ` and ${skippedTaskAssignments.length - 5} more`
+            : "";
         // Keep transient warning
-        message.warn(`Some task assignments were skipped because the task no longer exists: ${preview}${more}`);
+        message.warn(
+          `Some task assignments were skipped because the task no longer exists: ${preview}${more}`
+        );
         console.info("Skipped task assignments:", skippedTaskAssignments);
         // Save skipped assignments for inline UI so user can edit/dismiss
         setSkippedAssignments(skippedTaskAssignments);
@@ -570,6 +596,70 @@ const ClientForm = ({
       // For updates, remove read-only fields that are not part of ClientUpdateInput
       if (client) {
         const updateInput = { ...input };
+        console.log(
+          "Submitting client UPDATE with input:",
+          JSON.stringify(updateInput, null, 2)
+        );
+        // Defensive: ensure gradings payload is always sent on update.
+        // If the form transformed gradings already (array of objects), use that.
+        // Otherwise fall back to existing client gradings so we don't accidentally clear them.
+        let gradingsPayload = null;
+        if (
+          Array.isArray(input.gradings) &&
+          input.gradings.length > 0 &&
+          input.gradings[0].gradingId
+        ) {
+          // Already transformed into grading objects by earlier logic
+          gradingsPayload = input.gradings;
+        } else if (
+          Array.isArray(form.getFieldValue("gradings")) &&
+          form.getFieldValue("gradings").length > 0
+        ) {
+          // Form has selected grading IDs — build full objects preserving custom rates
+          const gradingIdsFromForm = form.getFieldValue("gradings");
+          gradingsPayload = gradingIdsFromForm.map((gradingId) => {
+            const gradingData = gradingsData?.gradingsByWorkType?.find(
+              (g) => g.id === gradingId
+            );
+            const customRaw = Object.prototype.hasOwnProperty.call(
+              gradingCustomRates,
+              gradingId
+            )
+              ? gradingCustomRates[gradingId]
+              : undefined;
+            const customRate = (function () {
+              if (customRaw === undefined) return null;
+              if (customRaw === null) return null;
+              if (typeof customRaw === "number") return customRaw;
+              const s = String(customRaw).trim();
+              if (s === "") return null;
+              const p = parseFloat(s);
+              return Number.isFinite(p) ? p : null;
+            })();
+
+            return {
+              gradingId,
+              customRate,
+              currency: gradingData?.currency || "INR",
+              unit: gradingData?.unit || "image",
+            };
+          });
+        } else if (
+          fullClientData?.client?.gradings &&
+          fullClientData.client.gradings.length > 0
+        ) {
+          // No changes in form; preserve existing gradings from server
+          gradingsPayload = fullClientData.client.gradings.map((g) => ({
+            gradingId: g.gradingId,
+            customRate: g.customRate !== undefined ? g.customRate : null,
+            currency: g.currency || "INR",
+            unit: g.unit || "image",
+          }));
+        }
+
+        if (gradingsPayload !== null) {
+          updateInput.gradings = gradingsPayload;
+        }
         // Remove read-only fields that are fetched but shouldn't be sent in update
         delete updateInput.__typename;
         delete updateInput.id;
@@ -659,28 +749,8 @@ const ClientForm = ({
     gradingTaskAssignments,
   ]);
 
-  // Step navigation
-  const nextStep = useCallback(() => {
-    // Get fields for current step to validate only those
-    const currentStepFields = getCurrentStepFields();
-
-    form
-      .validateFields(currentStepFields)
-      .then(() => {
-        setCurrentStep(currentStep + 1);
-      })
-      .catch((errorInfo) => {
-        console.log("Validation failed:", errorInfo);
-        message.error("Please fill in all required fields before proceeding");
-      });
-  }, [form, currentStep]);
-
-  const prevStep = useCallback(() => {
-    setCurrentStep(currentStep - 1);
-  }, [currentStep]);
-
   // Helper to get field names for current step
-  const getCurrentStepFields = () => {
+  const getCurrentStepFields = useCallback(() => {
     switch (currentStep) {
       case 0: // Basic Information & Contact
         return [
@@ -714,7 +784,27 @@ const ClientForm = ({
       default:
         return [];
     }
-  };
+  }, [currentStep]);
+
+  // Step navigation
+  const nextStep = useCallback(() => {
+    // Get fields for current step to validate only those
+    const currentStepFields = getCurrentStepFields();
+
+    form
+      .validateFields(currentStepFields)
+      .then(() => {
+        setCurrentStep(currentStep + 1);
+      })
+      .catch((errorInfo) => {
+        console.log("Validation failed:", errorInfo);
+        message.error("Please fill in all required fields before proceeding");
+      });
+  }, [form, currentStep, getCurrentStepFields]);
+
+  const prevStep = useCallback(() => {
+    setCurrentStep(currentStep - 1);
+  }, [currentStep]);
 
   // Handle country change
   const handleCountryChange = (countryId) => {
@@ -1063,6 +1153,7 @@ const ClientForm = ({
                     placeholder="Select work types"
                     size="middle"
                     onChange={handleWorkTypesChange}
+                    value={selectedWorkTypes}
                   >
                     {workTypesData?.workTypes?.map((wt) => (
                       <Option key={wt.id} value={wt.id}>
@@ -1113,6 +1204,15 @@ const ClientForm = ({
                     size="middle"
                     disabled={!formWorkTypes || formWorkTypes.length === 0}
                     onChange={handleGradingsChange}
+                    value={selectedGradings}
+                    loading={!gradingsData && selectedWorkTypes.length > 0}
+                    notFoundContent={
+                      !formWorkTypes || formWorkTypes.length === 0
+                        ? "Please select work types first"
+                        : !gradingsData
+                        ? "Loading gradings..."
+                        : "No gradings found"
+                    }
                   >
                     {gradingsData?.gradingsByWorkType?.map((grading) => (
                       <Option key={grading.id} value={grading.id}>
@@ -1137,20 +1237,37 @@ const ClientForm = ({
                       showIcon
                       message={`Some task assignments were skipped (${skippedAssignments.length})`}
                       description={
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div style={{ maxWidth: '80%' }}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <div style={{ maxWidth: "80%" }}>
                             {skippedAssignments.slice(0, 5).map((s, idx) => (
-                              <div key={s + idx} style={{ fontSize: 12 }}>{s}</div>
+                              <div key={s + idx} style={{ fontSize: 12 }}>
+                                {s}
+                              </div>
                             ))}
                             {skippedAssignments.length > 5 && (
-                              <div style={{ fontSize: 12 }}>and {skippedAssignments.length - 5} more...</div>
+                              <div style={{ fontSize: 12 }}>
+                                and {skippedAssignments.length - 5} more...
+                              </div>
                             )}
                           </div>
                           <div>
-                            <Button size="small" type="link" onClick={() => setCurrentStep(0)}>
+                            <Button
+                              size="small"
+                              type="link"
+                              onClick={() => setCurrentStep(0)}
+                            >
                               Edit
                             </Button>
-                            <Button size="small" onClick={() => setSkippedAssignments([])}>
+                            <Button
+                              size="small"
+                              onClick={() => setSkippedAssignments([])}
+                            >
                               Dismiss
                             </Button>
                           </div>
@@ -1232,59 +1349,65 @@ const ClientForm = ({
                             be auto-assigned when creating projects.
                           </Text>
                           {grading.taskTypes.map((task) => {
-                            console.log(`Rendering task ${task.id} for grading ${gradingId}:`, {
-                              task,
-                              gradingId,
-                              currentValue: gradingTaskAssignments[gradingId]?.[task.id] || [],
-                              allAssignments: gradingTaskAssignments
-                            });
+                            console.log(
+                              `Rendering task ${task.id} for grading ${gradingId}:`,
+                              {
+                                task,
+                                gradingId,
+                                currentValue:
+                                  gradingTaskAssignments[gradingId]?.[
+                                    task.id
+                                  ] || [],
+                                allAssignments: gradingTaskAssignments,
+                              }
+                            );
                             return (
-                            <Row
-                              key={task.id}
-                              gutter={16}
-                              style={{ marginBottom: 12 }}
-                            >
-                              <Col span={8}>
-                                <Text>{task.name}</Text>
-                                {task.description && (
-                                  <>
-                                    <br />
-                                    <Text
-                                      type="secondary"
-                                      style={{ fontSize: "12px" }}
-                                    >
-                                      {task.description}
-                                    </Text>
-                                  </>
-                                )}
-                              </Col>
-                              <Col span={16}>
-                                <Select
-                                  mode="multiple"
-                                  placeholder={`Select employees for ${task.name}`}
-                                  size="small"
-                                  style={{ width: "100%" }}
-                                  value={
-                                    gradingTaskAssignments[gradingId]?.[
-                                      task.id
-                                    ] || []
-                                  }
-                                  onChange={(userIds) =>
-                                    handleGradingTaskAssignment(
-                                      gradingId,
-                                      task.id,
-                                      userIds
-                                    )
-                                  }
-                                >
-                                  {usersData?.users?.map((user) => (
-                                    <Option key={user.id} value={user.id}>
-                                      {user.firstName} {user.lastName}
-                                    </Option>
-                                  ))}
-                                </Select>
-                              </Col>
-                            </Row>
+                              <Row
+                                key={task.id}
+                                gutter={16}
+                                style={{ marginBottom: 12 }}
+                              >
+                                <Col span={8}>
+                                  <Text>{task.name}</Text>
+                                  {task.description && (
+                                    <>
+                                      <br />
+                                      <Text
+                                        type="secondary"
+                                        style={{ fontSize: "12px" }}
+                                      >
+                                        {task.description}
+                                      </Text>
+                                    </>
+                                  )}
+                                </Col>
+                                <Col span={16}>
+                                  <Select
+                                    mode="multiple"
+                                    placeholder={`Select employees for ${task.name}`}
+                                    size="small"
+                                    style={{ width: "100%" }}
+                                    value={
+                                      gradingTaskAssignments[gradingId]?.[
+                                        task.id
+                                      ] || []
+                                    }
+                                    onChange={(userIds) =>
+                                      handleGradingTaskAssignment(
+                                        gradingId,
+                                        task.id,
+                                        userIds
+                                      )
+                                    }
+                                  >
+                                    {usersData?.users?.map((user) => (
+                                      <Option key={user.id} value={user.id}>
+                                        {user.firstName} {user.lastName}
+                                      </Option>
+                                    ))}
+                                  </Select>
+                                </Col>
+                              </Row>
                             );
                           })}
                         </>
@@ -1603,8 +1726,10 @@ const ClientForm = ({
       const footer = renderFooter();
       renderFooterInDrawer(footer);
     }
+    // Re-run when handleSubmit changes so the footer's Update button
+    // always calls the latest callback (which captures the latest gradingCustomRates).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentStep, loading, clientType]);
+  }, [currentStep, loading, clientType, handleSubmit]);
 
   return (
     <>

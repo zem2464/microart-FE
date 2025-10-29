@@ -34,6 +34,31 @@ export const WORK_TYPE_FRAGMENT = gql`
         isRequired
       }
     }
+    customFields {
+      id
+      fieldName
+      fieldKey
+      fieldType
+      isRequired
+      defaultValue
+      placeholder
+      helpText
+      validation
+      options {
+        value
+        label
+        description
+      }
+      displayOrder
+      isActive
+    }
+    gradings {
+      id
+      name
+      description
+      defaultRate
+      isActive
+    }
   }
 `;
 

@@ -15,6 +15,7 @@ import {
   Alert,
   Tooltip,
   Input,
+  InputNumber,
   Select,
   message,
   Tabs,
@@ -39,29 +40,41 @@ import {
   GET_PROJECTS,
   DELETE_PROJECT,
   ACTIVATE_PROJECT,
+  UPDATE_PROJECT,
 } from "../../graphql/projectQueries";
 import { GET_CLIENTS } from "../../graphql/clientQueries";
-import { GET_TASKS } from "../../graphql/taskQueries";
+// tasks are loaded in ProjectDetail drawer when needed
 import { AppDrawerContext } from "../../contexts/DrawerContext";
 import dayjs from "dayjs";
 
 const { Text } = Typography;
 const { Option } = Select;
 
+// Status display map for labels and colors
+const STATUS_MAP = {
+  DRAFT: { label: 'Draft', color: 'orange' },
+  ACTIVE: { label: 'Active', color: 'green' },
+  IN_PROGRESS: { label: 'In Progress', color: 'blue' },
+  COMPLETED: { label: 'Completed', color: 'blue' },
+  CANCELLED: { label: 'Cancelled', color: 'red' }
+};
+
 // Helper function to get client display name
 const getClientDisplayName = (client) => {
-  if (client.displayName) return client.displayName;
-  if (client.companyName) return client.companyName;
-  return `${client.firstName} ${client.lastName || ""}`.trim();
+  return client.clientCode || 'Unknown Client';
 };
 
 const ProjectManagement = () => {
-  const { showProjectFormDrawer } = useContext(AppDrawerContext);
+  const { showProjectFormDrawer, showProjectDetailDrawer } = useContext(AppDrawerContext);
   const [activeTab, setActiveTab] = useState("list");
-  const [selectedProject, setSelectedProject] = useState(null);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("all");
+  
+  // Project completion modal state
+  const [completeModalVisible, setCompleteModalVisible] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [actualImageCount, setActualImageCount] = useState(0);
 
   // GraphQL Queries
   const {
@@ -91,20 +104,8 @@ const ProjectManagement = () => {
     fetchPolicy: "cache-and-network",
   });
 
-  const { data: projectTasksData, loading: tasksLoading } = useQuery(
-    GET_TASKS,
-    {
-      variables: {
-        filters: selectedProject ? { projectId: selectedProject.id } : {},
-        page: 1,
-        limit: 50,
-        sortBy: "createdAt",
-        sortOrder: "DESC",
-      },
-      skip: !selectedProject,
-      fetchPolicy: "cache-and-network",
-    }
-  );
+  // project tasks are loaded inside the ProjectDetail drawer when opened
+  const tasksLoading = false;
 
   // GraphQL Mutations
   const [deleteProject] = useMutation(DELETE_PROJECT, {
@@ -127,18 +128,40 @@ const ProjectManagement = () => {
     },
   });
 
+  const [completeProject] = useMutation(UPDATE_PROJECT, {
+    onCompleted: () => {
+      message.success("Project completed successfully!");
+      refetchProjects();
+      setCompleteModalVisible(false);
+      setSelectedProject(null);
+      setActualImageCount(0);
+    },
+    onError: (error) => {
+      message.error(`Error completing project: ${error.message}`);
+    },
+  });
+
+  // Normalize projects array from GraphQL response (supports projects.projects or legacy projects.data)
+  const allProjects =
+    projectsData?.projects?.projects || projectsData?.projects?.data || [];
+
   // Filter projects based on search and filters
   const filteredProjects =
-    projectsData?.projects?.data?.filter((project) => {
-      const matchesSearch =
-        project.projectCode.toLowerCase().includes(searchText.toLowerCase()) ||
-        project.description?.toLowerCase().includes(searchText.toLowerCase()) ||
-        project.projectNumber.toLowerCase().includes(searchText.toLowerCase());
+    allProjects.filter((project) => {
+      const code = (project.projectCode || project.projectNumber || project.name || '').toString();
+      const desc = (project.description || '').toString();
+      const searchLower = searchText.toString().toLowerCase();
 
+      const matchesSearch =
+        code.toLowerCase().includes(searchLower) ||
+        desc.toLowerCase().includes(searchLower);
+
+      const projStatus = (project.status || '').toString().toUpperCase();
       const matchesStatus =
-        statusFilter === "all" || project.status === statusFilter;
-      const matchesClient =
-        clientFilter === "all" || project.clientId === parseInt(clientFilter);
+        statusFilter === 'all' || projStatus === (statusFilter || '').toString().toUpperCase();
+
+      const projClientId = project.clientId || project.client?.id;
+      const matchesClient = clientFilter === 'all' || projClientId === clientFilter || projClientId === parseInt(clientFilter);
 
       return matchesSearch && matchesStatus && matchesClient;
     }) || [];
@@ -146,15 +169,15 @@ const ProjectManagement = () => {
   // Calculate statistics
   const stats = {
     total: filteredProjects.length,
-    active: filteredProjects.filter((p) => p.status === "ACTIVE").length,
-    draft: filteredProjects.filter((p) => p.status === "DRAFT").length,
-    completed: filteredProjects.filter((p) => p.status === "COMPLETED").length,
+    active: filteredProjects.filter((p) => (p.status || '').toString().toUpperCase() === 'ACTIVE').length,
+    draft: filteredProjects.filter((p) => (p.status || '').toString().toUpperCase() === 'DRAFT').length,
+    completed: filteredProjects.filter((p) => (p.status || '').toString().toUpperCase() === 'COMPLETED').length,
   };
 
   // Handle project actions
   const handleViewProject = (project) => {
-    setSelectedProject(project);
-    setActiveTab("details");
+    // Open project details in the shared drawer
+    showProjectDetailDrawer(project);
   };
 
   const handleEditProject = (project) => {
@@ -192,26 +215,54 @@ const ProjectManagement = () => {
     });
   };
 
+  const handleCompleteProject = (project) => {
+    setSelectedProject(project);
+    setActualImageCount(project.imageQuantity || 0); // Default to original quantity
+    setCompleteModalVisible(true);
+  };
+
+  const handleCompleteSubmit = () => {
+    if (!selectedProject || actualImageCount <= 0) {
+      message.error("Please enter a valid image count");
+      return;
+    }
+
+    // Calculate actual cost based on actual image count
+    const rate = selectedProject.grading?.defaultRate || 0;
+    const actualCost = rate * actualImageCount;
+
+    completeProject({
+      variables: {
+        id: selectedProject.id,
+        input: {
+          status: "COMPLETED",
+          actualCost: actualCost,
+          imageQuantity: actualImageCount, // Update with actual count
+        },
+      },
+    });
+  };
+
   // Table columns
   const columns = [
     {
-      title: "Project Number",
-      dataIndex: "projectNumber",
-      key: "projectNumber",
-      width: 150,
-      render: (text) => <Text code>{text}</Text>,
+      title: 'Project Code',
+      dataIndex: 'projectCode',
+      key: 'projectCode',
+      width: 180,
+      render: (text, record) => (
+        <Text code>{text || record.projectNumber || record.id}</Text>
+      ),
     },
     {
-      title: "Name",
-      dataIndex: "name",
-      key: "name",
+      title: 'Title / Description',
+      dataIndex: 'description',
+      key: 'description',
       render: (text, record) => (
         <Space direction="vertical" size={0}>
-          <Text strong>{text}</Text>
-          <Text type="secondary" style={{ fontSize: "12px" }}>
-            {record.description?.length > 50
-              ? `${record.description.substring(0, 50)}...`
-              : record.description}
+          <Text strong>{record.name || record.projectCode || record.projectNumber || 'Untitled'}</Text>
+          <Text type="secondary" style={{ fontSize: '12px' }}>
+            {text?.length > 80 ? `${text.substring(0, 80)}...` : text}
           </Text>
         </Space>
       ),
@@ -236,44 +287,62 @@ const ProjectManagement = () => {
       width: 100,
       render: (text, record) => (
         <Tag color="gold">
-          {text} - ${record.grading?.defaultRate || 0}
+          {text} - ₹{record.grading?.defaultRate || 0}
         </Tag>
       ),
+    },
+    {
+      title: 'Tasks',
+      dataIndex: 'tasks',
+      key: 'tasks',
+      width: 160,
+      sorter: (a, b) => ((a.tasks && a.tasks.length) || a.taskCount || 0) - ((b.tasks && b.tasks.length) || b.taskCount || 0),
+      render: (tasks, record) => {
+        // If project is a draft, tasks should remain hidden / not visible
+        const status = (record.status || '').toString().toUpperCase();
+        if (status === 'DRAFT') {
+          return <div style={{ minWidth: 140, color: '#fa8c16' }}>Draft — tasks hidden</div>;
+        }
+
+        const all = tasks || record.tasks || [];
+        const total = all.length || record.taskCount || 0;
+        const completed = (all.filter ? all.filter(t => (t.status || '').toString().toUpperCase() === 'COMPLETED').length : 0) || record.completedTaskCount || 0;
+        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
+        return (
+          <div style={{ minWidth: 140 }}>
+            <div style={{ marginBottom: 6 }}>{total} task{total !== 1 ? 's' : ''}</div>
+            <Progress percent={percent} size="small" />
+          </div>
+        );
+      }
     },
     {
       title: "Status",
       dataIndex: "status",
       key: "status",
       width: 100,
+      filters: Object.keys(STATUS_MAP).map(key => ({ text: STATUS_MAP[key].label, value: key })),
+      sorter: (a, b) => ('' + (a.status || '')).localeCompare('' + (b.status || '')),
       render: (status) => {
-        const statusConfig = {
-          DRAFT: { color: "orange", icon: <EditOutlined /> },
-          ACTIVE: { color: "green", icon: <PlayCircleOutlined /> },
-          COMPLETED: { color: "blue", icon: <CheckCircleOutlined /> },
-          CANCELLED: { color: "red", icon: <PauseCircleOutlined /> },
-        };
-        const config = statusConfig[status] || { color: "default", icon: null };
-        return (
-          <Tag color={config.color} icon={config.icon}>
-            {status}
-          </Tag>
-        );
-      },
+        const key = (status || '').toString().toUpperCase();
+        const cfg = STATUS_MAP[key] || { label: status || 'Unknown', color: 'default' };
+        return <Tag color={cfg.color}>{cfg.label}</Tag>;
+      }
     },
     {
       title: "Deadline",
-      dataIndex: "deadline",
-      key: "deadline",
+      dataIndex: "deadlineDate",
+      key: "deadlineDate",
       width: 120,
       render: (date) =>
         date ? dayjs(date).format("MMM DD, YYYY") : "No deadline",
     },
     {
       title: "Budget",
-      dataIndex: "budget",
-      key: "budget",
+      dataIndex: "estimatedCost",
+      key: "estimatedCost",
       width: 100,
-      render: (budget) => (budget ? `$${budget.toLocaleString()}` : "N/A"),
+      render: (budget) => (budget ? `₹${budget.toLocaleString()}` : "N/A"),
     },
     {
       title: "Actions",
@@ -301,6 +370,16 @@ const ProjectManagement = () => {
                 type="text"
                 icon={<PlayCircleOutlined />}
                 onClick={() => handleActivateProject(record)}
+              />
+            </Tooltip>
+          )}
+          {record.status === "ACTIVE" && record.taskCount > 0 && record.completedTaskCount === record.taskCount && (
+            <Tooltip title="Complete Project">
+              <Button
+                type="text"
+                icon={<CheckCircleOutlined />}
+                style={{ color: '#52c41a' }}
+                onClick={() => handleCompleteProject(record)}
               />
             </Tooltip>
           )}
@@ -464,30 +543,85 @@ const ProjectManagement = () => {
               </div>
             ),
           },
-          {
-            key: "details",
-            label: (
-              <span>
-                <EyeOutlined />
-                Project Details
-              </span>
-            ),
-            children: selectedProject ? (
-              <ProjectDetails
-                project={selectedProject}
-                tasks={projectTasksData?.tasks?.data || []}
-                tasksLoading={tasksLoading}
-                onBack={() => setActiveTab("list")}
-              />
-            ) : (
-              <Empty
-                description="Select a project from the list to view details"
-                image={Empty.PRESENTED_IMAGE_SIMPLE}
-              />
-            ),
-          },
+      
         ]}
       />
+
+      {/* Project Completion Modal */}
+      <Modal
+        title="Complete Project"
+        open={completeModalVisible}
+        onOk={handleCompleteSubmit}
+        onCancel={() => {
+          setCompleteModalVisible(false);
+          setSelectedProject(null);
+          setActualImageCount(0);
+        }}
+        okText="Complete Project"
+        okButtonProps={{ type: 'primary', danger: false, style: { backgroundColor: '#52c41a', borderColor: '#52c41a' } }}
+        width={600}
+      >
+        {selectedProject && (
+          <div>
+            <Alert
+              message="Project Completion"
+              description="All tasks have been completed. Please enter the actual number of images processed to calculate the final cost."
+              type="info"
+              showIcon
+              style={{ marginBottom: 20 }}
+            />
+            
+            <Descriptions title="Project Details" column={1} bordered size="small" style={{ marginBottom: 20 }}>
+              <Descriptions.Item label="Project Code">{selectedProject.projectCode}</Descriptions.Item>
+              <Descriptions.Item label="Client">{selectedProject.client?.clientCode}</Descriptions.Item>
+              <Descriptions.Item label="Estimated Images">{selectedProject.imageQuantity}</Descriptions.Item>
+              <Descriptions.Item label="Estimated Cost">₹{selectedProject.estimatedCost?.toLocaleString()}</Descriptions.Item>
+              <Descriptions.Item label="Rate per Image">₹{selectedProject.grading?.defaultRate?.toLocaleString()}</Descriptions.Item>
+            </Descriptions>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <div style={{ marginBottom: 8 }}>
+                  <strong>Actual Images Processed *</strong>
+                </div>
+                <InputNumber
+                  value={actualImageCount}
+                  onChange={setActualImageCount}
+                  min={1}
+                  style={{ width: '100%' }}
+                  placeholder="Enter actual image count"
+                />
+              </Col>
+              <Col span={12}>
+                <div style={{ marginBottom: 8 }}>
+                  <strong>Calculated Actual Cost</strong>
+                </div>
+                <div style={{ 
+                  padding: '4px 11px', 
+                  backgroundColor: '#f5f5f5', 
+                  border: '1px solid #d9d9d9',
+                  borderRadius: '6px',
+                  minHeight: '32px',
+                  display: 'flex',
+                  alignItems: 'center'
+                }}>
+                  <span style={{ color: '#595959', fontWeight: 'bold', fontSize: '16px' }}>
+                    ₹{((selectedProject.grading?.defaultRate || 0) * actualImageCount)?.toLocaleString()}
+                  </span>
+                </div>
+              </Col>
+            </Row>
+
+            <Alert
+              message="Note"
+              description={`The actual cost will be calculated as: ${actualImageCount} images × ₹${selectedProject.grading?.defaultRate?.toLocaleString()} = ₹${((selectedProject.grading?.defaultRate || 0) * actualImageCount)?.toLocaleString()}`}
+              type="warning"
+              showIcon
+              style={{ marginTop: 16 }}
+            />
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
@@ -526,15 +660,15 @@ const ProjectDetails = ({ project, tasks, tasksLoading, onBack }) => {
                 {project.workType?.name || "N/A"}
               </Descriptions.Item>
               <Descriptions.Item label="Grading">
-                {project.grading?.name || "N/A"} - $
+                {project.grading?.name || "N/A"} - ₹
                 {project.grading?.defaultRate || 0}
               </Descriptions.Item>
               <Descriptions.Item label="Budget">
-                {project.budget ? `$${project.budget.toLocaleString()}` : "N/A"}
+                {project.estimatedCost ? `₹${project.estimatedCost.toLocaleString()}` : "N/A"}
               </Descriptions.Item>
               <Descriptions.Item label="Deadline">
-                {project.deadline
-                  ? dayjs(project.deadline).format("MMMM DD, YYYY")
+                {project.deadlineDate
+                  ? dayjs(project.deadlineDate).format("MMMM DD, YYYY")
                   : "No deadline"}
               </Descriptions.Item>
               <Descriptions.Item label="Created">
@@ -642,11 +776,11 @@ const ProjectDetails = ({ project, tasks, tasksLoading, onBack }) => {
                   children: "Project activated",
                   color: "green",
                 },
-                project.deadline && {
-                  children: `Deadline: ${dayjs(project.deadline).format(
+                project.deadlineDate && {
+                  children: `Deadline: ${dayjs(project.deadlineDate).format(
                     "MMM DD, YYYY"
                   )}`,
-                  color: dayjs(project.deadline).isAfter(dayjs())
+                  color: dayjs(project.deadlineDate).isAfter(dayjs())
                     ? "orange"
                     : "red",
                 },

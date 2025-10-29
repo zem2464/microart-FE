@@ -3,9 +3,13 @@ import {
   InMemoryCache,
   createHttpLink,
   from,
+  split,
 } from "@apollo/client";
 import { onError } from "@apollo/client/link/error";
 import { setContext } from "@apollo/client/link/context";
+import { GraphQLWsLink } from '@apollo/client/link/subscriptions';
+import { createClient } from 'graphql-ws';
+import { getMainDefinition } from '@apollo/client/utilities';
 import {
   isLoggedIn,
   meUserData,
@@ -91,6 +95,20 @@ const httpLink = createHttpLink({
   credentials: "include",
 });
 
+// WebSocket link for subscriptions
+export const wsLink = new GraphQLWsLink(createClient({
+  url: process.env.REACT_APP_GRAPHQL_WS_URL || "ws://localhost:4000/graphql",
+  connectionParams: () => ({
+    // Add authentication headers if needed
+    credentials: "include",
+  }),
+  on: {
+    connected: () => console.log('WebSocket connected'),
+    closed: () => console.log('WebSocket closed'),
+    error: (err) => console.error('WebSocket error:', err),
+  },
+}));
+
 const cache = new InMemoryCache({
   typePolicies: {
     User: {
@@ -115,6 +133,34 @@ const cache = new InMemoryCache({
     },
     Task: {
       keyFields: ["id"],
+      fields: {
+        // Ensure task updates merge properly
+        comments: {
+          merge(existing = [], incoming = []) {
+            return incoming;
+          },
+        },
+      },
+    },
+    TaskComment: {
+      keyFields: ["id"],
+      fields: {
+        replies: {
+          merge(existing = [], incoming = []) {
+            return incoming;
+          },
+        },
+      },
+    },
+    TaskCommentConnection: {
+      keyFields: false,
+      fields: {
+        nodes: {
+          merge(existing = [], incoming = []) {
+            return incoming;
+          },
+        },
+      },
     },
     Role: {
       keyFields: ["id"],
@@ -125,9 +171,22 @@ const cache = new InMemoryCache({
   },
 });
 
+// Split link to route subscriptions to WebSocket and queries/mutations to HTTP
+const splitLink = split(
+  ({ query }) => {
+    const definition = getMainDefinition(query);
+    return (
+      definition.kind === 'OperationDefinition' &&
+      definition.operation === 'subscription'
+    );
+  },
+  wsLink,
+  from([operationNameHeaderLink, httpLink])
+);
+
 // Create Apollo Client
 const client = new ApolloClient({
-  link: from([operationNameHeaderLink, httpLink]),
+  link: from([splitLink]),
   cache,
   credentials: "include",
 });
@@ -135,16 +194,25 @@ const client = new ApolloClient({
 // Create the error link with the client instance
 const errorLink = createErrorLink(client);
 
-// Update client with the complete link chain
-client.setLink(from([errorLink, operationNameHeaderLink, httpLink]));
+// Update client with the complete link chain including error handling
+client.setLink(from([errorLink, splitLink]));
 
 // Store client reference globally for error handling
 window.apolloClient = client;
 
-// Simple reconnect function (placeholder for future WebSocket implementation)
+// WebSocket reconnection function
 export const reconnectWebSocket = () => {
-  console.log("WebSocket reconnection placeholder - WebSockets not configured yet");
-  // Future WebSocket reconnection logic will go here
+  console.log("Attempting to reconnect WebSocket...");
+  try {
+    // The GraphQLWsLink will automatically handle reconnection
+    // We can trigger a manual reconnection if needed
+    if (wsLink && wsLink.client) {
+      wsLink.client.dispose();
+      // The link will automatically reconnect on next subscription
+    }
+  } catch (error) {
+    console.error("Error during WebSocket reconnection:", error);
+  }
 };
 
 export default client;

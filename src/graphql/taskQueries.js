@@ -26,7 +26,7 @@ export const GET_TASKS = gql`
           projectCode
           client {
             id
-            name
+            clientCode
           }
         }
         taskType {
@@ -79,8 +79,7 @@ export const GET_TASK = gql`
         description
         client {
           id
-          name
-          code
+          clientCode
         }
         workType {
           id

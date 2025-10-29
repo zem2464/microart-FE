@@ -25,10 +25,6 @@ export const GET_PROJECTS = gql`
         client {
           id
           clientCode
-          firstName
-          lastName
-          displayName
-          companyName
         }
         workType {
           id
@@ -45,6 +41,8 @@ export const GET_PROJECTS = gql`
         deadlineDate
         status
         priority
+        taskCount
+        completedTaskCount
         isActive
         createdAt
         updatedAt
@@ -95,10 +93,11 @@ export const GET_PROJECT = gql`
       priority
       notes
       clientNotes
+      customFields
       isActive
-      tasks {
+      taskTypes {
         id
-        taskCode
+        name
         taskType {
           id
           name
@@ -134,8 +133,10 @@ export const CREATE_PROJECT = gql`
     createProject(input: $input) {
       id
       projectCode
+      description
       status
-      message
+      customFields
+      createdAt
     }
   }
 `;
@@ -145,8 +146,44 @@ export const UPDATE_PROJECT = gql`
     updateProject(id: $id, input: $input) {
       id
       projectCode
+      description
+      client {
+        id
+        clientCode
+      }
+      workType {
+        id
+        name
+      }
+      grading {
+        id
+        name
+        defaultRate
+      }
+      imageQuantity
+      estimatedCost
+      actualCost
+      deadlineDate
       status
-      message
+      priority
+      notes
+      clientNotes
+      customFields
+      isActive
+      taskCount
+      completedTaskCount
+      creator {
+        id
+        firstName
+        lastName
+      }
+      updater {
+        id
+        firstName
+        lastName
+      }
+      createdAt
+      updatedAt
     }
   }
 `;
@@ -166,9 +203,9 @@ export const ACTIVATE_PROJECT = gql`
       id
       status
       message
-      tasks {
+      taskTypes {
         id
-        taskCode
+        name
         taskType {
           name
         }
@@ -180,72 +217,109 @@ export const ACTIVATE_PROJECT = gql`
 // Helper Queries for Project Creation
 export const GET_CLIENT_PREFERENCES = gql`
   query GetClientPreferences($clientId: ID!) {
-    client(id: $clientId) {
-      id
-      isCreditEnabled
-      creditAmountLimit
-      availableCredit
-      preferences {
+    clientPreferences(clientId: $clientId) {
+      workTypes {
         id
-        workTypes {
+        name
+        description
+      }
+      gradings {
+        id
+        grading {
           id
           name
+          defaultRate
         }
-        gradings {
-          id
-          grading {
-            id
-            name
-            defaultRate
-          }
-        }
-        taskTypes {
+        currency
+        unit
+        customRate
+        isDefault
+      }
+      taskPreferences {
+        id
+        taskType {
           id
           name
-          preferredUsers {
-            id
-            firstName
-            lastName
-            email
-          }
+          description
+          color
+          icon
         }
+        preferredUserIds
+        gradingId
       }
     }
   }
 `;
 
 export const VALIDATE_CLIENT_CREDIT = gql`
-  query ValidateClientCredit($clientId: ID!, $gradingId: ID!, $quantity: Int!) {
-    validateClientCredit(clientId: $clientId, gradingId: $gradingId, quantity: $quantity) {
+  query ValidateClientCredit($clientId: ID!, $gradingId: ID!, $imageQuantity: Int!) {
+    validateClientCredit(clientId: $clientId, gradingId: $gradingId, imageQuantity: $imageQuantity) {
       isValid
+      message
       availableCredit
       requiredCredit
+      creditLimitEnabled
+      creditLimit
+      usedCredit
+      rate
+    }
+  }
+`;
+
+export const VALIDATE_PROJECT_CREDIT = gql`
+  query ValidateProjectCredit($clientId: ID!, $gradingId: ID, $imageQuantity: Int, $estimatedCost: Float) {
+    validateProjectCredit(clientId: $clientId, gradingId: $gradingId, imageQuantity: $imageQuantity, estimatedCost: $estimatedCost) {
+      isValid
+      canCreateProject
       message
+      availableCredit
+      requiredCredit
+      creditLimit
+      usedCredit
+      creditLimitEnabled
     }
   }
 `;
 
 export const GET_GRADING_TASKS = gql`
   query GetGradingTasks($gradingId: ID!) {
-    grading(id: $gradingId) {
+    gradingTasks(gradingId: $gradingId) {
       id
-      name
-      tasks {
+      gradingId
+      taskTypeId
+      sequence
+      estimatedHours
+      employeeRate
+      currency
+      unit
+      instructions
+      isActive
+      taskType {
         id
         name
-        taskType {
-          id
-          name
-        }
-        estimatedHours
-        hourlyRate
-        preferredUsers {
-          id
-          firstName
-          lastName
-          email
-        }
+        description
+        color
+        icon
       }
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const GET_AVAILABLE_USERS = gql`
+  query GetAvailableUsers {
+    availableUsers {
+      id
+      firstName
+      lastName
+      email
+      contactPersonal
+      role {
+        id
+        name
+      }
+      isEmployee
     }
   }
 `;
