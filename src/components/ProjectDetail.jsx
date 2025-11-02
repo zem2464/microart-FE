@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useQuery } from '@apollo/client';
 import { Card, Row, Col, Descriptions, Divider, Timeline, Empty, Typography, Progress } from 'antd';
 import dayjs from 'dayjs';
-import { GET_TASKS } from '../graphql/taskQueries';
+import { GET_TASKS } from '../gql/tasks';
 import { GET_AVAILABLE_USERS } from '../graphql/projectQueries';
-import TaskManager from './TaskManager';
+import TaskCard from './TaskCard';
 
 // Updated to use standardized TaskManager component for consistent task display across the app
 // This replaces the previous basic table implementation with the same component used in project creation
@@ -37,6 +37,7 @@ const ProjectDetail = ({ project, onClose }) => {
 
   useEffect(() => {
     if (tasksData?.tasks?.tasks) {
+      console.log('ProjectDetail received tasks data:', tasksData.tasks.tasks);
       setTasks(tasksData.tasks.tasks);
     }
   }, [tasksData]);
@@ -91,17 +92,23 @@ const ProjectDetail = ({ project, onClose }) => {
               <Empty description={<span>Project is in Draft — tasks are hidden until the project is started.</span>} />
             ) : (
               totalTasks > 0 ? (
-                <TaskManager
-                  tasks={tasks}
-                  onTaskUpdate={handleTaskUpdate}
-                  availableUsers={availableUsers}
-                  workType={project.workType}
-                  grading={project.grading}
-                  readOnly={false}
-                  layout="list"
-                  clientCode={project.client?.clientCode || project.client?.code}
-                  projectDescription={project.description}
-                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  {tasks.map((task) => (
+                    <TaskCard
+                      key={task.id}
+                      task={task}
+                      availableUsers={availableUsers}
+                      workType={project.workType}
+                      grading={project.grading}
+                      readOnly={false}
+                      layout="list"
+                      onTaskUpdate={(updatedTask) => {
+                        console.log('Task updated in ProjectDetail:', updatedTask);
+                        handleTaskUpdate(updatedTask);
+                      }}
+                    />
+                  ))}
+                </div>
               ) : (
                 <Empty description="No tasks for this project" />
               )

@@ -245,31 +245,12 @@ export const AppDrawerProvider = ({ children }) => {
 					footer={
 						<Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
 							<Button onClick={closeProjectFormDrawer} size="middle">Cancel</Button>
-							{projectFormDrawer.mode === 'edit' ? (
-								<Button type="primary" size="middle" onClick={() => {
-									const form = document.querySelector('form');
-									if (form) form.requestSubmit();
-								}}>
-									Update Project
-								</Button>
-							) : (
-								<>
-									<Button size="middle" onClick={() => {
-										// Save as Draft: set hidden input and submit
-										const statusEl = document.getElementById('__project_status');
-										if (statusEl) statusEl.value = 'DRAFT';
-										const form = document.querySelector('form');
-										if (form) form.requestSubmit();
-									}}>Save as Draft</Button>
-									<Button type="primary" size="middle" onClick={() => {
-										// Start Project: set status to ACTIVE and submit (tasks will be submitted)
-										const statusEl = document.getElementById('__project_status');
-										if (statusEl) statusEl.value = 'ACTIVE';
-										const form = document.querySelector('form');
-										if (form) form.requestSubmit();
-									}}>Start Project</Button>
-								</>
-							)}
+							<Button type="primary" size="middle" onClick={() => {
+								const form = document.querySelector('form');
+								if (form) form.requestSubmit();
+							}}>
+								{projectFormDrawer.mode === 'edit' ? 'Update Project' : 'Save Project'}
+							</Button>
 						</Space>
 					}
 				>
@@ -477,7 +458,7 @@ export const AppDrawerProvider = ({ children }) => {
 				<ModuleDrawer
 					open={clientDetailDrawer.open}
 					title="Client Details"
-					width={800}
+					width={1200}
 					placement="right"
 					onClose={closeClientDetailDrawer}
 					destroyOnClose

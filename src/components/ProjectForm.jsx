@@ -16,6 +16,15 @@ import {
 import dayjs from "dayjs";
 import CustomFieldRenderer from "./CustomFieldRenderer";
 import TaskManager from "./TaskManager";
+import {
+  FileTextOutlined,
+  PlayCircleOutlined,
+  SyncOutlined,
+  EyeOutlined,
+  CheckCircleOutlined,
+  StopOutlined,
+  PauseCircleOutlined,
+} from "@ant-design/icons";
 
 import React, { useState, useEffect, useCallback } from "react";
 import {
@@ -32,6 +41,8 @@ import {
   InputNumber,
   Divider,
   Alert,
+  Radio,
+  Space,
 } from "antd";
 
 const { Option } = Select;
@@ -56,6 +67,19 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   const [workTypeGradings, setWorkTypeGradings] = useState([]);
   const [projectTasks, setProjectTasks] = useState([]);
   const [availableUsers, setAvailableUsers] = useState([]);
+  const [currentStatus, setCurrentStatus] = useState('draft'); // Track current form status
+
+  // Helper functions for field restrictions based on project status
+  const isActiveProject = project && mode === "edit" && 
+    (project.status === 'active' || project.status === 'in_progress' || project.status === 'completed');
+  
+  const isDraftProject = project && mode === "edit" && project.status === 'draft';
+  
+  // Fields that can be edited in active projects (basic details only)
+  const isFieldEditableInActive = (fieldName) => {
+    const editableFields = ['description', 'notes', 'deadlineDate', 'imageQuantity', 'priority', 'status'];
+    return editableFields.includes(fieldName);
+  };
 
   // lazy queries used by handlers (declared early so handlers can include them in deps)
   const [refetchClientPreferences] = useLazyQuery(GET_CLIENT_PREFERENCES, {
@@ -198,6 +222,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       });
 
       if (data?.clientPreferences) {
+        console.log('🔍 DEBUG: clientPreferences data received:', data.clientPreferences);
+        console.log('🔍 DEBUG: workTypes in clientPreferences:', data.clientPreferences.workTypes);
+        
         // For now, we'll need to get credit info separately or add it to the backend
   // credit info is fetched separately via VALIDATE_PROJECT_CREDIT
 
@@ -231,6 +258,11 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       });
 
       if (data?.clientPreferences) {
+        console.log("Client preferences received:", data.clientPreferences);
+        console.log("Work types from preferences:", data.clientPreferences.workTypes);
+        console.log("Gradings from preferences:", data.clientPreferences.gradings);
+        console.log("Task preferences from preferences:", data.clientPreferences.taskPreferences);
+        
         setClientPreferences(data.clientPreferences);
         
         // Also fetch credit summary
@@ -244,6 +276,8 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         } catch (err) {
           console.warn('Failed to fetch client credit summary', err);
         }
+      } else {
+        console.log("No client preferences received or data is empty:", data);
       }
     } catch (error) {
       console.error("Error fetching client preferences:", error);
@@ -344,44 +378,48 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
       if (data?.gradingTasks) {
         setGradingTasks(data.gradingTasks);
-        // Initialize project tasks with enhanced structure and preferred users
-        const initialTasks = data.gradingTasks.map(gradingTask => {
-          // Find preferred user for this task type from client preferences
-          let preferredUserId = null;
-          if (clientPreferences?.taskPreferences) {
-            const taskPreference = clientPreferences.taskPreferences.find(
-              pref => pref.taskType.id === gradingTask.taskType.id
-            );
-            
-            // Use the first preferred user ID if available
-            if (taskPreference && taskPreference.preferredUserIds && taskPreference.preferredUserIds.length > 0) {
-              preferredUserId = taskPreference.preferredUserIds[0];
+        
+        // Only initialize project tasks when status is active (create mode) or active projects (edit mode)
+        if (currentStatus === 'active' || (mode === "edit" && isActiveProject)) {
+          // Initialize project tasks with enhanced structure and preferred users
+          const initialTasks = data.gradingTasks.map(gradingTask => {
+            // Find preferred user for this task type from client preferences
+            let preferredUserId = null;
+            if (clientPreferences?.taskPreferences) {
+              const taskPreference = clientPreferences.taskPreferences.find(
+                pref => pref.taskType.id === gradingTask.taskType.id
+              );
+              
+              // Use the first preferred user ID if available
+              if (taskPreference && taskPreference.preferredUserIds && taskPreference.preferredUserIds.length > 0) {
+                preferredUserId = taskPreference.preferredUserIds[0];
+              }
             }
-          }
 
-          return {
-            id: gradingTask.taskType.id,
-            taskTypeId: gradingTask.taskType.id,
-            gradingTaskId: gradingTask.id,
-            name: gradingTask.taskType.name,
-            description: gradingTask.taskType.description || gradingTask.instructions || "",
-            assigneeId: preferredUserId, // Pre-select preferred user
-            status: "todo",
-            priority: "B",
-            estimatedHours: gradingTask.estimatedHours || 0,
-            actualHours: 0,
-            estimatedCost: gradingTask.employeeRate || 0,
-            startDate: null,
-            dueDate: null,
-            dependencies: [],
-            blockedBy: [],
-            comments: [],
-            customFields: {},
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
-        });
-        setProjectTasks(initialTasks);
+            return {
+              id: gradingTask.taskType.id,
+              taskTypeId: gradingTask.taskType.id,
+              gradingTaskId: gradingTask.id,
+              name: gradingTask.taskType.name,
+              description: gradingTask.taskType.description || gradingTask.instructions || "",
+              assigneeId: preferredUserId, // Pre-select preferred user
+              status: "todo",
+              priority: "B",
+              estimatedHours: gradingTask.estimatedHours || 0,
+              actualHours: 0,
+              estimatedCost: gradingTask.employeeRate || 0,
+              startDate: null,
+              dueDate: null,
+              dependencies: [],
+              blockedBy: [],
+              comments: [],
+              customFields: {},
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+          });
+          setProjectTasks(initialTasks);
+        }
       }
     } catch (error) {
       console.error("Error fetching grading tasks:", error);
@@ -433,8 +471,10 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       if (data?.gradingTasks) {
         setGradingTasks(data.gradingTasks);
         
-        // Create initial project tasks from grading tasks
-        const initialTasks = data.gradingTasks.map((gradingTask) => {
+        // Only create project tasks when status is active (create mode) or active projects (edit mode) 
+        if (currentStatus === 'active' || (mode === "edit" && isActiveProject)) {
+          // Create initial project tasks from grading tasks
+          const initialTasks = data.gradingTasks.map((gradingTask) => {
           let preferredUserId = null;
           if (clientPreferences?.taskPreferences) {
             const taskPreference = clientPreferences.taskPreferences.find(
@@ -467,8 +507,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           };
-        });
-        setProjectTasks(initialTasks);
+          });
+          setProjectTasks(initialTasks);
+        }
       }
     } catch (error) {
       console.error("Error loading grading data:", error);
@@ -613,7 +654,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
           deadlineDate: project.deadlineDate ? dayjs(project.deadlineDate) : null,
           description: project.description,
           notes: project.notes,
-          clientNotes: project.clientNotes,
+
           priority: project.priority,
           status: project.status,
         });
@@ -644,11 +685,18 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         if (project.customFields) {
           setCustomFieldValues(project.customFields);
         }
+        
+        // Initialize current status
+        setCurrentStatus(project.status || 'draft');
       })();
     } else {
       form.resetFields();
+      // Set default values for new project
+      form.setFieldsValue({ status: 'draft' });
+      
       // Reset all state for new project
       setSelectedClientId(null);
+      setCurrentStatus('draft'); // Reset status for new project
     // clear any previous client credit display (we rely on projectCreditValidation)
       setClientPreferences(null);
       setSelectedWorkType(null);
@@ -673,10 +721,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
           return;
         }
       }
-      // Determine desired status coming from the hidden input (set by drawer footer buttons)
-      const desiredStatus = (typeof document !== 'undefined' && document.getElementById('__project_status'))
-        ? String(document.getElementById('__project_status').value || '').toUpperCase()
-        : (mode === 'edit' && project ? (project.status || 'DRAFT') : 'DRAFT');
+      // Always use the form field value for status (both create and edit mode)
+      const desiredStatus = values.status || currentStatus || 'draft';
+      console.log('🔧 Form status:', values.status, 'current status:', currentStatus, 'final:', desiredStatus);
 
       const projectData = {
         clientId: values.clientId,
@@ -688,30 +735,16 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         deadlineDate: values.deadlineDate ? values.deadlineDate.toISOString() : null,
         priority: values.priority,
         notes: values.notes,
-        clientNotes: values.clientNotes,
+
         customFields: customFieldValues,
-        // set status depending on which footer button was used
-        status: desiredStatus,
-        // If saving as draft, do not submit tasks to backend (tasks should be hidden until project is started)
-        tasks: (desiredStatus === 'DRAFT') ? [] : projectTasks.map(task => ({
-          taskTypeId: task.taskTypeId,
-          gradingTaskId: task.gradingTaskId,
-          name: task.name,
-          title: task.name,
-          description: task.description,
-          instructions: task.instructions,
-          status: task.status,
-          priority: task.priority,
-          estimatedHours: task.estimatedHours,
-          estimatedCost: task.estimatedCost,
-          dueDate: task.dueDate,
-          assigneeId: task.assigneeId,
-          notes: task.notes,
-          clientNotes: task.clientNotes
-        }))
+        // In edit mode, use form field value; in create mode, use footer button value
+        status: desiredStatus
       };
 
+      console.log('🚀 Project update data:', projectData);
+
       if (mode === "edit" && project) {
+        // Update project - don't include tasks field as ProjectUpdateInput doesn't support it
         await updateProject({
           variables: {
             id: project.id,
@@ -719,8 +752,29 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
           },
         });
       } else {
+        // Create project - include tasks field as ProjectCreateInput supports it
+        const createProjectData = {
+          ...projectData,
+          // If saving as draft, do not submit tasks to backend (tasks should be hidden until project is started)
+          tasks: (desiredStatus === 'draft') ? [] : projectTasks.map(task => ({
+            taskTypeId: task.taskTypeId,
+            gradingTaskId: task.gradingTaskId,
+            name: task.name,
+            title: task.name,
+            description: task.description,
+            instructions: task.instructions,
+            status: task.status,
+            priority: task.priority,
+            estimatedHours: task.estimatedHours,
+            estimatedCost: task.estimatedCost,
+            dueDate: task.dueDate,
+            assigneeId: task.assigneeId,
+            notes: task.notes,
+          }))
+        };
+        
         await createProject({
-          variables: { input: projectData },
+          variables: { input: createProjectData },
         });
       }
     } catch (error) {
@@ -750,8 +804,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       onFinish={handleSubmit}
       disabled={loading || isFormDisabledByCredit}
     >
-      {/* Hidden field used by drawer footer buttons to indicate desired submit status (DRAFT / ACTIVE) */}
-      <input type="hidden" id="__project_status" name="__project_status" value={project?.status || "DRAFT"} />
+      {/* Status is now handled by the form field directly */}
       {/* Credit Validation Alert */}
       {projectCreditValidation && projectCreditValidation.creditLimitEnabled && !projectCreditValidation.canCreateProject && (
         <Alert
@@ -767,6 +820,89 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
           }
         />
       )}
+
+      {/* Active Project Field Restriction Notice */}
+      {isActiveProject && (
+        <Alert
+          message="Active Project - Limited Editing"
+          description="This project is active. You can only edit basic details like description, notes, deadline, quantity, and priority. Client, work type, grading, and tasks cannot be modified."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
+      {/* Project Status - Block Radio Buttons */}
+      <Row gutter={16}>
+        <Col span={24}>
+          <Form.Item
+            name="status"
+            label="Project Status"
+            rules={[{ required: true, message: "Please select project status" }]}
+          >
+            <Radio.Group
+              onChange={(e) => {
+                const value = e.target.value;
+                // Update form state and current status
+                setCurrentStatus(value);
+                form.setFieldsValue({ status: value });
+                
+                // If changing to active and we have grading selected, load tasks
+                if (value === 'active' && selectedGrading) {
+                  handleGradingSelect(selectedGrading);
+                }
+              }}
+              style={{ width: '100%' }}
+              buttonStyle="solid"
+            >
+              {/* Draft Option - Only show if project is currently draft or in create mode */}
+              {(mode === "create" || (mode === "edit" && project?.status === "draft")) && (
+                <Radio.Button value="draft" style={{ marginRight: 8, marginBottom: 8 }}>
+                  <FileTextOutlined style={{ marginRight: 6 }} />
+                  Draft
+                </Radio.Button>
+              )}
+              
+              {/* Active Option */}
+              <Radio.Button value="active" style={{ marginRight: 8, marginBottom: 8 }}>
+                <PlayCircleOutlined style={{ marginRight: 6 }} />
+                Active
+              </Radio.Button>
+              
+              {/* Other status options for active projects in edit mode */}
+              {mode === "edit" && (project?.status === "active" || project?.status === "in_progress" || project?.status === "completed") && (
+                <>
+                  <Radio.Button value="in_progress" style={{ marginRight: 8, marginBottom: 8 }}>
+                    <SyncOutlined style={{ marginRight: 6 }} />
+                    In Progress
+                  </Radio.Button>
+                  
+                  <Radio.Button value="review" style={{ marginRight: 8, marginBottom: 8 }}>
+                    <EyeOutlined style={{ marginRight: 6 }} />
+                    Review
+                  </Radio.Button>
+                  
+                  <Radio.Button value="completed" style={{ marginRight: 8, marginBottom: 8 }}>
+                    <CheckCircleOutlined style={{ marginRight: 6 }} />
+                    Completed
+                  </Radio.Button>
+                  
+                  <Radio.Button value="cancelled" style={{ marginRight: 8, marginBottom: 8 }}>
+                    <StopOutlined style={{ marginRight: 6 }} />
+                    Cancelled
+                  </Radio.Button>
+                  
+                  <Radio.Button value="on_hold" style={{ marginRight: 8, marginBottom: 8 }}>
+                    <PauseCircleOutlined style={{ marginRight: 6 }} />
+                    On Hold
+                  </Radio.Button>
+                </>
+              )}
+            </Radio.Group>
+          </Form.Item>
+        </Col>
+      </Row>
+
       <Row gutter={16}>
         <Col span={10}>
           <Form.Item
@@ -783,6 +919,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
               filterOption={filterClients}
               notFoundContent={!clientsData ? "Loading..." : "No clients found"}
               onChange={handleClientSelect}
+              disabled={isActiveProject}
               labelRender={(props) => {
                 const client = clientsData?.clients?.find(
                   (c) => c.id === props.value
@@ -818,16 +955,28 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
               placeholder="Select work type"
               loading={!workTypesData}
               onChange={handleWorkTypeSelect}
+              disabled={isActiveProject}
             >
-              {workTypesData?.workTypes
-                ?.filter((workType) => {
+              {(() => {
+                console.log("Filtering work types:");
+                console.log("Available work types:", workTypesData?.workTypes);
+                console.log("Client preferences workTypes:", clientPreferences?.workTypes);
+                
+                // Ensure workTypesData.workTypes exists before filtering
+                const workTypes = workTypesData?.workTypes || [];
+                
+                return workTypes.filter((workType) => {
                   if (clientPreferences?.workTypes?.length > 0) {
-                    return clientPreferences.workTypes.some(
+                    const isPreferred = clientPreferences.workTypes.some(
                       (pref) => pref.id === workType.id
                     );
+                    console.log(`Work type ${workType.name} (${workType.id}) is preferred:`, isPreferred);
+                    return isPreferred;
                   }
+                  console.log(`No client preferences, showing all work types`);
                   return true;
-                })
+                });
+              })()
                 .map((workType) => (
                   <Option key={workType.id} value={workType.id}>
                     {workType.name}
@@ -852,12 +1001,12 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
           >
             <Select
               placeholder={selectedWorkType ? "Select grading" : "Please select work type first"}
-              disabled={!selectedWorkType}
+              disabled={!selectedWorkType || isActiveProject}
               loading={false}
               onChange={handleGradingSelect}
             >
-              {workTypeGradings
-                ?.filter((grading) => {
+              {(workTypeGradings || [])
+                .filter((grading) => {
                   if (clientPreferences?.gradings?.length > 0) {
                     return clientPreferences.gradings.some(
                       (pref) => pref.grading.id === grading.id
@@ -927,7 +1076,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
               parser={(v) => String(v).replace(/[₹,\s]/g, "")}
               onChange={handlePerImageRateChange}
               placeholder={selectedGrading ? "Leave empty to use client's/custom/default rate" : "Select grading to override rate"}
-              disabled={!selectedGrading}
+              disabled={!selectedGrading || isActiveProject}
             />
           </Form.Item>
         </Col>
@@ -1003,7 +1152,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
       {/* Notes Section */}
       <Row gutter={16}>
-        <Col span={12}>
+        <Col span={24}>
           <Form.Item
             name="notes"
             label="Internal Notes"
@@ -1014,41 +1163,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
             />
           </Form.Item>
         </Col>
-        <Col span={12}>
-          <Form.Item
-            name="clientNotes"
-            label="Client Notes"
-          >
-            <Input.TextArea
-              placeholder="Notes visible to client"
-              rows={3}
-            />
-          </Form.Item>
-        </Col>
       </Row>
 
-      {/* Status field for edit mode */}
-      {mode === "edit" && (
-        <Row gutter={16}>
-          <Col span={12}>
-            <Form.Item
-              name="status"
-              label="Project Status"
-              rules={[{ required: true, message: "Please select status" }]}
-            >
-              <Select placeholder="Select status">
-                <Option value="draft">Draft</Option>
-                <Option value="active">Active</Option>
-                <Option value="in_progress">In Progress</Option>
-                <Option value="review">Review</Option>
-                <Option value="completed">Completed</Option>
-                <Option value="cancelled">Cancelled</Option>
-                <Option value="on_hold">On Hold</Option>
-              </Select>
-            </Form.Item>
-          </Col>
-        </Row>
-      )}
+
 
       {/* Credit information is shown below in Project Summary (uses projectCreditValidation) */}
 
@@ -1067,7 +1184,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
               style={{ backgroundColor: "#f9f9f9" }}
             >
               <Row gutter={16}>
-                {customFields.map((field) => (
+                {(customFields || []).map((field) => (
                   <Col span={field.fieldType === 'textarea' ? 24 : 12} key={field.id}>
                     <CustomFieldRenderer
                       field={field}
@@ -1083,8 +1200,28 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         </Row>
       )}
 
-      {/* Task Management Section */}
-      {projectTasks.length > 0 && (
+      {/* Draft Project Task Notice */}
+      {(currentStatus === 'draft' || (mode === "edit" && isDraftProject)) && (
+        <Row gutter={16} style={{ marginTop: 16 }}>
+          <Col span={24}>
+            <Card
+              size="small"
+              style={{ backgroundColor: "#fff7e6", border: "1px solid #ffd666" }}
+            >
+              <div style={{ textAlign: "center", color: "#d89614" }}>
+                <Typography.Text>
+                  📋 <strong>Tasks will be created automatically when this project is activated.</strong>
+                  <br />
+                  Tasks are based on the selected grading and will be assigned according to client preferences.
+                </Typography.Text>
+              </div>
+            </Card>
+          </Col>
+        </Row>
+      )}
+
+      {/* Task Management Section - Show for active projects in both create and edit mode */}
+      {projectTasks.length > 0 && (currentStatus === 'active' || (mode === "edit" && isActiveProject)) && (
         <Row gutter={16} style={{ marginTop: 16 }}>
           <Col span={24}>
             <Card

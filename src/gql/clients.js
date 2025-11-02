@@ -96,6 +96,7 @@ export const GET_CLIENT = gql`
       gstNumber
       panCard
       creditDays
+      isCreditEnabled
       creditAmountLimit
       openingBalance
       openingBalanceType
@@ -445,7 +446,6 @@ export const GET_TRANSACTIONS_BY_CLIENT = gql`
       paymentMethod
       paymentDate
       dueDate
-      status
       balanceAfter
       attachments
       notes

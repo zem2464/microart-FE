@@ -33,23 +33,27 @@ const TaskManager = ({
   const [linkingTask, setLinkingTask] = useState(null);
   const [linkForm] = Form.useForm();
 
-  // Enhance tasks with additional properties
+  // Enhance tasks with additional properties while preserving original data
   const enhanceTask = (task) => ({
-    id: task.id,
-    taskKey: task.taskKey || `TASK-${task.id}`,
+    // Preserve all original task properties
+    ...task,
+    // Only add missing properties without overriding existing ones
+    taskKey: task.taskKey || task.taskCode || `TASK-${task.id}`,
     name: task.name || task.title || 'Untitled Task',
+    title: task.title || task.name || 'Untitled Task',
     description: task.description || projectDescription || 'No description provided',
     taskType: task.taskType || task.type || 'task',
-    status: task.status || 'todo',
+    // Preserve original status - only default to 'todo' if status is null/undefined
+    status: task.status !== null && task.status !== undefined ? task.status : 'todo',
     priority: task.priority || 'medium',
     assigneeId: task.assigneeId || task.assignee?.id,
-    estimatedHours: task.estimatedHours || 0,
-    actualHours: task.actualHours || 0,
-    dueDate: task.dueDate || null,
+    estimatedHours: task.estimatedHours || task.estimatedTime || 0,
+    actualHours: task.actualHours || task.actualTime || 0,
+    dueDate: task.dueDate || task.deadlineDate || null,
     dependencies: task.dependencies || [],
     comments: task.comments || [],
     customFields: task.customFields || {},
-    clientCode: clientCode,
+    clientCode: task.clientCode || clientCode || task.project?.client?.clientCode,
     createdAt: task.createdAt || new Date().toISOString(),
     updatedAt: task.updatedAt || new Date().toISOString(),
   });

@@ -15,6 +15,7 @@ import {
   meUserData,
   isApplicationLoading,
 } from "./cache/userCacheVar";
+import { getAuthToken, debugCookies } from "./utils/cookieUtils";
 
 const createErrorLink = (client) =>
   onError(({ graphQLErrors, networkError }) => {
@@ -95,17 +96,33 @@ const httpLink = createHttpLink({
   credentials: "include",
 });
 
-// WebSocket link for subscriptions
+// WebSocket link for subscriptions using HMS approach with automatic cookie handling
 export const wsLink = new GraphQLWsLink(createClient({
   url: process.env.REACT_APP_GRAPHQL_WS_URL || "ws://localhost:4000/graphql",
-  connectionParams: () => ({
-    // Add authentication headers if needed
-    credentials: "include",
-  }),
+  // Remove connectionParams - cookies will be sent automatically with credentials: include
+  // This prevents duplicate subscription calls and relies on backend cookie parsing
+  retryAttempts: 5,
+  shouldRetry: () => true,
+  keepAlive: 30000, // Send ping every 30 seconds
+  webSocketImpl: typeof window !== 'undefined' ? window.WebSocket : null,
   on: {
-    connected: () => console.log('WebSocket connected'),
-    closed: () => console.log('WebSocket closed'),
-    error: (err) => console.error('WebSocket error:', err),
+    connecting: () => {
+      // WebSocket connecting
+    },
+    opened: () => {
+      // WebSocket connection opened
+    },
+    connected: () => {
+      // WebSocket connection established
+      console.log('WebSocket connected with authentication');
+    },
+    closed: (event) => {
+      // WebSocket connection closed
+      console.log('WebSocket closed:', event?.code, event?.reason);
+    },
+    error: (error) => {
+      console.error("WebSocket error:", error);
+    },
   },
 }));
 
@@ -200,19 +217,78 @@ client.setLink(from([errorLink, splitLink]));
 // Store client reference globally for error handling
 window.apolloClient = client;
 
-// WebSocket reconnection function
+// Export a function to reconnect WebSocket with new auth (HMS approach)
 export const reconnectWebSocket = () => {
-  console.log("Attempting to reconnect WebSocket...");
-  try {
-    // The GraphQLWsLink will automatically handle reconnection
-    // We can trigger a manual reconnection if needed
-    if (wsLink && wsLink.client) {
-      wsLink.client.dispose();
-      // The link will automatically reconnect on next subscription
+  console.log("Reconnecting WebSocket with fresh authentication...");
+
+  // Get the current client
+  const currentLink = client.link;
+  if (currentLink && currentLink.left && currentLink.left.client) {
+    try {
+      // Close existing WebSocket connection
+      currentLink.left.client.terminate();
+    } catch (error) {
+      console.warn("Error closing existing WebSocket:", error);
     }
-  } catch (error) {
-    console.error("Error during WebSocket reconnection:", error);
   }
+
+  // Create new WebSocket link with fresh auth - no connectionParams needed
+  const newWsLink = new GraphQLWsLink(
+    createClient({
+      url: process.env.REACT_APP_GRAPHQL_WS_URL || "ws://localhost:4000/graphql",
+      // Remove connectionParams - cookies sent automatically with credentials
+      retryAttempts: 5,
+      shouldRetry: () => true,
+      keepAlive: 30000,
+      on: {
+        connecting: () => {
+          // WebSocket reconnecting
+        },
+        opened: () => {
+          // WebSocket reconnection opened
+        },
+        connected: () => {
+          // WebSocket reconnection established
+          console.log('WebSocket reconnected with authentication');
+        },
+        closed: (event) => {
+          // WebSocket reconnection closed
+        },
+        error: (error) => {
+          console.error("WebSocket reconnection error:", error);
+        },
+      },
+    })
+  );
+
+  // Create new split link
+  const newSplitLink = split(
+    ({ query }) => {
+      const definition = getMainDefinition(query);
+      return (
+        definition.kind === "OperationDefinition" &&
+        definition.operation === "subscription"
+      );
+    },
+    newWsLink,
+    from([operationNameHeaderLink, httpLink])
+  );
+
+  // Update client with new link
+  client.setLink(from([errorLink, newSplitLink]));
+};
+
+// Function to check WebSocket authentication status
+export const checkWebSocketAuth = () => {
+  return new Promise((resolve) => {
+    if (wsLink && wsLink.client) {
+      // Check if WebSocket is connected and authenticated
+      const connectionState = wsLink.client.status;
+      resolve(connectionState === 'connected');
+    } else {
+      resolve(false);
+    }
+  });
 };
 
 export default client;

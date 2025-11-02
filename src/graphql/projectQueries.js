@@ -35,6 +35,13 @@ export const GET_PROJECTS = gql`
           name
           defaultRate
         }
+            invoiceId
+            invoice {
+              id
+              invoiceNumber
+              totalAmount
+              status
+            }
         imageQuantity
         estimatedCost
         actualCost
@@ -123,6 +130,13 @@ export const GET_PROJECT = gql`
       }
       createdAt
       updatedAt
+      invoiceId
+      invoice {
+        id
+        invoiceNumber
+        totalAmount
+        status
+      }
     }
   }
 `;

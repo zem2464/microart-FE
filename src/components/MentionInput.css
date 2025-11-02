@@ -1,0 +1,68 @@
+/* MentionInput Styles - Simple approach to fix overlapping */
+.react-mentions__control {
+  position: relative !important;
+}
+
+.react-mentions__control:focus-within {
+  border-color: #40a9ff;
+  box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.2);
+}
+
+.react-mentions__control--disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.react-mentions__highlighter {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  pointer-events: none !important;
+  overflow: hidden !important;
+  white-space: pre-wrap !important;
+  word-wrap: break-word !important;
+  z-index: 1 !important;
+}
+
+.react-mentions__input {
+  position: relative !important;
+  background: transparent !important;
+  color: rgba(0, 0, 0, 0.01) !important; /* Almost transparent to prevent overlap */
+  caret-color: #000 !important;
+  z-index: 2 !important;
+}
+
+.react-mentions__input::selection {
+  background: rgba(24, 144, 255, 0.2) !important;
+}
+
+.react-mentions__suggestions {
+  position: absolute !important;
+  z-index: 1000 !important;
+}
+
+.react-mentions__suggestions__item {
+  transition: background-color 0.2s ease;
+}
+
+.react-mentions__suggestions__item:hover,
+.react-mentions__suggestions__item--focused {
+  background-color: #f0f0f0 !important;
+}
+
+.react-mentions__mention {
+  background-color: #e6f7ff !important;
+  color: #1890ff !important;
+  font-weight: bold !important;
+  border-radius: 3px !important;
+  padding: 1px 3px !important;
+  text-decoration: none !important;
+  white-space: nowrap !important;
+}
+
+.react-mentions__mention:hover {
+  background-color: #bae7ff !important;
+  color: #096dd9 !important;
+}

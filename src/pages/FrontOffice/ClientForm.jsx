@@ -370,6 +370,8 @@ const ClientForm = ({
         leader: clientData.leader?.id,
         notes: clientData.clientNotes,
         isCreditEnabled: clientData.isCreditEnabled,
+        creditAmountLimit: clientData.creditAmountLimit,
+        creditDays: clientData.creditDays,
       };
 
       console.log("Form Data being set:", formData);
@@ -1588,7 +1590,7 @@ const ClientForm = ({
                   </Form.Item>
                 </Col>
                 <Col span={8}>
-                  <Form.Item name="creditAmount" label="Credit in Amount (₹)">
+                  <Form.Item name="creditAmountLimit" label="Credit in Amount (₹)">
                     <InputNumber
                       placeholder="Enter credit amount"
                       size="middle"

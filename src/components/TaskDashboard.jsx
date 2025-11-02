@@ -4,7 +4,7 @@ import { useQuery } from '@apollo/client';
 import { Card, Row, Col, Spin, Alert } from 'antd';
 import TaskCard from './TaskCard';
 import { GET_TASKS } from '../gql/tasks';
-import { GET_USERS } from '../gql/users'; // Assuming this exists
+import { GET_AVAILABLE_USERS } from '../graphql/projectQueries';
 
 const TaskDashboard = () => {
   // Fetch tasks
@@ -19,7 +19,7 @@ const TaskDashboard = () => {
   });
 
   // Fetch available users for assignment
-  const { data: usersData, loading: usersLoading } = useQuery(GET_USERS);
+  const { data: usersData, loading: usersLoading } = useQuery(GET_AVAILABLE_USERS);
 
   // Handle task updates
   const handleTaskUpdate = (updatedTask) => {
@@ -48,7 +48,7 @@ const TaskDashboard = () => {
   }
 
   const tasks = tasksData?.tasks?.tasks || [];
-  const users = usersData?.users || [];
+  const users = usersData?.availableUsers || [];
 
   return (
     <div style={{ padding: '24px' }}>

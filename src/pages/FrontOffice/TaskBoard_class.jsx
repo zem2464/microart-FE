@@ -75,109 +75,142 @@ const REVERSE_STATUS_MAP = {
   "COMPLETED": "completed"
 };
 
-// Functional drag board with key-based remounting
-const StableDragBoard = React.memo(({ 
-  tasksByStatus, 
-  usersData, 
-  updatingTasks, 
-  onTaskClick, 
-  onDragStart, 
-  onDragUpdate, 
-  onDragEnd,
-  boardKey // Add this to force remount when needed
-}) => {
-  const [isDragging, setIsDragging] = useState(false);
-  
-  const handleDragStart = useCallback((start) => {
-    console.log('[StableDragBoard] Drag started - freezing updates');
-    setIsDragging(true);
-    onDragStart(start);
-  }, [onDragStart]);
+// Create a stable component that will never re-render during drag
+class StableDragBoard extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      isDragActive: false,
+      frozenTasks: null,
+      frozenUsers: null,
+      frozenUpdatingTasks: new Set()
+    };
+    this.dragInProgress = false;
+  }
 
-  const handleDragEnd = useCallback((result) => {
-    console.log('[StableDragBoard] Drag ended - allowing updates');
-    setIsDragging(false);
-    
-    // Call parent's drag end handler
-    onDragEnd(result, () => {
-      // Parent cleanup callback - nothing needed here
+  // Prevent all updates during drag
+  shouldComponentUpdate(nextProps, nextState) {
+    // Only update when drag state changes or when not dragging
+    if (this.dragInProgress) {
+      return false; // NEVER update during drag
+    }
+    return true;
+  }
+
+  freezeForDrag = (tasksByStatus, usersData, updatingTasks) => {
+    this.dragInProgress = true;
+    this.setState({
+      isDragActive: true,
+      frozenTasks: { ...tasksByStatus },
+      frozenUsers: usersData,
+      frozenUpdatingTasks: new Set(updatingTasks)
     });
-  }, [onDragEnd]);
+    console.log('[Stable Board] Frozen for drag - no updates possible');
+  };
 
-  return (
-    <div className="relative" key={boardKey}>
-      <DragDropContext
-        onDragStart={handleDragStart}
-        onDragUpdate={onDragUpdate}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex flex-row gap-3 h-[calc(100vh-200px)]">
-          {STATUS_COLUMNS.map((column) => (
-            <div key={column.id} className="flex-1 flex flex-col bg-gray-100 rounded-md">
-              {/* Column header */}
-              <div className="px-2 pt-3 pb-2 border-b border-gray-200 bg-white rounded-t-md">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
-                      {column.title}
-                    </span>
-                    <span className="text-xs text-slate-500 bg-gray-200 px-2 py-0.5 rounded-full font-medium min-w-[18px] text-center">
-                      {tasksByStatus[column.id]?.length || 0}
-                    </span>
+  unfreezeAfterDrag = () => {
+    this.dragInProgress = false;
+    this.setState({
+      isDragActive: false,
+      frozenTasks: null,
+      frozenUsers: null,
+      frozenUpdatingTasks: new Set()
+    });
+    console.log('[Stable Board] Unfrozen after drag - updates resumed');
+  };
+
+  render() {
+    const { tasksByStatus, usersData, updatingTasks, onTaskClick, onDragStart, onDragUpdate, onDragEnd } = this.props;
+    const { isDragActive, frozenTasks, frozenUsers, frozenUpdatingTasks } = this.state;
+
+    // Use frozen data during drag, live data otherwise
+    const effectiveTasks = isDragActive ? frozenTasks : tasksByStatus;
+    const effectiveUsers = isDragActive ? frozenUsers : usersData;
+    const effectiveUpdatingTasks = isDragActive ? frozenUpdatingTasks : updatingTasks;
+
+    return (
+      <div className="relative">
+        <DragDropContext
+          onDragStart={(start) => {
+            this.freezeForDrag(tasksByStatus, usersData, updatingTasks);
+            onDragStart(start);
+          }}
+          onDragUpdate={onDragUpdate}
+          onDragEnd={(result) => {
+            const cleanup = () => {
+              setTimeout(() => this.unfreezeAfterDrag(), 100);
+            };
+            onDragEnd(result, cleanup);
+          }}
+        >
+          <div className="flex flex-row gap-3 h-[calc(100vh-200px)]">
+            {STATUS_COLUMNS.map((column) => (
+              <div key={column.id} className="flex-1 flex flex-col bg-gray-100 rounded-md">
+                {/* Column header */}
+                <div className="px-2 pt-3 pb-2 border-b border-gray-200 bg-white rounded-t-md">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-600 uppercase tracking-wide">
+                        {column.title}
+                      </span>
+                      <span className="text-xs text-slate-500 bg-gray-200 px-2 py-0.5 rounded-full font-medium min-w-[18px] text-center">
+                        {effectiveTasks[column.id]?.length || 0}
+                      </span>
+                    </div>
+                    <Button
+                      type="text"
+                      size="small"
+                      icon={<PlusOutlined />}
+                      className="w-5 h-5 min-w-[20px] p-0 text-slate-500 text-xs"
+                    />
                   </div>
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<PlusOutlined />}
-                    className="w-5 h-5 min-w-[20px] p-0 text-slate-500 text-xs"
-                  />
                 </div>
-              </div>
 
-              <Droppable
-                droppableId={column.id}
-                type="TASK"
-                direction="vertical"
-                isDropDisabled={updatingTasks?.size > 5}
-              >
-                {(provided, snapshot) => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className={[
-                      "flex-1 p-2 overflow-y-auto overflow-x-hidden min-h-[120px] relative transition-all",
-                      snapshot.isDraggingOver
-                        ? "bg-blue-50 border-2 border-dashed border-blue-400 rounded-md"
-                        : "border-2 border-transparent",
-                    ].join(" ")}
-                    data-droppable-id={column.id}
-                  >
-                    {tasksByStatus[column.id]?.length > 0 ? (
-                      <TaskList
-                        tasks={tasksByStatus[column.id].filter((task) => task && task.id)}
-                        onTaskClick={onTaskClick}
-                        availableUsers={usersData?.availableUsers || []}
-                        updatingTasks={updatingTasks}
-                      />
-                    ) : (
-                      <div className="text-center py-10 px-5 text-slate-500 text-xs">
-                        <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-2 opacity-50">
-                          {column.icon}
+                <Droppable
+                  droppableId={column.id}
+                  type="TASK"
+                  direction="vertical"
+                  isDropDisabled={effectiveUpdatingTasks?.size > 5}
+                >
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={[
+                        "flex-1 p-2 overflow-y-auto overflow-x-hidden min-h-[120px] relative transition-all",
+                        snapshot.isDraggingOver
+                          ? "bg-blue-50 border-2 border-dashed border-blue-400 rounded-md"
+                          : "border-2 border-transparent",
+                      ].join(" ")}
+                      data-droppable-id={column.id}
+                    >
+                      {effectiveTasks[column.id]?.length > 0 ? (
+                        <TaskList
+                          tasks={effectiveTasks[column.id].filter((task) => task && task.id)}
+                          onTaskClick={onTaskClick}
+                          availableUsers={effectiveUsers?.availableUsers || []}
+                          updatingTasks={effectiveUpdatingTasks}
+                        />
+                      ) : (
+                        <div className="text-center py-10 px-5 text-slate-500 text-xs">
+                          <div className="w-10 h-10 bg-gray-200 rounded-full flex items-center justify-center mx-auto mb-2 opacity-50">
+                            {column.icon}
+                          </div>
+                          <div>{column.description}</div>
                         </div>
-                        <div>{column.description}</div>
-                      </div>
-                    )}
-                    {provided.placeholder}
-                  </div>
-                )}
-              </Droppable>
-            </div>
-          ))}
-        </div>
-      </DragDropContext>
-    </div>
-  );
-});
+                      )}
+                      {provided.placeholder}
+                    </div>
+                  )}
+                </Droppable>
+              </div>
+            ))}
+          </div>
+        </DragDropContext>
+      </div>
+    );
+  }
+}
 
 const TaskBoard = () => {
   // State management
@@ -191,7 +224,9 @@ const TaskBoard = () => {
   const [taskModalVisible, setTaskModalVisible] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [updatingTasks, setUpdatingTasks] = useState(new Set());
-  const [boardKey, setBoardKey] = useState(0); // Key to force remount after drag
+  
+  // Ref to control the stable board
+  const stableBoardRef = useRef(null);
 
   // GraphQL queries and mutations
   const {
@@ -230,23 +265,6 @@ const TaskBoard = () => {
     onError: (error) => {
       message.error(`Failed to update task: ${error.message}`);
     },
-    // Force Apollo to refetch queries after mutation
-    refetchQueries: [
-      {
-        query: GET_TASKS,
-        variables: {
-          filters: Object.keys(filters).reduce((acc, key) => {
-            if (filters[key]) acc[key] = filters[key];
-            return acc;
-          }, {}),
-          search: search || null,
-          limit: 1000,
-          sortBy: "createdAt",
-          sortOrder: "ASC",
-        },
-      },
-    ],
-    awaitRefetchQueries: true,
   });
 
   // Group tasks by status
@@ -292,14 +310,22 @@ const TaskBoard = () => {
     
     const { destination, source, draggableId } = result;
     
-    // Always cleanup drag state immediately
-    window.__isDraggingTask = false;
+    // Always cleanup first
+    const performCleanup = () => {
+      window.__isDraggingTask = false;
+      if (cleanup) cleanup();
+    };
 
-    // If no destination or no change, force refresh and return
-    if (!destination || 
-        (destination.droppableId === source.droppableId && destination.index === source.index)) {
-      console.log('[TaskBoard] No valid drop destination, refreshing board');
-      setBoardKey(prev => prev + 1);
+    // If no destination, just cleanup
+    if (!destination) {
+      performCleanup();
+      return;
+    }
+
+    // If no change, just cleanup
+    if (destination.droppableId === source.droppableId && 
+        destination.index === source.index) {
+      performCleanup();
       return;
     }
 
@@ -309,11 +335,9 @@ const TaskBoard = () => {
     
     if (!task) {
       console.warn('[TaskBoard] Task not found:', draggableId);
-      setBoardKey(prev => prev + 1);
+      performCleanup();
       return;
     }
-
-    console.log(`[TaskBoard] Moving task ${draggableId} from ${source.droppableId} to ${destination.droppableId}`);
 
     // Mark task as updating
     setUpdatingTasks((prev) => new Set(prev).add(draggableId));
@@ -322,89 +346,19 @@ const TaskBoard = () => {
       // Get the new status
       const newStatus = STATUS_MAP[destination.droppableId] || destination.droppableId.toUpperCase();
       
-      console.log(`[TaskBoard] Updating task ${draggableId} to status: ${newStatus}`);
-      
-      // Perform the mutation with proper cache update
-      const result = await updateTaskStatus({
+      // Update backend
+      await updateTaskStatus({
         variables: {
           id: draggableId,
           status: newStatus,
         },
-        // Optimistic update for immediate UI feedback
-        optimisticResponse: {
-          updateTaskStatus: {
-            __typename: "Task",
-            id: draggableId,
-            status: newStatus,
-            ...task
-          }
-        },
-        // Manual cache update to ensure immediate UI sync
-        update: (cache, { data: { updateTaskStatus } }) => {
-          console.log('[TaskBoard] Manually updating Apollo cache');
-          try {
-            // Read current cache
-            const existingTasks = cache.readQuery({
-              query: GET_TASKS,
-              variables: {
-                filters: Object.keys(filters).reduce((acc, key) => {
-                  if (filters[key]) acc[key] = filters[key];
-                  return acc;
-                }, {}),
-                search: search || null,
-                limit: 1000,
-                sortBy: "createdAt",
-                sortOrder: "ASC",
-              },
-            });
-
-            // Update the task in cache
-            const updatedTasks = existingTasks.tasks.tasks.map(t => 
-              t.id === draggableId ? { ...t, status: newStatus } : t
-            );
-
-            // Write back to cache
-            cache.writeQuery({
-              query: GET_TASKS,
-              variables: {
-                filters: Object.keys(filters).reduce((acc, key) => {
-                  if (filters[key]) acc[key] = filters[key];
-                  return acc;
-                }, {}),
-                search: search || null,
-                limit: 1000,
-                sortBy: "createdAt",
-                sortOrder: "ASC",
-              },
-              data: {
-                ...existingTasks,
-                tasks: {
-                  ...existingTasks.tasks,
-                  tasks: updatedTasks
-                }
-              },
-            });
-            console.log('[TaskBoard] Cache updated successfully');
-          } catch (cacheError) {
-            console.warn('[TaskBoard] Cache update failed:', cacheError);
-          }
-        }
       });
 
-      console.log(`[TaskBoard] Task ${draggableId} successfully updated in backend`);
-      
-      // Force a board refresh to ensure UI sync
-      setTimeout(() => {
-        setBoardKey(prev => prev + 1);
-        console.log('[TaskBoard] Board refreshed after successful update');
-      }, 100);
+      console.log(`[TaskBoard] Task ${draggableId} moved from ${source.droppableId} to ${destination.droppableId}`);
       
     } catch (error) {
       console.error('[TaskBoard] Failed to update task status:', error);
       message.error("Failed to update task status");
-      
-      // Force refresh on error to restore correct state
-      setBoardKey(prev => prev + 1);
     } finally {
       // Remove updating flag
       setUpdatingTasks((prev) => {
@@ -412,8 +366,16 @@ const TaskBoard = () => {
         next.delete(draggableId);
         return next;
       });
+      
+      // Cleanup and refetch
+      performCleanup();
+      
+      // Refetch after a delay to ensure state is stable
+      setTimeout(() => {
+        refetchTasks();
+      }, 200);
     }
-  }, [tasksByStatus, updateTaskStatus, filters, search]);
+  }, [tasksByStatus, updateTaskStatus, refetchTasks]);
 
   // Task click handler
   const handleTaskClick = useCallback((task) => {
@@ -517,10 +479,10 @@ const TaskBoard = () => {
         </div>
       )}
 
-      {/* Task board - Stable Component with Key-based Remounting */}
+      {/* Task board - Stable Class Component */}
       {!tasksLoading && (
         <StableDragBoard
-          boardKey={boardKey}
+          ref={stableBoardRef}
           tasksByStatus={tasksByStatus}
           usersData={usersData}
           updatingTasks={updatingTasks}

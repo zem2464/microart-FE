@@ -21,6 +21,7 @@ export const GET_CLIENT_TRANSACTIONS = gql`
       paymentDate
       dueDate
       status
+      status
       balanceAfter
       attachments
       notes
@@ -216,7 +217,6 @@ export const MARK_TRANSACTION_AS_PAID = gql`
       id
       transactionType
       amount
-      status
       balanceAfter
       paymentMethod
       referenceNumber
@@ -233,7 +233,6 @@ export const REVERSE_TRANSACTION = gql`
       transactionType
       amount
       description
-      status
       balanceAfter
       notes
       createdAt

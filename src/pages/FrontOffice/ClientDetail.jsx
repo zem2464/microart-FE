@@ -9,6 +9,7 @@ import {
   Tag,
   Avatar,
   Button,
+  Spin,
   Statistic,
   Timeline,
   Table,
@@ -16,7 +17,16 @@ import {
   Space,
   Tooltip,
   Typography,
-  Divider
+  Divider,
+  Select,
+  DatePicker,
+  Input,
+  Badge,
+  Progress,
+  Form,
+  InputNumber,
+  message,
+  Alert
 } from 'antd';
 import {
   UserOutlined,
@@ -30,20 +40,52 @@ import {
   CalendarOutlined,
   FileTextOutlined,
   TeamOutlined,
-  ToolOutlined
+  ToolOutlined,
+  WalletOutlined,
+  CreditCardOutlined,
+  FilterOutlined,
+  ReloadOutlined,
+  PlusOutlined,
+  ExclamationCircleOutlined
 } from '@ant-design/icons';
-import { useQuery } from '@apollo/client';
+import { useQuery, useMutation } from '@apollo/client';
+import dayjs from 'dayjs';
 import { 
   GET_CLIENT_WORK_TYPES, 
   GET_CLIENT_SERVICE_PROVIDERS,
   GET_TRANSACTIONS_BY_CLIENT 
 } from '../../gql/clients';
+import {
+  GET_CLIENT_LEDGER_SUMMARY,
+  GET_CLIENT_LEDGER_RANGE,
+  GET_CLIENT_INVOICES,
+  GET_CLIENT_PAYMENTS,
+  GET_CLIENT_CREDIT_BLOCKED_PROJECTS,
+  RECORD_CLIENT_PAYMENT,
+  ALLOCATE_PAYMENT_TO_INVOICE,
+  GET_PAYMENT_TYPES
+} from '../../gql/clientLedger';
 
 const { TabPane } = Tabs;
 const { Title, Text } = Typography;
+const { Option } = Select;
+const { RangePicker } = DatePicker;
 
 const ClientDetail = ({ client, onClose, onEdit }) => {
   const [activeTab, setActiveTab] = useState('profile');
+  const [paymentForm] = Form.useForm();
+  const [allocationForm] = Form.useForm();
+  
+  // Ledger state
+  const [ledgerFilters, setLedgerFilters] = useState({
+    invoiceStatus: 'all',
+    paymentStatus: 'all',
+    dateRange: [dayjs().startOf('month'), dayjs().endOf('month')],
+    showBlockedOnly: false
+  });
+  const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [showAllocationModal, setShowAllocationModal] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState(null);
 
   // Fetch related data
   const { data: workTypesData, loading: workTypesLoading } = useQuery(GET_CLIENT_WORK_TYPES, {
@@ -62,6 +104,96 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
       filters: { limit: 10 } // Latest 10 transactions
     },
     fetchPolicy: 'cache-and-network'
+  });
+
+  // Ledger queries
+  const { data: ledgerData, loading: ledgerLoading, refetch: refetchLedger } = useQuery(GET_CLIENT_LEDGER_SUMMARY, {
+    variables: { clientId: client.id },
+    fetchPolicy: 'cache-and-network'
+  });
+
+  const { data: invoicesData, loading: invoicesLoading } = useQuery(GET_CLIENT_INVOICES, {
+    variables: { 
+      clientId: client.id,
+      filters: {
+        ...(ledgerFilters.invoiceStatus !== 'all' && { status: ledgerFilters.invoiceStatus }),
+        ...(ledgerFilters.dateRange && {
+          dateFrom: ledgerFilters.dateRange[0].format('YYYY-MM-DD'),
+          dateTo: ledgerFilters.dateRange[1].format('YYYY-MM-DD')
+        })
+      },
+      pagination: { page: 1, limit: 50 }
+    },
+    fetchPolicy: 'cache-and-network'
+  });
+
+  const { data: paymentsData, loading: paymentsLoading } = useQuery(GET_CLIENT_PAYMENTS, {
+    variables: { 
+      clientId: client.id,
+      filters: {
+        ...(ledgerFilters.paymentStatus !== 'all' && { status: ledgerFilters.paymentStatus }),
+        ...(ledgerFilters.dateRange && {
+          dateFrom: ledgerFilters.dateRange[0].format('YYYY-MM-DD'),
+          dateTo: ledgerFilters.dateRange[1].format('YYYY-MM-DD')
+        })
+      },
+      pagination: { page: 1, limit: 50 }
+    },
+    fetchPolicy: 'cache-and-network'
+  });
+
+  const { data: blockedProjectsData, loading: blockedProjectsLoading } = useQuery(GET_CLIENT_CREDIT_BLOCKED_PROJECTS, {
+    variables: { clientId: client.id },
+    fetchPolicy: 'cache-and-network'
+  });
+
+  // Range ledger (opening balance + transactions within selected range)
+  const { data: ledgerRangeData, loading: ledgerRangeLoading, refetch: refetchLedgerRange, error: ledgerRangeError } = useQuery(GET_CLIENT_LEDGER_RANGE, {
+    variables: {
+      clientId: client.id,
+      dateFrom: ledgerFilters.dateRange ? ledgerFilters.dateRange[0].format('YYYY-MM-DD') : null,
+      dateTo: ledgerFilters.dateRange ? ledgerFilters.dateRange[1].format('YYYY-MM-DD') : null,
+      pagination: { page: 1, limit: 1000 }
+    },
+    skip: !client?.id || !ledgerFilters.dateRange || !ledgerFilters.dateRange[0] || !ledgerFilters.dateRange[1],
+    fetchPolicy: 'cache-and-network',
+    errorPolicy: 'all',
+    notifyOnNetworkStatusChange: true
+  });
+
+  const { data: paymentTypesData } = useQuery(GET_PAYMENT_TYPES);
+
+  // Mutations
+  const [recordPayment] = useMutation(RECORD_CLIENT_PAYMENT, {
+    onCompleted: (data) => {
+      if (data.recordClientPayment.success) {
+        message.success(data.recordClientPayment.message);
+        setShowPaymentModal(false);
+        paymentForm.resetFields();
+        refetchLedger();
+      } else {
+        message.error(data.recordClientPayment.message);
+      }
+    },
+    onError: (error) => {
+      message.error('Error recording payment: ' + error.message);
+    }
+  });
+
+  const [allocatePayment] = useMutation(ALLOCATE_PAYMENT_TO_INVOICE, {
+    onCompleted: (data) => {
+      if (data.allocatePaymentToInvoice.success) {
+        message.success(data.allocatePaymentToInvoice.message);
+        setShowAllocationModal(false);
+        allocationForm.resetFields();
+        refetchLedger();
+      } else {
+        message.error(data.allocatePaymentToInvoice.message);
+      }
+    },
+    onError: (error) => {
+      message.error('Error allocating payment: ' + error.message);
+    }
   });
 
   // Helper functions
@@ -388,6 +520,430 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
     </Card>
   );
 
+  const renderLedgerTab = () => {
+    const ledgerSummary = ledgerData?.clientLedgerSummary;
+    
+    return (
+      <div className="space-y-6">
+        {/* Credit Summary */}
+        <Row gutter={16}>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="Credit Limit"
+                value={ledgerSummary?.client?.creditLimit || 0}
+                precision={2}
+                prefix="₹"
+                valueStyle={{ color: '#1890ff' }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="Available Credit"
+                value={ledgerSummary?.summary?.availableCredit || 0}
+                precision={2}
+                prefix="₹"
+                valueStyle={{ 
+                  color: (ledgerSummary?.summary?.availableCredit || 0) > 0 ? '#52c41a' : '#f5222d' 
+                }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="Outstanding Amount"
+                value={ledgerSummary?.summary?.totalOutstanding || 0}
+                precision={2}
+                prefix="₹"
+                valueStyle={{ color: '#f5222d' }}
+              />
+            </Card>
+          </Col>
+          <Col span={6}>
+            <Card>
+              <Statistic
+                title="Credit Blocked"
+                value={ledgerSummary?.summary?.totalCreditBlocked || 0}
+                precision={2}
+                prefix="₹"
+                valueStyle={{ color: '#faad14' }}
+              />
+            </Card>
+          </Col>
+        </Row>
+
+        {/* Credit Utilization */}
+        <Card>
+          <div className="flex items-center justify-between mb-4">
+            <Title level={5}>Credit Utilization</Title>
+            <Text>
+              {ledgerSummary?.summary?.creditUtilization?.toFixed(1) || 0}% of credit limit used
+            </Text>
+          </div>
+          <Progress
+            percent={ledgerSummary?.summary?.creditUtilization || 0}
+            status={
+              (ledgerSummary?.summary?.creditUtilization || 0) > 90 ? 'exception' :
+              (ledgerSummary?.summary?.creditUtilization || 0) > 75 ? 'active' : 'success'
+            }
+            strokeColor={
+              (ledgerSummary?.summary?.creditUtilization || 0) > 90 ? '#ff4d4f' :
+              (ledgerSummary?.summary?.creditUtilization || 0) > 75 ? '#faad14' : '#52c41a'
+            }
+          />
+        </Card>
+
+        {/* Filters */}
+        <Card title={<><FilterOutlined /> Filters</>}>
+          <Row gutter={16}>
+            <Col span={6}>
+              <Select
+                placeholder="Invoice Status"
+                value={ledgerFilters.invoiceStatus}
+                onChange={(value) => setLedgerFilters(prev => ({ ...prev, invoiceStatus: value }))}
+                style={{ width: '100%' }}
+              >
+                <Option value="all">All Invoices</Option>
+                <Option value="pending">Pending</Option>
+                <Option value="partial">Partially Paid</Option>
+                <Option value="paid">Paid</Option>
+                <Option value="overdue">Overdue</Option>
+              </Select>
+            </Col>
+            <Col span={6}>
+              <Select
+                placeholder="Payment Status"
+                value={ledgerFilters.paymentStatus}
+                onChange={(value) => setLedgerFilters(prev => ({ ...prev, paymentStatus: value }))}
+                style={{ width: '100%' }}
+              >
+                <Option value="all">All Payments</Option>
+                <Option value="allocated">Fully Allocated</Option>
+                <Option value="partial">Partially Allocated</Option>
+                <Option value="unallocated">Unallocated</Option>
+              </Select>
+            </Col>
+            <Col span={8}>
+              <RangePicker
+                placeholder={['Start Date', 'End Date']}
+                value={ledgerFilters.dateRange}
+                onChange={(dates) => setLedgerFilters(prev => ({ ...prev, dateRange: dates }))}
+                style={{ width: '100%' }}
+              />
+            </Col>
+            <Col span={4}>
+              <Button
+                icon={<ReloadOutlined />}
+                onClick={() => {
+                  setLedgerFilters({
+                    invoiceStatus: 'all',
+                    paymentStatus: 'all',
+                    dateRange: [dayjs().startOf('month'), dayjs().endOf('month')],
+                    showBlockedOnly: false
+                  });
+                }}
+              >
+                Reset
+              </Button>
+            </Col>
+          </Row>
+        </Card>
+
+        {/* Date-range ledger (opening balance + transactions) */}
+        <Card title={<><WalletOutlined /> Date-wise Ledger</>} style={{ marginTop: 12 }}>
+          {ledgerRangeLoading ? (
+            <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spin /></div>
+          ) : ledgerRangeError ? (
+            <div style={{ textAlign: 'center', padding: 24 }}>
+              <Text type="secondary">Unable to load ledger data for the selected date range.</Text>
+            </div>
+          ) : (
+            (() => {
+              const range = ledgerRangeData?.clientLedgerRange;
+              const opening = Number(range?.openingBalance ?? 0);
+              const txs = (range?.transactions || []).slice();
+              txs.sort((a, b) => new Date(a.transactionDate) - new Date(b.transactionDate));
+
+              let running = opening;
+              const txWithRunning = txs.map(t => {
+                const debit = Number(t.debitAmount || 0);
+                const credit = Number(t.creditAmount || 0);
+                running = running + credit - debit;
+                return { ...t, debit, credit, runningBalance: running };
+              });
+
+              const closing = Number(range?.closingBalance ?? running);
+
+              const balanceLabel = (amt) => {
+                if (amt > 0) return { text: 'To Pay (DR)', color: '#f5222d' };
+                if (amt < 0) return { text: 'To Receive (CR)', color: '#52c41a' };
+                return { text: 'Settled', color: '#1890ff' };
+              };
+
+              return (
+                <div>
+                  <Row gutter={16} style={{ marginBottom: 12 }}>
+                    <Col span={8}><Card><Statistic title="Opening Balance" value={opening} precision={2} prefix="₹" /></Card></Col>
+                    <Col span={8}><Card><Statistic title="Closing Balance" value={closing} precision={2} prefix="₹" /></Card></Col>
+                    <Col span={8}><Card><Statistic title="Transactions" value={txWithRunning.length} /></Card></Col>
+                  </Row>
+
+                  <Table
+                    dataSource={txWithRunning}
+                    rowKey="id"
+                    size="small"
+                    pagination={{ pageSize: 10 }}
+                    columns={[
+                      { title: 'Date', dataIndex: 'transactionDate', key: 'transactionDate', render: d => d ? dayjs(d).format('DD/MM/YYYY') : '-' },
+                      { title: 'Ref', dataIndex: 'referenceNumber', key: 'referenceNumber' },
+                      { title: 'Type', dataIndex: 'transactionType', key: 'transactionType' },
+                      { title: 'DR/CR', key: 'drcr', render: (_, r) => (
+                          r.credit > 0 ? <Tag color="green">CR</Tag> : r.debit > 0 ? <Tag color="red">DR</Tag> : '-' 
+                        )
+                      },
+                      { title: 'Description', dataIndex: 'description', key: 'description' },
+                      { title: 'Debit', dataIndex: 'debit', key: 'debit', render: v => formatCurrency(v) },
+                      { title: 'Credit', dataIndex: 'credit', key: 'credit', render: v => formatCurrency(v) },
+                      { title: 'Running Balance', dataIndex: 'runningBalance', key: 'runningBalance', render: v => (
+                          <div>
+                            <div>{formatCurrency(Math.abs(v))}</div>
+                            <div style={{ color: balanceLabel(v).color, fontSize: 12 }}>{balanceLabel(v).text}</div>
+                          </div>
+                        )
+                      }
+                    ]}
+                  />
+                </div>
+              );
+            })()
+          )}
+        </Card>
+
+        {/* Credit Blocked Projects */}
+        {blockedProjectsData?.clientCreditBlockedProjects?.length > 0 && (
+          <Card 
+            title={
+              <div className="flex items-center">
+                <ExclamationCircleOutlined style={{ color: '#faad14', marginRight: 8 }} />
+                <span>Credit Blocked Projects</span>
+                <Badge 
+                  count={blockedProjectsData.clientCreditBlockedProjects.length} 
+                  style={{ marginLeft: 8 }}
+                />
+              </div>
+            }
+          >
+            <Alert
+              message="The following projects have credit blocked. Complete payments to release credits."
+              type="warning"
+              showIcon
+              style={{ marginBottom: 16 }}
+            />
+            <Table
+              columns={[
+                {
+                  title: 'Project Code',
+                  dataIndex: 'projectCode',
+                  key: 'projectCode',
+                },
+                {
+                  title: 'Description',
+                  dataIndex: 'description',
+                  key: 'description',
+                  ellipsis: true,
+                },
+                {
+                  title: 'Blocked Amount',
+                  dataIndex: 'creditBlockedAmount',
+                  key: 'blockedAmount',
+                  render: (amount) => formatCurrency(amount),
+                },
+                {
+                  title: 'Blocked Date',
+                  dataIndex: 'creditBlockedAt',
+                  key: 'blockedDate',
+                  render: (date) => new Date(date).toLocaleDateString(),
+                },
+                {
+                  title: 'Status',
+                  dataIndex: 'status',
+                  key: 'status',
+                  render: (status) => (
+                    <Tag color="orange">{status?.toUpperCase()}</Tag>
+                  ),
+                },
+              ]}
+              dataSource={blockedProjectsData.clientCreditBlockedProjects}
+              loading={blockedProjectsLoading}
+              rowKey="id"
+              pagination={false}
+              size="small"
+            />
+          </Card>
+        )}
+
+        {/* Action Buttons */}
+        <Card>
+          <Space>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => setShowPaymentModal(true)}
+            >
+              Record Payment
+            </Button>
+            <Button
+              icon={<CreditCardOutlined />}
+              onClick={() => {
+                if (paymentsData?.clientPayments?.payments?.some(p => p.unallocatedAmount > 0)) {
+                  setShowAllocationModal(true);
+                } else {
+                  message.info('No unallocated payments available for allocation');
+                }
+              }}
+            >
+              Allocate Payments
+            </Button>
+          </Space>
+        </Card>
+
+        {/* Invoices and Payments Tables */}
+        <Row gutter={16}>
+          <Col span={12}>
+            <Card 
+              title={<><FileTextOutlined /> Invoices</>}
+              extra={
+                <Badge 
+                  count={invoicesData?.clientInvoices?.invoices?.length || 0} 
+                  showZero 
+                />
+              }
+            >
+              <Table
+                columns={[
+                  {
+                    title: 'Invoice #',
+                    dataIndex: 'invoiceNumber',
+                    key: 'invoiceNumber',
+                  },
+                  {
+                    title: 'Project',
+                    dataIndex: ['project', 'projectCode'],
+                    key: 'projectCode',
+                  },
+                  {
+                    title: 'Amount',
+                    dataIndex: 'totalAmount',
+                    key: 'amount',
+                    render: (amount) => formatCurrency(amount),
+                  },
+                  {
+                    title: 'Balance',
+                    dataIndex: 'balanceAmount',
+                    key: 'balance',
+                    render: (balance) => (
+                      <Text style={{ color: balance > 0 ? '#f5222d' : '#52c41a' }}>
+                        {formatCurrency(balance)}
+                      </Text>
+                    ),
+                  },
+                  {
+                    title: 'Status',
+                    dataIndex: 'status',
+                    key: 'status',
+                    render: (status) => {
+                      const colors = {
+                        pending: 'orange',
+                        partial: 'blue',
+                        paid: 'green',
+                        overdue: 'red'
+                      };
+                      return (
+                        <Tag color={colors[status] || 'default'}>
+                          {status?.toUpperCase()}
+                        </Tag>
+                      );
+                    },
+                  },
+                ]}
+                dataSource={invoicesData?.clientInvoices?.invoices || []}
+                loading={invoicesLoading}
+                rowKey="id"
+                pagination={{ pageSize: 10, showSizeChanger: false }}
+                size="small"
+              />
+            </Card>
+          </Col>
+          <Col span={12}>
+            <Card 
+              title={<><WalletOutlined /> Payments</>}
+              extra={
+                <Badge 
+                  count={paymentsData?.clientPayments?.payments?.length || 0} 
+                  showZero 
+                />
+              }
+            >
+              <Table
+                columns={[
+                  {
+                    title: 'Payment #',
+                    dataIndex: 'paymentNumber',
+                    key: 'paymentNumber',
+                  },
+                  {
+                    title: 'Date',
+                    dataIndex: 'paymentDate',
+                    key: 'date',
+                    render: (date) => new Date(date).toLocaleDateString(),
+                  },
+                  {
+                    title: 'Amount',
+                    dataIndex: 'amount',
+                    key: 'amount',
+                    render: (amount) => formatCurrency(amount),
+                  },
+                  {
+                    title: 'Unallocated',
+                    dataIndex: 'unallocatedAmount',
+                    key: 'unallocated',
+                    render: (amount) => (
+                      <Text style={{ color: amount > 0 ? '#faad14' : '#52c41a' }}>
+                        {formatCurrency(amount)}
+                      </Text>
+                    ),
+                  },
+                  {
+                    title: 'Type',
+                    dataIndex: ['paymentType', 'name'],
+                    key: 'type',
+                  },
+                ]}
+                dataSource={paymentsData?.clientPayments?.payments || []}
+                loading={paymentsLoading}
+                rowKey="id"
+                pagination={{ pageSize: 10, showSizeChanger: false }}
+                size="small"
+                onRow={(record) => ({
+                  onClick: () => {
+                    if (record.unallocatedAmount > 0) {
+                      setSelectedPayment(record);
+                      setShowAllocationModal(true);
+                    }
+                  },
+                  style: { cursor: record.unallocatedAmount > 0 ? 'pointer' : 'default' }
+                })}
+              />
+            </Card>
+          </Col>
+        </Row>
+      </div>
+    );
+  };
+
   const renderTransactionsTab = () => (
     <div className="space-y-4">
       {/* Financial Summary */}
@@ -466,20 +1022,254 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
     >
       <div className="py-4">
         <Tabs activeKey={activeTab} onChange={setActiveTab}>
-          <TabPane tab="Profile" key="profile">
+          <TabPane 
+            tab={
+              <span>
+                <UserOutlined />
+                Details
+              </span>
+            } 
+            key="profile"
+          >
             {renderProfileTab()}
           </TabPane>
-          <TabPane tab="Work Types" key="workTypes">
+          <TabPane 
+            tab={
+              <span>
+                <WalletOutlined />
+                Ledger
+                {ledgerData?.clientLedgerSummary?.summary?.totalCreditBlocked > 0 && (
+                  <Badge 
+                    count="!" 
+                    size="small" 
+                    style={{ backgroundColor: '#faad14' }}
+                  />
+                )}
+              </span>
+            } 
+            key="ledger"
+          >
+            {renderLedgerTab()}
+          </TabPane>
+          <TabPane 
+            tab={
+              <span>
+                <ToolOutlined />
+                Work Types
+              </span>
+            } 
+            key="workTypes"
+          >
             {renderWorkTypesTab()}
           </TabPane>
-          <TabPane tab="Service Providers" key="serviceProviders">
+          <TabPane 
+            tab={
+              <span>
+                <TeamOutlined />
+                Service Providers
+              </span>
+            } 
+            key="serviceProviders"
+          >
             {renderServiceProvidersTab()}
           </TabPane>
-          <TabPane tab="Transactions" key="transactions">
+          <TabPane 
+            tab={
+              <span>
+                <DollarOutlined />
+                Transactions
+              </span>
+            } 
+            key="transactions"
+          >
             {renderTransactionsTab()}
           </TabPane>
         </Tabs>
       </div>
+
+      {/* Payment Modal */}
+      <Modal
+        title="Record Client Payment"
+        open={showPaymentModal}
+        onCancel={() => {
+          setShowPaymentModal(false);
+          paymentForm.resetFields();
+        }}
+        footer={null}
+        width={600}
+      >
+        <Form
+          form={paymentForm}
+          layout="vertical"
+          onFinish={(values) => {
+            recordPayment({
+              variables: {
+                input: {
+                  clientId: client.id,
+                  ...values,
+                  paymentDate: values.paymentDate.format('YYYY-MM-DD')
+                }
+              }
+            });
+          }}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="paymentTypeId"
+                label="Payment Type"
+                rules={[{ required: true, message: 'Please select payment type' }]}
+              >
+                <Select placeholder="Select payment type">
+                  {paymentTypesData?.paymentTypes?.map(type => (
+                    <Option key={type.id} value={type.id}>
+                      {type.name} ({type.type})
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="amount"
+                label="Amount"
+                rules={[{ required: true, message: 'Please enter amount' }]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0.01}
+                  precision={2}
+                  formatter={value => `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value.replace(/₹\s?|(,*)/g, '')}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="paymentDate"
+                label="Payment Date"
+                rules={[{ required: true, message: 'Please select payment date' }]}
+              >
+                <DatePicker style={{ width: '100%' }} />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="referenceNumber"
+                label="Reference Number"
+              >
+                <Input placeholder="Cheque/Transaction reference" />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item
+            name="notes"
+            label="Notes"
+          >
+            <Input.TextArea rows={3} placeholder="Additional notes..." />
+          </Form.Item>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                Record Payment
+              </Button>
+              <Button onClick={() => setShowPaymentModal(false)}>
+                Cancel
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Payment Allocation Modal */}
+      <Modal
+        title="Allocate Payment to Invoice"
+        open={showAllocationModal}
+        onCancel={() => {
+          setShowAllocationModal(false);
+          setSelectedPayment(null);
+          allocationForm.resetFields();
+        }}
+        footer={null}
+        width={800}
+      >
+        {selectedPayment && (
+          <div className="mb-4">
+            <Alert
+              message={`Payment #${selectedPayment.paymentNumber} - Unallocated: ${formatCurrency(selectedPayment.unallocatedAmount)}`}
+              type="info"
+            />
+          </div>
+        )}
+        <Form
+          form={allocationForm}
+          layout="vertical"
+          onFinish={(values) => {
+            allocatePayment({
+              variables: {
+                input: {
+                  paymentId: selectedPayment?.id,
+                  invoiceId: values.invoiceId,
+                  allocatedAmount: values.allocatedAmount
+                }
+              }
+            });
+          }}
+        >
+          <Row gutter={16}>
+            <Col span={16}>
+              <Form.Item
+                name="invoiceId"
+                label="Select Invoice"
+                rules={[{ required: true, message: 'Please select an invoice' }]}
+              >
+                <Select 
+                  placeholder="Select invoice to allocate payment"
+                  showSearch
+                  optionFilterProp="children"
+                >
+                  {invoicesData?.clientInvoices?.invoices
+                    ?.filter(invoice => invoice.balanceAmount > 0)
+                    ?.map(invoice => (
+                    <Option key={invoice.id} value={invoice.id}>
+                      {invoice.invoiceNumber} - {invoice.project.projectCode} 
+                      (Balance: {formatCurrency(invoice.balanceAmount)})
+                    </Option>
+                  ))}
+                </Select>
+              </Form.Item>
+            </Col>
+            <Col span={8}>
+              <Form.Item
+                name="allocatedAmount"
+                label="Amount to Allocate"
+                rules={[{ required: true, message: 'Please enter amount' }]}
+              >
+                <InputNumber
+                  style={{ width: '100%' }}
+                  min={0.01}
+                  max={selectedPayment?.unallocatedAmount}
+                  precision={2}
+                  formatter={value => `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                  parser={value => value.replace(/₹\s?|(,*)/g, '')}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item>
+            <Space>
+              <Button type="primary" htmlType="submit">
+                Allocate Payment
+              </Button>
+              <Button onClick={() => setShowAllocationModal(false)}>
+                Cancel
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
     </Modal>
   );
 };

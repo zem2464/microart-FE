@@ -1,4 +1,4 @@
-import React, { useState, useContext } from "react";
+import React, { useState, useContext, useEffect } from "react";
 import {
   Card,
   Table,
@@ -43,6 +43,7 @@ import {
   UPDATE_PROJECT,
 } from "../../graphql/projectQueries";
 import { GET_CLIENTS } from "../../graphql/clientQueries";
+import { GENERATE_PROJECT_INVOICE } from "../../gql/clientLedger";
 // tasks are loaded in ProjectDetail drawer when needed
 import { AppDrawerContext } from "../../contexts/DrawerContext";
 import dayjs from "dayjs";
@@ -93,7 +94,7 @@ const ProjectManagement = () => {
     fetchPolicy: "cache-and-network",
   });
 
-  const { data: clientsData } = useQuery(GET_CLIENTS, {
+  const { data: clientsData, refetch: refetchClients } = useQuery(GET_CLIENTS, {
     variables: {
       filters: {},
       page: 1,
@@ -107,9 +108,13 @@ const ProjectManagement = () => {
   // project tasks are loaded inside the ProjectDetail drawer when opened
   const tasksLoading = false;
 
+  // Track projects that already have invoices (projectId -> true)
+  const [invoicedProjectIds, setInvoicedProjectIds] = useState(new Set());
+  // No apollo client usage is needed now; invoice presence is returned on project objects
+
   // GraphQL Mutations
   const [deleteProject] = useMutation(DELETE_PROJECT, {
-    onCompleted: () => {
+    oncompleted: () => {
       message.success("Project deleted successfully!");
       refetchProjects();
     },
@@ -119,7 +124,7 @@ const ProjectManagement = () => {
   });
 
   const [activateProject] = useMutation(ACTIVATE_PROJECT, {
-    onCompleted: () => {
+    oncompleted: () => {
       message.success("Project activated successfully!");
       refetchProjects();
     },
@@ -129,21 +134,91 @@ const ProjectManagement = () => {
   });
 
   const [completeProject] = useMutation(UPDATE_PROJECT, {
-    onCompleted: () => {
-      message.success("Project completed successfully!");
+    oncompleted: () => {
+      message.success("Project marked as completed — generating invoice...");
       refetchProjects();
-      setCompleteModalVisible(false);
-      setSelectedProject(null);
-      setActualImageCount(0);
+      // refresh clients so any client balances / credit limits reflect the invoice
+      try { refetchClients && refetchClients(); } catch (e) { /* ignore */ }
+
+      // Attempt to generate invoice for this project. Leave modal open until generation completes.
+      try {
+        if (selectedProject && selectedProject.id) {
+          generateInvoice({ variables: { projectId: selectedProject.id } }).catch(err => {
+            // If invoice generation fails, still close the modal (user can retry) and show error
+            message.error(`Invoice generation failed: ${err.message}`);
+            setCompleteModalVisible(false);
+            setSelectedProject(null);
+            setActualImageCount(0);
+          });
+        } else {
+          // No selected project (shouldn't happen) — just close modal
+          setCompleteModalVisible(false);
+          setSelectedProject(null);
+          setActualImageCount(0);
+        }
+      } catch (e) {
+        // Ensure modal is closed on unexpected errors
+        setCompleteModalVisible(false);
+        setSelectedProject(null);
+        setActualImageCount(0);
+      }
     },
     onError: (error) => {
       message.error(`Error completing project: ${error.message}`);
     },
   });
 
+  const [generateInvoice] = useMutation(GENERATE_PROJECT_INVOICE, {
+    onCompleted: (data) => {
+      const success = data?.generateProjectInvoice?.success;
+      const invoice = data?.generateProjectInvoice?.invoice;
+      if (success) {
+        message.success(data.generateProjectInvoice.message || 'Invoice generated');
+        // mark project as invoiced locally
+        if (invoice && invoice.id && invoice.projectId) {
+          setInvoicedProjectIds(prev => new Set(prev).add(invoice.projectId));
+        } else if (selectedProject && selectedProject.id) {
+          setInvoicedProjectIds(prev => new Set(prev).add(selectedProject.id));
+        }
+
+        // If we were generating invoice from the completion flow (modal open), close modal and clear selection
+        try {
+          if (selectedProject) {
+            setCompleteModalVisible(false);
+            setSelectedProject(null);
+            setActualImageCount(0);
+          }
+        } catch (e) { /* ignore */ }
+
+        try { refetchProjects(); } catch (e) {}
+        try { refetchClients && refetchClients(); } catch (e) {}
+      } else {
+        message.error(data?.generateProjectInvoice?.message || 'Failed to generate invoice');
+      }
+    },
+    onError: (err) => {
+      message.error(`Error generating invoice: ${err.message}`);
+    }
+  });
+
   // Normalize projects array from GraphQL response (supports projects.projects or legacy projects.data)
   const allProjects =
     projectsData?.projects?.projects || projectsData?.projects?.data || [];
+
+  // Populate invoicedProjectIds from server-provided project.invoiceId / project.invoice
+  useEffect(() => {
+    const ids = new Set();
+    try {
+      (allProjects || []).forEach(p => {
+        if (p && (p.invoiceId || (p.invoice && p.invoice.id))) {
+          ids.add(p.id);
+        }
+      });
+      setInvoicedProjectIds(ids);
+    } catch (e) {
+      // ignore
+    }
+  }, [allProjects]);
 
   // Filter projects based on search and filters
   const filteredProjects =
@@ -215,6 +290,20 @@ const ProjectManagement = () => {
     });
   };
 
+  // Determine per-image rate for a project. Prefer any explicit project rate if present,
+  // otherwise derive from estimatedCost / imageQuantity, fallback to grading defaultRate.
+  const determineProjectRate = (proj) => {
+    if (!proj) return 0;
+    // common possible persisted fields: perImageRate, rate, projectRate
+    const explicit = proj.perImageRate ?? proj.rate ?? proj.projectRate ?? proj.perImageRate;
+    if (explicit !== undefined && explicit !== null) return Number(explicit);
+    if (proj.estimatedCost && proj.imageQuantity) {
+      const imgQ = Number(proj.imageQuantity) || 0;
+      if (imgQ > 0) return Number(proj.estimatedCost) / imgQ;
+    }
+    return proj.grading?.defaultRate || 0;
+  };
+
   const handleCompleteProject = (project) => {
     setSelectedProject(project);
     setActualImageCount(project.imageQuantity || 0); // Default to original quantity
@@ -226,15 +315,14 @@ const ProjectManagement = () => {
       message.error("Please enter a valid image count");
       return;
     }
-
     // Calculate actual cost based on actual image count
-    const rate = selectedProject.grading?.defaultRate || 0;
+    const rate = determineProjectRate(selectedProject);
     const actualCost = rate * actualImageCount;
 
     completeProject({
       variables: {
         id: selectedProject.id,
-        input: {
+          input: {
           status: "COMPLETED",
           actualCost: actualCost,
           imageQuantity: actualImageCount, // Update with actual count
@@ -255,16 +343,11 @@ const ProjectManagement = () => {
       ),
     },
     {
-      title: 'Title / Description',
-      dataIndex: 'description',
-      key: 'description',
+      title: 'Project Name',
+      dataIndex: 'name',
+      key: 'name',
       render: (text, record) => (
-        <Space direction="vertical" size={0}>
-          <Text strong>{record.name || record.projectCode || record.projectNumber || 'Untitled'}</Text>
-          <Text type="secondary" style={{ fontSize: '12px' }}>
-            {text?.length > 80 ? `${text.substring(0, 80)}...` : text}
-          </Text>
-        </Space>
+        <Text strong>{text || record.projectCode || record.projectNumber || 'Untitled'}</Text>
       ),
     },
     {
@@ -304,9 +387,9 @@ const ProjectManagement = () => {
           return <div style={{ minWidth: 140, color: '#fa8c16' }}>Draft — tasks hidden</div>;
         }
 
-        const all = tasks || record.tasks || [];
-        const total = all.length || record.taskCount || 0;
-        const completed = (all.filter ? all.filter(t => (t.status || '').toString().toUpperCase() === 'COMPLETED').length : 0) || record.completedTaskCount || 0;
+  const all = tasks || record.tasks || [];
+  const total = all.length || record.taskCount || 0;
+  const completed = (all.filter ? all.filter(t => (t.status || '').toString().toUpperCase() === 'COMPLETED').length : 0) || record.completedTaskCount || 0;
         const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
         return (
           <div style={{ minWidth: 140 }}>
@@ -357,13 +440,15 @@ const ProjectManagement = () => {
               onClick={() => handleViewProject(record)}
             />
           </Tooltip>
-          <Tooltip title="Edit">
-            <Button
-              type="text"
-              icon={<EditOutlined />}
-              onClick={() => handleEditProject(record)}
-            />
-          </Tooltip>
+          {((record.status || '').toString().toUpperCase() !== 'COMPLETED') && (
+            <Tooltip title="Edit">
+              <Button
+                type="text"
+                icon={<EditOutlined />}
+                onClick={() => handleEditProject(record)}
+              />
+            </Tooltip>
+          )}
           {record.status === "DRAFT" && (
             <Tooltip title="Activate Project">
               <Button
@@ -373,24 +458,70 @@ const ProjectManagement = () => {
               />
             </Tooltip>
           )}
-          {record.status === "ACTIVE" && record.taskCount > 0 && record.completedTaskCount === record.taskCount && (
-            <Tooltip title="Complete Project">
+          {((record.status || '').toString().toUpperCase() === 'ACTIVE') && (
+            (
+              (record.taskCount && record.completedTaskCount && record.taskCount > 0 && record.completedTaskCount === record.taskCount)
+              ||
+              (record.tasks && record.tasks.length > 0 && record.tasks.every(t => (t.status || '').toString().toUpperCase() === 'COMPLETED'))
+            ) && !(record.invoiceId || record.invoice?.id || invoicedProjectIds.has(record.id)) && (
+              <Tooltip title="Complete & Generate Invoice">
+                <Button
+                  type="primary"
+                  danger={false}
+                  style={{ backgroundColor: '#fa8c16', borderColor: '#fa8c16' }}
+                  onClick={() => handleCompleteProject(record)}
+                >
+                  Complete & Invoice
+                </Button>
+              </Tooltip>
+            )
+          )}
+
+          {/* If project is already completed but has no invoice, allow generating one */}
+          {(((record.status || '').toString().toUpperCase() === 'COMPLETED') && !(record.invoiceId || record.invoice?.id || invoicedProjectIds.has(record.id))) && (
+            <Tooltip title="Generate Invoice for Completed Project">
+              <Button
+                type="primary"
+                style={{ backgroundColor: '#1890ff', borderColor: '#1890ff' }}
+                onClick={() => {
+                  Modal.confirm({
+                    title: 'Generate Invoice',
+                    content: `Generate invoice for project ${record.projectCode || record.id}?`,
+                    okText: 'Generate',
+                    onOk: () => generateInvoice({ variables: { projectId: record.id } }).then(() => {
+                      // optimistically mark as invoiced locally
+                      setInvoicedProjectIds(prev => new Set(prev).add(record.id));
+                    }),
+                  });
+                }}
+              >
+                Generate Invoice
+              </Button>
+            </Tooltip>
+          )}
+
+          {/* When project is already completed or has an invoice, show a quick Invoice/View button so users can open details */}
+          {(((record.status || '').toString().toUpperCase() === 'COMPLETED') || record.invoiceId || record.invoice?.id || invoicedProjectIds.has(record.id)) && (
+            <Tooltip title="View Invoice / Project Details">
+              <Button
+                type="default"
+                onClick={() => handleViewProject(record)}
+              >
+                View Invoice
+              </Button>
+            </Tooltip>
+          )}
+
+          {((record.status || '').toString().toUpperCase() !== 'COMPLETED') && (
+            <Tooltip title="Delete">
               <Button
                 type="text"
-                icon={<CheckCircleOutlined />}
-                style={{ color: '#52c41a' }}
-                onClick={() => handleCompleteProject(record)}
+                danger
+                icon={<DeleteOutlined />}
+                onClick={() => handleDeleteProject(record)}
               />
             </Tooltip>
           )}
-          <Tooltip title="Delete">
-            <Button
-              type="text"
-              danger
-              icon={<DeleteOutlined />}
-              onClick={() => handleDeleteProject(record)}
-            />
-          </Tooltip>
         </Space>
       ),
     },
@@ -557,8 +688,8 @@ const ProjectManagement = () => {
           setSelectedProject(null);
           setActualImageCount(0);
         }}
-        okText="Complete Project"
-        okButtonProps={{ type: 'primary', danger: false, style: { backgroundColor: '#52c41a', borderColor: '#52c41a' } }}
+  okText="Complete & Invoice"
+  okButtonProps={{ type: 'primary', danger: false, style: { backgroundColor: '#52c41a', borderColor: '#52c41a' } }}
         width={600}
       >
         {selectedProject && (
@@ -576,7 +707,7 @@ const ProjectManagement = () => {
               <Descriptions.Item label="Client">{selectedProject.client?.clientCode}</Descriptions.Item>
               <Descriptions.Item label="Estimated Images">{selectedProject.imageQuantity}</Descriptions.Item>
               <Descriptions.Item label="Estimated Cost">₹{selectedProject.estimatedCost?.toLocaleString()}</Descriptions.Item>
-              <Descriptions.Item label="Rate per Image">₹{selectedProject.grading?.defaultRate?.toLocaleString()}</Descriptions.Item>
+              <Descriptions.Item label="Rate per Image">₹{Number(determineProjectRate(selectedProject)).toLocaleString()}</Descriptions.Item>
             </Descriptions>
 
             <Row gutter={16}>
@@ -606,7 +737,7 @@ const ProjectManagement = () => {
                   alignItems: 'center'
                 }}>
                   <span style={{ color: '#595959', fontWeight: 'bold', fontSize: '16px' }}>
-                    ₹{((selectedProject.grading?.defaultRate || 0) * actualImageCount)?.toLocaleString()}
+                    ₹{((determineProjectRate(selectedProject) || 0) * actualImageCount)?.toLocaleString()}
                   </span>
                 </div>
               </Col>
@@ -614,7 +745,7 @@ const ProjectManagement = () => {
 
             <Alert
               message="Note"
-              description={`The actual cost will be calculated as: ${actualImageCount} images × ₹${selectedProject.grading?.defaultRate?.toLocaleString()} = ₹${((selectedProject.grading?.defaultRate || 0) * actualImageCount)?.toLocaleString()}`}
+              description={`The actual cost will be calculated as: ${actualImageCount} images × ₹${(determineProjectRate(selectedProject)).toLocaleString()} = ₹${((determineProjectRate(selectedProject) || 0) * actualImageCount)?.toLocaleString()}`}
               type="warning"
               showIcon
               style={{ marginTop: 16 }}
@@ -629,7 +760,7 @@ const ProjectManagement = () => {
 // Project Details Component
 const ProjectDetails = ({ project, tasks, tasksLoading, onBack }) => {
   const completedTasks = tasks.filter(
-    (task) => task.status === "COMPLETED"
+    (task) => task.status === "completed"
   ).length;
   const totalTasks = tasks.length;
   const progressPercent =
@@ -713,7 +844,7 @@ const ProjectDetails = ({ project, tasks, tasksLoading, onBack }) => {
                     render: (status) => (
                       <Tag
                         color={
-                          status === "COMPLETED"
+                          status === "completed"
                             ? "green"
                             : status === "IN_PROGRESS"
                             ? "blue"
@@ -757,7 +888,7 @@ const ProjectDetails = ({ project, tasks, tasksLoading, onBack }) => {
               />
             </div>
             <Statistic
-              title="Tasks Completed"
+              title="Tasks completed"
               value={completedTasks}
               suffix={`/ ${totalTasks}`}
             />

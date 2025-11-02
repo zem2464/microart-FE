@@ -24,9 +24,15 @@ export const GET_TASKS = gql`
         project {
           id
           projectCode
+          description
+          deadlineDate
+          imageQuantity
           client {
             id
             clientCode
+            colorCorrectionStyle
+            transferMode
+            clientNotes
           }
         }
         taskType {
@@ -51,10 +57,23 @@ export const GET_TASKS = gql`
         priority
         deadlineDate
         notes
+        clientNotes
+        internalNotes
         startDate
         completedDate
         createdAt
         updatedAt
+        clientColorStyle
+        clientTransferMode
+        projectDeadlineDate
+        projectDescription
+        projectImageQuantity
+        taskManager {
+          id
+          firstName
+          lastName
+          email
+        }
       }
       pagination {
         page
@@ -77,9 +96,14 @@ export const GET_TASK = gql`
         id
         projectCode
         description
+        deadlineDate
+        imageQuantity
         client {
           id
           clientCode
+          colorCorrectionStyle
+          transferMode
+          clientNotes
         }
         workType {
           id
@@ -119,6 +143,8 @@ export const GET_TASK = gql`
       priority
       deadlineDate
       notes
+      clientNotes
+      internalNotes
       startDate
       completedDate
       estimatedTime
@@ -130,6 +156,17 @@ export const GET_TASK = gql`
       }
       createdAt
       updatedAt
+      clientColorStyle
+      clientTransferMode
+      projectDeadlineDate
+      projectDescription
+      projectImageQuantity
+      taskManager {
+        id
+        firstName
+        lastName
+        email
+      }
     }
   }
 `;

@@ -31,9 +31,15 @@ export const TASK_FRAGMENT = gql`
     project {
       id
       projectCode
+      description
+      deadlineDate
+      imageQuantity
       client {
         id
         clientCode
+        colorCorrectionStyle
+        transferMode
+        clientNotes
       }
     }
     
@@ -76,6 +82,19 @@ export const TASK_FRAGMENT = gql`
     }
     
     assignedBy {
+      id
+      firstName
+      lastName
+      email
+    }
+    
+    # Additional computed fields
+    clientColorStyle
+    clientTransferMode
+    projectDeadlineDate
+    projectDescription
+    projectImageQuantity
+    taskManager {
       id
       firstName
       lastName
