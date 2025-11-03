@@ -26,7 +26,21 @@ export const GET_TASKS = gql`
           projectCode
           description
           deadlineDate
-          imageQuantity
+          imageQuantity # Legacy field for backward compatibility
+          totalImageQuantity # New field for multiple grading support
+          estimatedCost # Legacy field
+          totalEstimatedCost # New field
+          projectGradings {
+            id
+            gradingId
+            imageQuantity
+            estimatedCost
+            grading {
+              id
+              name
+              defaultRate
+            }
+          }
           client {
             id
             clientCode
@@ -97,7 +111,21 @@ export const GET_TASK = gql`
         projectCode
         description
         deadlineDate
-        imageQuantity
+        imageQuantity # Legacy field for backward compatibility
+        totalImageQuantity # New field for multiple grading support
+        estimatedCost # Legacy field
+        totalEstimatedCost # New field
+        projectGradings {
+          id
+          gradingId
+          imageQuantity
+          estimatedCost
+          grading {
+            id
+            name
+            defaultRate
+          }
+        }
         client {
           id
           clientCode
@@ -109,6 +137,7 @@ export const GET_TASK = gql`
           id
           name
         }
+        # Legacy grading field for backward compatibility
         grading {
           id
           name

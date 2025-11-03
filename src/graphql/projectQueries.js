@@ -35,16 +35,35 @@ export const GET_PROJECTS = gql`
           name
           defaultRate
         }
-            invoiceId
-            invoice {
-              id
-              invoiceNumber
-              totalAmount
-              status
-            }
+        projectGradings {
+          id
+          gradingId
+          grading {
+            id
+            name
+            defaultRate
+          }
+          imageQuantity
+          estimatedCost
+          actualCost
+          customRate
+          sequence
+        }
+        invoiceId
+        invoice {
+          id
+          invoiceNumber
+          totalAmount
+          status
+        }
+        # Backward compatibility fields
         imageQuantity
         estimatedCost
         actualCost
+        # New total fields
+        totalImageQuantity
+        totalEstimatedCost
+        totalActualCost
         deadlineDate
         status
         priority
@@ -92,9 +111,28 @@ export const GET_PROJECT = gql`
         name
         defaultRate
       }
+      projectGradings {
+        id
+        gradingId
+        grading {
+          id
+          name
+          defaultRate
+        }
+        imageQuantity
+        estimatedCost
+        actualCost
+        customRate
+        sequence
+      }
+      # Backward compatibility fields
       imageQuantity
       estimatedCost
       actualCost
+      # New total fields
+      totalImageQuantity
+      totalEstimatedCost
+      totalActualCost
       deadlineDate
       status
       priority
@@ -334,6 +372,21 @@ export const GET_AVAILABLE_USERS = gql`
         name
       }
       isEmployee
+    }
+  }
+`;
+
+export const VALIDATE_MULTIPLE_GRADING_CREDIT = gql`
+  query ValidateMultipleGradingCredit($clientId: ID!, $projectGradings: [ProjectGradingInput!]!) {
+    validateMultipleGradingCredit(clientId: $clientId, projectGradings: $projectGradings) {
+      isValid
+      canCreateProject
+      message
+      availableCredit
+      requiredCredit
+      creditLimit
+      usedCredit
+      creditLimitEnabled
     }
   }
 `;
