@@ -1,8 +1,8 @@
 import React, { useState } from "react";
-import { Button, Card, Input, message, Popconfirm, Table, Tag, Avatar, Space } from "antd";
-import { EditOutlined, DeleteOutlined, SearchOutlined, UserOutlined, EyeOutlined } from "@ant-design/icons";
+import { Button, Card, Input, message, Popconfirm, Table, Tag, Avatar, Space, Tooltip } from "antd";
+import { EditOutlined, DeleteOutlined, SearchOutlined, UserOutlined, EyeOutlined, KeyOutlined } from "@ant-design/icons";
 import { useQuery, useMutation } from "@apollo/client";
-import { GET_USERS, DELETE_USER } from "../../gql/users";
+import { GET_USERS, DELETE_USER, UPDATE_USER } from "../../gql/users";
 import { useAppDrawer } from "../../contexts/DrawerContext";
 import dayjs from "dayjs";
 
@@ -16,6 +16,7 @@ const Users = () => {
   });
 
   const [deleteUser] = useMutation(DELETE_USER);
+  const [updateUser] = useMutation(UPDATE_USER);
 
   const handleEdit = (user) => {
     showUserFormDrawer(user, 'edit', async () => refetch());
@@ -37,6 +38,25 @@ const Users = () => {
       refetch();
     } catch (e) {
       message.error("Delete failed: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  const handleResetPassword = async (user) => {
+    setLoading(true);
+    try {
+      await updateUser({ 
+        variables: { 
+          id: user.id,
+          input: {
+            hasSetInitialPassword: false
+          }
+        } 
+      });
+      message.success(`Password reset for ${user.firstName} ${user.lastName}. They will be prompted to set a new password on next login.`);
+      refetch();
+    } catch (e) {
+      message.error("Password reset failed: " + e.message);
     }
     setLoading(false);
   };
@@ -175,6 +195,27 @@ const Users = () => {
           >
             Edit
           </Button>
+          {record.canLogin && (
+            <Popconfirm
+              title="Reset Password?"
+              description={`${record.firstName} will need to set a new password on their next login.`}
+              onConfirm={() => handleResetPassword(record)}
+              okButtonProps={{ loading }}
+              okText="Reset"
+              cancelText="Cancel"
+            >
+              <Tooltip title="Reset Password">
+                <Button 
+                  type="link" 
+                  icon={<KeyOutlined />}
+                  size="small"
+                  style={{ color: '#faad14' }}
+                >
+                  Reset Password
+                </Button>
+              </Tooltip>
+            </Popconfirm>
+          )}
           {!record.isSystemDefine && (
             <Popconfirm
               title="Sure to Delete?"

@@ -31,37 +31,10 @@ export const LOGOUT_MUTATION = gql`
 `;
 
 export const SET_INITIAL_PASSWORD_MUTATION = gql`
-  mutation SetInitialPassword($email: String!, $password: String!, $deviceInfo: DeviceInfoInput) {
-    setInitialPassword(email: $email, password: $password, deviceInfo: $deviceInfo) {
-      user {
-        id
-        email
-        firstName
-        lastName
-        role {
-          id
-          name
-          permissions
-        }
-      }
-    }
-  }
-`;
-
-export const CHANGE_EXPIRE_PASSWORD_MUTATION = gql`
-  mutation ChangeExpirePassword($email: String!, $password: String!, $newPassword: String!, $deviceInfo: DeviceInfoInput) {
-    changeExpirePassword(email: $email, password: $password, newPassword: $newPassword, deviceInfo: $deviceInfo) {
-      user {
-        id
-        email
-        firstName
-        lastName
-        role {
-          id
-          name
-          permissions
-        }
-      }
+  mutation SetInitialPassword($email: String!, $newPassword: String!) {
+    setInitialPassword(email: $email, newPassword: $newPassword) {
+      success
+      message
     }
   }
 `;

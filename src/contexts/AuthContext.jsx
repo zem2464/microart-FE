@@ -1,11 +1,16 @@
-import { createContext, useContext, useEffect, useState, useCallback } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+} from "react";
 import { useApolloClient, useLazyQuery, useMutation } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
 import {
   LOGIN_MUTATION,
   LOGOUT_QUERY,
   SET_INITIAL_PASSWORD_MUTATION,
-  CHANGE_EXPIRE_PASSWORD_MUTATION,
 } from "../gql/auth";
 import { ME_QUERY } from "../gql/me";
 import {
@@ -97,7 +102,7 @@ export const AuthProvider = ({ children }) => {
         isApplicationLoading(false);
         return;
       }
-      
+
       try {
         await getMe();
         isApplicationLoading(false);
@@ -143,7 +148,7 @@ export const AuthProvider = ({ children }) => {
         }
       }
     };
-    
+
     checkAuth();
   }, [getMe, navigate]);
 
@@ -152,21 +157,10 @@ export const AuthProvider = ({ children }) => {
     awaitRefetchQueries: true,
   });
 
-  const [setInitialPasswordMutation, { loading: initialPasswordLoading, error: initialPasswordError }] = useMutation(
-    SET_INITIAL_PASSWORD_MUTATION,
-    {
-      refetchQueries: [{ query: ME_QUERY, fetchPolicy: "network-only" }],
-      awaitRefetchQueries: true,
-    }
-  );
-
-  const [changeExpirePasswordMutation, { loading: expirePasswordLoading, error: expirePasswordError }] = useMutation(
-    CHANGE_EXPIRE_PASSWORD_MUTATION,
-    {
-      refetchQueries: [{ query: ME_QUERY, fetchPolicy: "network-only" }],
-      awaitRefetchQueries: true,
-    }
-  );
+  const [
+    setInitialPasswordMutation,
+    { loading: initialPasswordLoading, error: initialPasswordError },
+  ] = useMutation(SET_INITIAL_PASSWORD_MUTATION);
 
   // Transform device info to match GraphQL schema
   const transformDeviceInfoForGraphQL = (deviceInfo) => {
@@ -270,16 +264,16 @@ export const AuthProvider = ({ children }) => {
       // Check the actual response structure from backend
       if (data?.login?.user) {
         isLoggedIn(true);
-        
+
         // Set user data (the refetchQueries should handle ME query too)
         meUserData(data.login.user);
         userCacheVar(data.login.user); // Also set userCacheVar for App.js routing
-        
+
         // Reconnect WebSocket with fresh authentication
         setTimeout(() => {
           reconnectWebSocket();
         }, 1000);
-        
+
         navigate("/");
         return { success: true };
       }
@@ -289,19 +283,17 @@ export const AuthProvider = ({ children }) => {
       let errorMsg = "Login failed";
       if (graphQLErrors) {
         graphQLErrors.forEach(({ extensions, message }) => {
-          if (extensions?.code === "AUTH_INITIAL_PASSWORD") {
+          // Check for error code in extensions.code or extensions.details.extensions.code
+          const errorCode =
+            extensions?.details?.extensions?.code || extensions?.code;
+          console.log("Login error code:", errorCode);
+          if (errorCode === "AUTH_INITIAL_PASSWORD") {
             navigate("/set-initial-password", {
               state: { emailAddress: values.email },
             });
             errorMsg = message;
             return;
-          } else if (extensions?.code === "AUTH_PASSWORD_EXPIRE") {
-            navigate("/change-expire-password", {
-              state: { emailAddress: values.email, password: values.password },
-            });
-            errorMsg = message;
-            return;
-          } else if (extensions?.code === "DEVICE_NOT_AUTHORIZED") {
+          } else if (errorCode === "DEVICE_NOT_AUTHORIZED") {
             isLoggedIn(false);
 
             const deviceData = extensions;
@@ -361,7 +353,7 @@ export const AuthProvider = ({ children }) => {
       }
     } catch (err) {
       console.error("Error during logout:", err);
-      
+
       // Even if backend logout fails, clean up frontend state
       // This ensures user can always logout on the frontend
       isLoggedIn(false);
@@ -379,16 +371,16 @@ export const AuthProvider = ({ children }) => {
   // Method to handle authentication errors (called from error interceptor)
   const handleAuthenticationError = useCallback(async () => {
     try {
-      console.log('Handling authentication error...');
+      console.log("Handling authentication error...");
       isLoggedIn(false);
       meUserData(null);
       userCacheVar(null); // Also clear userCacheVar for App.js routing
       await client.clearStore();
       navigate("/login");
     } catch (error) {
-      console.error('Error during authentication error handling:', error);
+      console.error("Error during authentication error handling:", error);
       // Force navigation even if other operations fail
-      window.location.href = '/login';
+      window.location.href = "/login";
     }
   }, [client, navigate]);
 
@@ -401,65 +393,28 @@ export const AuthProvider = ({ children }) => {
   }, [handleAuthenticationError]);
 
   const setInitialPassword = async (values) => {
-    // Ensure device info is available
-    let currentDeviceInfo = deviceInfo;
-    if (!currentDeviceInfo) {
-      currentDeviceInfo = await getDeviceRegistrationInfo();
-      setDeviceInfo(currentDeviceInfo);
-    }
-
-    const { data } = await setInitialPasswordMutation({
-      variables: {
-        email: values.email,
-        password: values.password,
-        deviceInfo: transformDeviceInfoForGraphQL(currentDeviceInfo),
-      },
-    });
-
-    if (data?.setInitialPassword?.user) {
-      isLoggedIn(true);
-      // Don't manually set user data - refetchQueries will handle this
-
-      // Reconnect WebSocket with fresh authentication after initial password set
-      setTimeout(() => {
-        reconnectWebSocket();
-      }, 1000);
-
-      navigate("/");
-    }
-  };
-
-  const changeExpirePassword = async (values) => {
     try {
-      // Ensure device info is available
-      let currentDeviceInfo = deviceInfo;
-      if (!currentDeviceInfo) {
-        currentDeviceInfo = await getDeviceRegistrationInfo();
-        setDeviceInfo(currentDeviceInfo);
-      }
-
-      const { data } = await changeExpirePasswordMutation({
+      const { data } = await setInitialPasswordMutation({
         variables: {
           email: values.email,
-          password: values.password,
-          newPassword: values.newPassword,
-          deviceInfo: transformDeviceInfoForGraphQL(currentDeviceInfo),
+          newPassword: values.password,
         },
       });
 
-      if (data?.changeExpirePassword?.user) {
-        isLoggedIn(true);
-        // Don't manually set user data - refetchQueries will handle this
-
-        // Reconnect WebSocket with fresh authentication
-        setTimeout(() => {
-          reconnectWebSocket();
-        }, 1000);
-
-        navigate("/");
+      if (data?.setInitialPassword?.success) {
+        // After setting initial password, login with the new credentials
+        const loginResult = await login({
+          email: values.email,
+          password: values.password,
+        });
+        
+        return loginResult;
+      } else {
+        throw new Error(data?.setInitialPassword?.message || "Failed to set initial password");
       }
     } catch (error) {
-      console.error("error occurred", error);
+      console.error("Error setting initial password:", error);
+      throw error;
     }
   };
 
@@ -475,11 +430,8 @@ export const AuthProvider = ({ children }) => {
         authLoading,
         getMe,
         setInitialPassword,
-        changeExpirePassword,
         initialPasswordError,
         initialPasswordLoading,
-        expirePasswordLoading,
-        expirePasswordError,
         deviceError,
         deviceInfo,
         setDeviceError,

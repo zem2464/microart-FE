@@ -9,6 +9,8 @@ import { ConfigProvider, theme } from "antd";
 import BackOfficeLayout from "./layouts/BackOfficeLayout";
 import FrontOfficeLayout from "./layouts/FrontOfficeLayout";
 import Login from "./pages/Login";
+import SetInitialPassword from "./pages/SetInitialPassword";
+import ChangeExpirePassword from "./pages/ChangeExpirePassword";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ViewModeProvider, useViewMode } from "./contexts/ViewModeContext";
 import { AppDrawerProvider } from "./contexts/DrawerContext";
@@ -65,6 +67,14 @@ function AppContent() {
         <Route
           path="/login"
           element={!user ? <Login /> : <Navigate to="/" />}
+        />
+        <Route
+          path="/set-initial-password"
+          element={!user ? <SetInitialPassword /> : <Navigate to="/" />}
+        />
+        <Route
+          path="/change-expire-password"
+          element={!user ? <ChangeExpirePassword /> : <Navigate to="/" />}
         />
         <Route
           path="/*"
