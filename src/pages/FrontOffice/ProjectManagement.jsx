@@ -339,14 +339,49 @@ const ProjectManagement = () => {
       imageQuantity: project.imageQuantity,
     });
     console.log("Generated folder name:", folderName);
-    navigator.clipboard
-      .writeText(folderName)
-      .then(() => {
-        message.success("Folder name copied to clipboard!");
-      })
-      .catch(() => {
+    
+    // Try modern clipboard API first
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard
+        .writeText(folderName)
+        .then(() => {
+          message.success("Folder name copied to clipboard!");
+        })
+        .catch(() => {
+          message.error("Failed to copy folder name");
+        });
+    } else {
+      // Fallback method for older browsers or non-HTTPS contexts
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = folderName;
+        textArea.style.position = "fixed";
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.width = "2em";
+        textArea.style.height = "2em";
+        textArea.style.padding = "0";
+        textArea.style.border = "none";
+        textArea.style.outline = "none";
+        textArea.style.boxShadow = "none";
+        textArea.style.background = "transparent";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand("copy");
+        document.body.removeChild(textArea);
+        
+        if (successful) {
+          message.success("Folder name copied to clipboard!");
+        } else {
+          message.error("Failed to copy folder name");
+        }
+      } catch (err) {
+        console.error("Failed to copy:", err);
         message.error("Failed to copy folder name");
-      });
+      }
+    }
   };
 
   // Calculate statistics
