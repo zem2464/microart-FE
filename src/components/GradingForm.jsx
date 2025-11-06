@@ -72,6 +72,7 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
     if (mode === 'edit' && grading) {
       form.setFieldsValue({
         name: grading.name,
+        shortCode: grading.shortCode,
         description: grading.description,
         workTypeId: grading.workTypeId,
         defaultRate: grading.defaultRate || 0,
@@ -167,6 +168,7 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
 
       const input = {
         name: values.name,
+        shortCode: values.shortCode || null,
         description: values.description,
         workTypeId: values.workTypeId,
         defaultRate: parseFloat(values.defaultRate),
@@ -236,7 +238,27 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
                 />
               </Form.Item>
             </Col>
-            <Col span={12}>
+            <Col span={6}>
+              <Form.Item
+                label="Short Code"
+                name="shortCode"
+                rules={[
+                  { max: 10, message: 'Short code must be max 10 characters' },
+                  { pattern: /^[A-Z0-9]*$/, message: 'Only uppercase letters and numbers' }
+                ]}
+              >
+                <Input 
+                  placeholder="e.g., BASIC, ADV"
+                  maxLength={10}
+                  style={{ textTransform: 'uppercase' }}
+                  onChange={(e) => {
+                    const value = e.target.value.toUpperCase();
+                    form.setFieldsValue({ shortCode: value });
+                  }}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={6}>
               <Form.Item
                 label="Work Type"
                 name="workTypeId"

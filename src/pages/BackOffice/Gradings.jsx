@@ -115,20 +115,34 @@ const Gradings = () => {
       title: "Grading Name",
       dataIndex: "name",
       key: "name",
-      sorter: (a, b) => a.name.localeCompare(b.name),
-      render: (text, record) => (
-        <div>
-          <Text strong className="block">{text}</Text>
-          {record.description && (
-            <Text type="secondary" className="text-sm">
-              {record.description.length > 60 
-                ? `${record.description.substring(0, 60)}...` 
-                : record.description
-              }
+      sorter: (a, b) => {
+        const aName = a.shortCode ? `${a.shortCode} - ${a.name}` : a.name;
+        const bName = b.shortCode ? `${b.shortCode} - ${b.name}` : b.name;
+        return aName.localeCompare(bName);
+      },
+      render: (text, record) => {
+        const displayName = record.shortCode ? `${record.shortCode} - ${text}` : text;
+        return (
+          <div>
+            <Text strong className="block">
+              {record.shortCode && (
+                <span style={{ color: '#1890ff', fontWeight: 'bold' }}>
+                  {record.shortCode} -{' '}
+                </span>
+              )}
+              {text}
             </Text>
-          )}
-        </div>
-      ),
+            {record.description && (
+              <Text type="secondary" className="text-sm">
+                {record.description.length > 60 
+                  ? `${record.description.substring(0, 60)}...` 
+                  : record.description
+                }
+              </Text>
+            )}
+          </div>
+        );
+      },
     },
     {
       title: "Work Type",

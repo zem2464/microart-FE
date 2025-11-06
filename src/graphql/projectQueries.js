@@ -34,6 +34,7 @@ export const GET_PROJECTS = gql`
         grading {
           id
           name
+          shortCode
           defaultRate
         }
         projectGradings {
@@ -42,6 +43,7 @@ export const GET_PROJECTS = gql`
           grading {
             id
             name
+            shortCode
             defaultRate
           }
           imageQuantity
@@ -113,6 +115,7 @@ export const GET_PROJECT = gql`
       grading {
         id
         name
+        shortCode
         defaultRate
       }
       projectGradings {
@@ -121,6 +124,7 @@ export const GET_PROJECT = gql`
         grading {
           id
           name
+          shortCode
           defaultRate
         }
         imageQuantity

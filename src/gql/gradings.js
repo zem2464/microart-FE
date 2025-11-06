@@ -5,6 +5,7 @@ export const GRADING_FRAGMENT = gql`
   fragment GradingInfo on Grading {
     id
     name
+    shortCode
     description
     workTypeId
     defaultRate

@@ -797,6 +797,20 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
   // Custom field value change handler
   const handleCustomFieldChange = (fieldKey, value) => {
+    // Prevent storing tree node objects or other complex objects
+    // Only allow primitive values: string, number, boolean, or arrays of primitives
+    if (value !== null && value !== undefined) {
+      if (typeof value === 'object' && !Array.isArray(value)) {
+        console.warn('Attempted to set non-primitive value for custom field:', fieldKey, value);
+        return; // Don't store object values
+      }
+      if (Array.isArray(value) && value.some(v => typeof v === 'object' && v !== null)) {
+        console.warn('Attempted to set array with objects for custom field:', fieldKey, value);
+        // Filter out objects from array
+        value = value.filter(v => typeof v !== 'object' || v === null);
+      }
+    }
+    
     setCustomFieldValues(prev => ({
       ...prev,
       [fieldKey]: value
@@ -1124,12 +1138,33 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         deadlineDate: values.deadlineDate ? values.deadlineDate.toISOString() : null,
         priority: values.priority,
         notes: values.notes,
-        customFields: customFieldValues,
+        // Clean customFieldValues to ensure proper format
+        // If customFieldValues has 'key', 'value', 'children' properties, it's a tree node object - skip it
+        customFields: (customFieldValues && typeof customFieldValues === 'object' && !customFieldValues.key && !customFieldValues.value && !customFieldValues.children) 
+          ? Object.keys(customFieldValues).reduce((acc, key) => {
+              const value = customFieldValues[key];
+              // Only include if value is a primitive type or array of primitives
+              if (value !== null && value !== undefined) {
+                if (typeof value !== 'object') {
+                  acc[key] = value;
+                } else if (Array.isArray(value)) {
+                  // For arrays, ensure all elements are primitives
+                  const primitiveValues = value.filter(v => v !== null && v !== undefined && typeof v !== 'object');
+                  if (primitiveValues.length > 0) {
+                    acc[key] = primitiveValues;
+                  }
+                }
+              }
+              return acc;
+            }, {})
+          : {},
         // In edit mode, use form field value; in create mode, use footer button value
         status: desiredStatus
       };
 
-      console.log('🚀 Project update data:', projectData);
+      console.log('🚀 Project data being sent:', projectData);
+      console.log('📋 Custom fields being sent:', projectData.customFields);
+      console.log('🔍 Original customFieldValues:', customFieldValues);
 
       if (mode === "edit" && project) {
         // Update project - don't include tasks field as ProjectUpdateInput doesn't support it
@@ -1411,11 +1446,19 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                   const displayRate = clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null
                     ? clientPref.customRate
                     : grading.defaultRate;
-                  const label = `${grading.name} - ₹${Number(displayRate || 0).toLocaleString()}`;
+                  const shortCodeDisplay = grading.shortCode ? `[${grading.shortCode}] ` : '';
+                  const label = `${shortCodeDisplay}${grading.name} - ₹${Number(displayRate || 0).toLocaleString()}`;
                   return (
                     <Option key={grading.id} value={grading.id} label={label}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span>{grading.name} - ₹{Number(displayRate || 0).toLocaleString()}</span>
+                        <span>
+                          {grading.shortCode && (
+                            <span style={{ color: '#1890ff', fontWeight: 'bold', marginRight: 4 }}>
+                              [{grading.shortCode}]
+                            </span>
+                          )}
+                          {grading.name} - ₹{Number(displayRate || 0).toLocaleString()}
+                        </span>
                         {clientPref && (
                           <span style={{ color: "#52c41a", marginLeft: 8 }}>
                             ★ Preferred
@@ -1425,6 +1468,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                     </Option>
                   );
                 })}
+
               {workTypeGradings?.length === 0 && selectedWorkType && (
                 <Option disabled value="">
                   No gradings available for this work type
@@ -1473,6 +1517,11 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                       }}
                     >
                       <div style={{ marginBottom: 12, fontWeight: 500, color: '#262626' }}>
+                        {grading?.shortCode && (
+                          <span style={{ color: '#1890ff', fontWeight: 'bold', marginRight: 4 }}>
+                            [{grading.shortCode}]
+                          </span>
+                        )}
                         {grading?.name || 'Unknown Grading'}
                         <div style={{ fontSize: 12, color: '#8c8c8c', fontWeight: 'normal', marginTop: 2 }}>
                           Default: ₹{Number(defaultRate).toLocaleString()}/image

@@ -1218,6 +1218,11 @@ const ClientForm = ({
                   >
                     {gradingsData?.gradingsByWorkType?.map((grading) => (
                       <Option key={grading.id} value={grading.id}>
+                        {grading.shortCode && (
+                          <span style={{ color: '#1890ff', fontWeight: 'bold', marginRight: 4 }}>
+                            [{grading.shortCode}]
+                          </span>
+                        )}
                         {grading.name} - Default Rate: ₹{grading.defaultRate}/
                         {grading.unit}
                       </Option>
@@ -1300,6 +1305,11 @@ const ClientForm = ({
                             strong
                             style={{ fontSize: "16px", color: "#1890ff" }}
                           >
+                            {grading.shortCode && (
+                              <span style={{ color: '#1890ff', fontWeight: 'bold', marginRight: 4 }}>
+                                [{grading.shortCode}]
+                              </span>
+                            )}
                             {grading.name}
                           </Text>
                           <Text type="secondary" style={{ marginLeft: 16 }}>
