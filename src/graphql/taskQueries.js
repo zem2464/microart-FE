@@ -25,6 +25,7 @@ export const GET_TASKS = gql`
           id
           projectCode
           description
+          notes
           deadlineDate
           imageQuantity # Legacy field for backward compatibility
           totalImageQuantity # New field for multiple grading support
@@ -110,6 +111,7 @@ export const GET_TASK = gql`
         id
         projectCode
         description
+        notes
         deadlineDate
         imageQuantity # Legacy field for backward compatibility
         totalImageQuantity # New field for multiple grading support

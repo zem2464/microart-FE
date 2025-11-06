@@ -31,9 +31,12 @@ export const TASK_FRAGMENT = gql`
     project {
       id
       projectCode
+      name
       description
+      notes
       deadlineDate
       imageQuantity
+      customFields
       client {
         id
         clientCode

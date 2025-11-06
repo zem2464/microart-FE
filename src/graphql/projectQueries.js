@@ -21,6 +21,7 @@ export const GET_PROJECTS = gql`
       projects {
         id
         projectCode
+        name
         description
         client {
           id
@@ -67,9 +68,11 @@ export const GET_PROJECTS = gql`
         deadlineDate
         status
         priority
+        notes
         taskCount
         completedTaskCount
         isActive
+        customFields
         createdAt
         updatedAt
       }
@@ -90,6 +93,7 @@ export const GET_PROJECT = gql`
     project(id: $id) {
       id
       projectCode
+      name
       description
       client {
         id
@@ -185,6 +189,7 @@ export const CREATE_PROJECT = gql`
     createProject(input: $input) {
       id
       projectCode
+      name
       description
       status
       customFields
@@ -198,6 +203,7 @@ export const UPDATE_PROJECT = gql`
     updateProject(id: $id, input: $input) {
       id
       projectCode
+      name
       description
       client {
         id

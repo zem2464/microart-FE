@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Card,
   Typography,
@@ -68,6 +68,43 @@ const updateBtnHiddenStyle = {
   overflow: "hidden",
 };
 
+const formatFieldLabel = (key) => {
+  if (!key || typeof key !== "string") {
+    return "";
+  }
+
+  const spaced = key
+    .replace(/[_-]+/g, " ")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .trim();
+
+  return spaced
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+};
+
+const formatFieldValue = (value) => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  if (typeof value === "object") {
+    if (value && typeof value.value !== "undefined" && typeof value.label !== "undefined") {
+      return String(value.value);
+    }
+
+    try {
+      return JSON.stringify(value);
+    } catch (error) {
+      return String(value);
+    }
+  }
+
+  return String(value);
+};
+
 const TaskCard = ({
   hideStatusOnBoard = false,
   task,
@@ -104,7 +141,7 @@ const TaskCard = ({
   const [instructions, setInstructions] = useState(task?.instructions || "");
   const [notes, setNotes] = useState(task?.notes || "");
   const [clientNotes, setClientNotes] = useState(task?.clientNotes || "");
-  const [internalNotes, setInternalNotes] = useState(task?.internalNotes || "");
+  const [internalNotes, setInternalNotes] = useState(task?.internalNotes || task?.project?.notes || "");
   // Focus state for each field
   const [descFocused, setDescFocused] = useState(false);
   const [instFocused, setInstFocused] = useState(false);
@@ -112,18 +149,38 @@ const TaskCard = ({
   const [clientNotesFocused, setClientNotesFocused] = useState(false);
   const [internalNotesFocused, setInternalNotesFocused] = useState(false);
 
+  const resolvedCustomFields = useMemo(() => {
+    if (Array.isArray(customFields) && customFields.length > 0) {
+      return customFields.map((field) => ({
+        label: field?.label || formatFieldLabel(field?.name || field?.key || ""),
+        value: formatFieldValue(field?.value),
+      }));
+    }
+
+    const projectCustomFields = task?.project?.customFields;
+    if (projectCustomFields && typeof projectCustomFields === "object" && !Array.isArray(projectCustomFields)) {
+      return Object.entries(projectCustomFields).map(([fieldKey, fieldValue]) => ({
+        label: formatFieldLabel(fieldKey),
+        value: formatFieldValue(fieldValue),
+      }));
+    }
+
+    const taskLevelCustomFields = task?.customFields;
+    if (taskLevelCustomFields && typeof taskLevelCustomFields === "object" && !Array.isArray(taskLevelCustomFields)) {
+      return Object.entries(taskLevelCustomFields).map(([fieldKey, fieldValue]) => ({
+        label: formatFieldLabel(fieldKey),
+        value: formatFieldValue(fieldValue),
+      }));
+    }
+
+    return [];
+  }, [customFields, task]);
+
   // Initialize form when modal opens or task changes
   useEffect(() => {
     if (modalVisible && task) {
       // Get assignee ID from either assignee object or assigneeId field
       const assigneeId = task.assignee?.id || task.assigneeId;
-
-      console.log("Initializing form with task:", {
-        taskAssignee: task.assignee,
-        assigneeId: assigneeId,
-        availableUsers: availableUsers.length,
-        taskTitle: task.title || task.name,
-      });
 
       // Convert status to uppercase format expected by Select options
       const convertStatusToSelectFormat = (status) => {
@@ -155,7 +212,6 @@ const TaskCard = ({
         internalNotes: task.internalNotes,
       };
 
-      console.log("Setting form values:", formValues);
       form.setFieldsValue(formValues);
     }
   }, [modalVisible, task, form, availableUsers.length]);
@@ -165,7 +221,6 @@ const TaskCard = ({
     if (modalVisible && task && availableUsers.length > 0) {
       const assigneeId = task.assignee?.id || task.assigneeId;
       if (assigneeId) {
-        console.log("Setting assignee after users loaded:", assigneeId);
         form.setFieldsValue({ assigneeId: assigneeId });
       }
     }
@@ -494,6 +549,7 @@ const TaskCard = ({
     } else {
       setModalVisible(true);
       const assigneeId = task.assignee?.id || task.assigneeId;
+      const taskInternalNotes = task.internalNotes || task.project?.notes || "";
       form.setFieldsValue({
         title: task.title || task.name, // Support both title and name fields
         description: task.description,
@@ -506,9 +562,9 @@ const TaskCard = ({
         estimatedCost: task.estimatedCost,
         actualCost: task.actualCost,
         dueDate: task.dueDate ? dayjs(task.dueDate) : null,
-        notes: task.notes,
+        notes: task.notes || "",
         clientNotes: task.clientNotes,
-        internalNotes: task.internalNotes,
+        internalNotes: taskInternalNotes, // Fall back to project notes
       });
     }
   };
@@ -517,11 +573,12 @@ const TaskCard = ({
   useEffect(() => {
     if (modalVisible && task) {
       // Initialize local state for editable fields
+      const taskInternalNotes = task.internalNotes || task.project?.notes || "";
       setDescription(task.description || "");
       setInstructions(task.instructions || "");
       setNotes(task.notes || "");
       setClientNotes(task.clientNotes || "");
-      setInternalNotes(task.internalNotes || "");
+      setInternalNotes(taskInternalNotes);
     }
   }, [modalVisible, task]);
 
@@ -648,14 +705,14 @@ const TaskCard = ({
 
   // Render custom fields in description
   const renderCustomFieldsDescription = () => {
-    if (!customFields || customFields.length === 0) return null;
+    if (!resolvedCustomFields || resolvedCustomFields.length === 0) return null;
 
     return (
       <div style={{ marginTop: "6px" }}>
         <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
-          {customFields.map((field, index) => (
+          {resolvedCustomFields.map((field, index) => (
             <div
-              key={index}
+              key={`${field.label}-${index}`}
               style={{
                 backgroundColor: "#F0F4F8",
                 padding: "4px 8px",
@@ -666,7 +723,7 @@ const TaskCard = ({
               <Text
                 style={{ fontSize: "10px", color: "#0052CC", fontWeight: 600 }}
               >
-                {field.label}:
+                {field.label || "Field"}:
               </Text>
               <Text
                 style={{
@@ -675,7 +732,7 @@ const TaskCard = ({
                   marginLeft: "4px",
                 }}
               >
-                {field.value}
+                {field.value !== "" ? field.value : "-"}
               </Text>
             </div>
           ))}
@@ -1301,6 +1358,16 @@ const TaskCard = ({
                     )}
                   </Col>
                 </Row>
+                {task.project?.name && (
+                  <Row gutter={16} style={{ marginTop: "8px" }}>
+                    <Col span={24}>
+                      <Text style={{ fontSize: "12px", color: "#6B778C" }}>
+                        Project:{" "}
+                        <strong>{task.project.name}</strong>
+                      </Text>
+                    </Col>
+                  </Row>
+                )}
               </div>
 
               {/* Client & Project Information Display */}
@@ -1377,16 +1444,6 @@ const TaskCard = ({
                       <Text style={{ fontSize: "12px", color: "#6B778C" }}>
                         <strong>Grading:</strong>{" "}
                         {task.gradingTask?.grading?.name || grading.name}
-                        {(task.gradingTask?.grading?.defaultRate ||
-                          grading?.defaultRate) && (
-                          <span>
-                            {" "}
-                            (₹
-                            {task.gradingTask?.grading?.defaultRate ||
-                              grading.defaultRate}
-                            )
-                          </span>
-                        )}
                       </Text>
                     </Col>
                   )}
@@ -1413,8 +1470,44 @@ const TaskCard = ({
                 </Row>
               </div>
 
+              {/* Project Internal Notes Display */}
+              {task.project?.notes && (
+                <div
+                  style={{
+                    marginBottom: "16px",
+                    padding: "12px",
+                    backgroundColor: "#FFF7E6",
+                    borderRadius: "4px",
+                    border: "1px solid #FFD591",
+                  }}
+                >
+                  <Text
+                    style={{
+                      fontWeight: 600,
+                      color: "#172B4D",
+                      display: "block",
+                      marginBottom: "8px",
+                    }}
+                  >
+                    📝 Project Internal Notes
+                  </Text>
+                  <div
+                    style={{
+                      padding: "8px",
+                      backgroundColor: "#FFFFFF",
+                      borderRadius: "4px",
+                      border: "1px solid #E8E8E8",
+                    }}
+                  >
+                    <Text style={{ fontSize: "12px", color: "#172B4D", whiteSpace: "pre-wrap" }}>
+                      {task.project.notes}
+                    </Text>
+                  </div>
+                </div>
+              )}
+
               {/* Custom Fields Display */}
-              {customFields && customFields.length > 0 && (
+              {resolvedCustomFields.length > 0 && (
                 <div
                   style={{
                     marginBottom: "16px",
@@ -1433,13 +1526,25 @@ const TaskCard = ({
                   >
                     Custom Fields
                   </Text>
-                  <Row gutter={[16, 8]}>
-                    {customFields.map((field, index) => (
-                      <Col span={12} key={index}>
-                        <Text style={{ fontSize: "12px", color: "#6B778C" }}>
-                          <strong>{field.label || field.name}:</strong>{" "}
-                          {field.value}
+                  <Row gutter={[0, 12]}>
+                    {resolvedCustomFields.map((field, index) => (
+                      <Col span={24} key={`${field.label}-${index}`}>
+                        <Text style={{ fontSize: "12px", color: "#6B778C", display: "block" }}>
+                          <strong>{field.label || "Field"}</strong>
                         </Text>
+                        <div
+                          style={{
+                            marginTop: "4px",
+                            padding: "8px",
+                            backgroundColor: "#FFFFFF",
+                            borderRadius: "4px",
+                            border: "1px solid #E8E8E8",
+                          }}
+                        >
+                          <Text style={{ fontSize: "12px", color: "#172B4D" }}>
+                            {field.value !== "" ? field.value : "-"}
+                          </Text>
+                        </div>
                       </Col>
                     ))}
                   </Row>

@@ -94,6 +94,11 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     if (newGradings[index]) {
       newGradings[index] = { ...newGradings[index], imageQuantity: quantity };
       setSelectedGradings(newGradings);
+      
+      // Trigger credit validation after quantity change
+      setTimeout(() => {
+        validateMultipleGradingsCredit(newGradings);
+      }, 100);
     }
   };
 
@@ -102,6 +107,11 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     if (newGradings[index]) {
       newGradings[index] = { ...newGradings[index], customRate: customRate };
       setSelectedGradings(newGradings);
+      
+      // Trigger credit validation after rate change
+      setTimeout(() => {
+        validateMultipleGradingsCredit(newGradings);
+      }, 100);
     }
   };
 
@@ -193,6 +203,11 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   });
 
   const [updateProject] = useMutation(UPDATE_PROJECT, {
+    refetchQueries: [
+      'GetTasks',  // Refetch tasks to update custom fields in task cards
+      'GetMyTasks', // Also refetch user's tasks if applicable
+    ],
+    awaitRefetchQueries: true,
     onCompleted: () => {
       message.success("Project updated successfully!");
       onSuccess?.();
@@ -280,17 +295,44 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   // credit info is fetched separately via VALIDATE_PROJECT_CREDIT
 
         setClientPreferences(data.clientPreferences);
-        // Also fetch a quick credit summary for this client so we can show credit info
-        try {
-          const creditResp = await refetchProjectCreditValidation({
-            variables: { clientId: clientId },
-          });
-          if (creditResp?.data?.validateProjectCredit) {
-            setProjectCreditValidation(creditResp.data.validateProjectCredit);
+        // Also fetch credit info for this client
+        // If we have multiple gradings selected, validate those; otherwise get general credit info
+        if (selectedGradings.length > 0) {
+          setTimeout(() => {
+            validateMultipleGradingsCredit(selectedGradings);
+          }, 200);
+        } else if (selectedGrading && imageQuantity > 0) {
+          // Legacy single grading validation
+          try {
+            const creditResp = await refetchProjectCreditValidation({
+              variables: { 
+                clientId: clientId,
+                gradingId: selectedGrading,
+                imageQuantity: imageQuantity,
+                estimatedCost: calculatedBudget
+              },
+            });
+            if (creditResp?.data?.validateProjectCredit) {
+              setProjectCreditValidation(creditResp.data.validateProjectCredit);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch client credit validation', err);
           }
-        } catch (err) {
-          // Non-fatal: continue without credit info
-          console.warn('Failed to fetch client credit summary', err);
+        } else {
+          // Just get general credit info without specific project details
+          try {
+            const creditResp = await refetchProjectCreditValidation({
+              variables: { 
+                clientId: clientId,
+                estimatedCost: 0  // No project selected yet
+              },
+            });
+            if (creditResp?.data?.validateProjectCredit) {
+              setProjectCreditValidation(creditResp.data.validateProjectCredit);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch client credit summary', err);
+          }
         }
       }
     } catch (error) {
@@ -316,16 +358,41 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         
         setClientPreferences(data.clientPreferences);
         
-        // Also fetch credit summary
-        try {
-          const creditResp = await refetchProjectCreditValidation({
-            variables: { clientId: clientId },
-          });
-          if (creditResp?.data?.validateProjectCredit) {
-            setProjectCreditValidation(creditResp.data.validateProjectCredit);
+        // Also fetch credit summary (for edit mode, validate current project state)
+        if (selectedGradings.length > 0) {
+          setTimeout(() => {
+            validateMultipleGradingsCredit(selectedGradings);
+          }, 200);
+        } else if (selectedGrading && imageQuantity > 0) {
+          try {
+            const creditResp = await refetchProjectCreditValidation({
+              variables: { 
+                clientId: clientId,
+                gradingId: selectedGrading,
+                imageQuantity: imageQuantity,
+                estimatedCost: calculatedBudget
+              },
+            });
+            if (creditResp?.data?.validateProjectCredit) {
+              setProjectCreditValidation(creditResp.data.validateProjectCredit);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch client credit validation', err);
           }
-        } catch (err) {
-          console.warn('Failed to fetch client credit summary', err);
+        } else {
+          try {
+            const creditResp = await refetchProjectCreditValidation({
+              variables: { 
+                clientId: clientId,
+                estimatedCost: 0  // No project selected yet
+              },
+            });
+            if (creditResp?.data?.validateProjectCredit) {
+              setProjectCreditValidation(creditResp.data.validateProjectCredit);
+            }
+          } catch (err) {
+            console.warn('Failed to fetch client credit summary', err);
+          }
         }
       } else {
         console.log("No client preferences received or data is empty:", data);
@@ -337,14 +404,24 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   };
 
   // Work type selection handler
-  const handleWorkTypeSelect = useCallback(async (workTypeId) => {
+  const handleWorkTypeSelect = useCallback(async (workTypeId, existingCustomFieldValues = null) => {
+    console.log('=== handleWorkTypeSelect called ===');
+    console.log('workTypeId:', workTypeId);
+    console.log('existingCustomFieldValues:', existingCustomFieldValues);
+    
     setSelectedWorkType(workTypeId);
     form.setFieldsValue({ grading: undefined });
     setSelectedGrading(null);
     setCalculatedBudget(0);
     setGradingTasks([]);
     setCustomFields([]);
-    setCustomFieldValues({});
+    // Only clear custom field values if not in edit mode with existing values
+    if (!existingCustomFieldValues) {
+      console.log('Clearing custom field values (create mode)');
+      setCustomFieldValues({});
+    } else {
+      console.log('Preserving existing custom field values (edit mode)');
+    }
     setWorkTypeGradings([]);
     setProjectTasks([]);
 
@@ -371,25 +448,37 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       // Process custom fields
       if (customFieldsResult.data?.workTypeFields) {
         const fields = [...customFieldsResult.data.workTypeFields].sort((a, b) => a.displayOrder - b.displayOrder);
+        console.log('Fetched work type fields:', fields);
         setCustomFields(fields);
         
-        // Initialize custom field values with default values
-        const defaultValues = {};
-        fields.forEach(field => {
-          if (field.defaultValue) {
-            try {
-              defaultValues[field.fieldKey] = field.fieldType === 'checkbox' 
-                ? field.defaultValue === 'true' || field.defaultValue === true
-                : field.defaultValue;
-            } catch (error) {
-              defaultValues[field.fieldKey] = field.defaultValue;
+        // If we have existing custom field values (edit mode), use those
+        if (existingCustomFieldValues && Object.keys(existingCustomFieldValues).length > 0) {
+          console.log('Setting existing custom field values:', existingCustomFieldValues);
+          setCustomFieldValues(existingCustomFieldValues);
+          // Set existing values in form
+          form.setFieldsValue(existingCustomFieldValues);
+          console.log('Form fields set with existing values');
+        } else {
+          // Initialize custom field values with default values (create mode)
+          console.log('Setting default custom field values');
+          const defaultValues = {};
+          fields.forEach(field => {
+            if (field.defaultValue) {
+              try {
+                defaultValues[field.fieldKey] = field.fieldType === 'checkbox' 
+                  ? field.defaultValue === 'true' || field.defaultValue === true
+                  : field.defaultValue;
+              } catch (error) {
+                defaultValues[field.fieldKey] = field.defaultValue;
+              }
             }
-          }
-        });
-        setCustomFieldValues(defaultValues);
-        
-        // Set default values in form
-        form.setFieldsValue(defaultValues);
+          });
+          console.log('Default values:', defaultValues);
+          setCustomFieldValues(defaultValues);
+          
+          // Set default values in form
+          form.setFieldsValue(defaultValues);
+        }
       }
 
       // Process gradings
@@ -400,7 +489,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       console.error("Error fetching work type data:", error);
       message.error("Failed to load data for this work type");
     }
-  }, [refetchCustomFields, getWorkTypeGradings]);
+  }, [refetchCustomFields, getWorkTypeGradings, form]);
 
   // Grading selection handler
   const handleGradingSelect = async (gradingId) => {
@@ -500,11 +589,19 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     addedIds.forEach(gradingId => {
       const grading = workTypeGradings?.find(g => g.id === gradingId);
       if (grading) {
+        // Check if client has a custom rate for this grading
+        const clientPref = clientPreferences?.gradings?.find(
+          (pref) => pref.grading?.id === gradingId
+        );
+        const clientCustomRate = clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null 
+          ? clientPref.customRate 
+          : null;
+        
         newSelectedGradings.push({
           gradingId: gradingId,
           grading: grading,
           imageQuantity: 1, // Default quantity
-          customRate: null,
+          customRate: clientCustomRate, // Pre-fill with client's custom rate if available
           sequence: newSelectedGradings.length + 1
         });
       }
@@ -590,6 +687,15 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       setPerImageRate(null);
       // For multiple gradings, we'll need to handle task generation differently
       // This might require updating the task generation logic
+    }
+    
+    // Trigger credit validation for the new grading selection
+    if (newSelectedGradings.length > 0 && selectedClientId) {
+      setTimeout(() => {
+        validateMultipleGradingsCredit(newSelectedGradings);
+      }, 200);
+    } else {
+      setProjectCreditValidation(null);
     }
   };
 
@@ -689,16 +795,6 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     }
   };
 
-  const handlePerImageRateChange = (value) => {
-    // allow null/undefined to reset
-    const parsed = value === undefined || value === null ? null : Number(value);
-    setPerImageRate(parsed);
-    // recalc when override rate changes
-    if (selectedGrading && imageQuantity > 0) {
-      calculateBudget(selectedGrading, imageQuantity, parsed);
-    }
-  };
-
   // Custom field value change handler
   const handleCustomFieldChange = (fieldKey, value) => {
     setCustomFieldValues(prev => ({
@@ -757,6 +853,55 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     }
   };
 
+  // Credit validation for multiple gradings
+  const validateMultipleGradingsCredit = async (gradings = selectedGradings) => {
+    if (!selectedClientId || !gradings || gradings.length === 0) {
+      setProjectCreditValidation(null);
+      return;
+    }
+
+    try {
+      // Prepare project gradings data for validation
+      const projectGradingsData = gradings.map(sg => {
+        const grading = workTypeGradings?.find(g => g.id === sg.gradingId);
+        const clientPref = clientPreferences?.gradings?.find(
+          (pref) => pref.grading?.id === sg.gradingId
+        );
+        
+        // Use same priority logic as display: customRate > clientPref.customRate > grading.defaultRate
+        const effectiveRate = sg.customRate !== undefined && sg.customRate !== null
+          ? sg.customRate
+          : (clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null
+            ? clientPref.customRate
+            : grading?.defaultRate || 0);
+        
+        return {
+          gradingId: sg.gradingId,
+          imageQuantity: sg.imageQuantity || 0,
+          customRate: effectiveRate // Send the calculated effective rate instead of just the custom rate
+        };
+      });
+
+      const { data } = await refetchMultipleGradingCreditValidation({
+        variables: {
+          clientId: selectedClientId,
+          projectGradings: projectGradingsData,
+        },
+      });
+
+      if (data?.validateMultipleGradingCredit) {
+        setProjectCreditValidation(data.validateMultipleGradingCredit);
+        
+        // Show warning if credit validation fails
+        if (!data.validateMultipleGradingCredit.canCreateProject) {
+          message.warning(data.validateMultipleGradingCredit.message);
+        }
+      }
+    } catch (error) {
+      console.error("Error validating multiple gradings credit:", error);
+    }
+  };
+
   
 
   // Set available users when users data is loaded
@@ -808,7 +953,14 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     // Update backward compatibility fields
     setImageQuantity(newTotalQuantity);
     setCalculatedBudget(newTotalCost);
-  }, [selectedGradings, clientPreferences]);
+    
+    // Trigger credit validation if we have selected client and gradings
+    if (selectedClientId && selectedGradings.length > 0) {
+      setTimeout(() => {
+        validateMultipleGradingsCredit(selectedGradings);
+      }, 100);
+    }
+  }, [selectedGradings, clientPreferences, selectedClientId]);
 
   // Handle task updates
   const handleTaskUpdate = (updatedTasks) => {
@@ -820,12 +972,18 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     if (project && mode === "edit") {
       // Async IIFE to ensure proper order
       (async () => {
+        console.log('=== ProjectForm Edit Mode Initialization ===');
+        console.log('Project data:', project);
+        console.log('Project customFields:', project.customFields);
+        console.log('Project notes:', project.notes);
+        
         form.setFieldsValue({
           clientId: project.clientId || project.client?.id,
           workTypeId: project.workTypeId || project.workType?.id,
           gradingId: project.gradingId || project.grading?.id, // Keep for backward compatibility
           imageQuantity: project.imageQuantity || project.totalImageQuantity,
           deadlineDate: project.deadlineDate ? dayjs(project.deadlineDate) : null,
+          name: project.name,
           description: project.description,
           notes: project.notes,
           priority: project.priority,
@@ -843,7 +1001,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         }
         if (workTypeId) {
           setSelectedWorkType(workTypeId);
-          await loadWorkTypeData(workTypeId);
+          // Pass existing custom field values to preserve them in edit mode
+          console.log('Calling handleWorkTypeSelect with customFields:', project.customFields);
+          await handleWorkTypeSelect(workTypeId, project.customFields || null);
         }
 
         // Initialize multiple gradings or fallback to single grading
@@ -884,9 +1044,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         } else if (project.estimatedCost) {
           setCalculatedBudget(project.estimatedCost);
         }
-        if (project.customFields) {
-          setCustomFieldValues(project.customFields);
-        }
+        // Custom fields are now set by handleWorkTypeSelect with existing values
         
         // Initialize current status
         setCurrentStatus(project.status || 'draft');
@@ -961,6 +1119,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         gradingId: selectedGradings.length > 0 ? selectedGradings[0]?.gradingId : values.gradingId,
         imageQuantity: totalImageQuantity || values.imageQuantity,
         estimatedCost: totalCalculatedBudget || calculatedBudget, // Use total budget
+        name: values.name,
         description: values.description,
         deadlineDate: values.deadlineDate ? values.deadlineDate.toISOString() : null,
         priority: values.priority,
@@ -998,7 +1157,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
             estimatedCost: task.estimatedCost || 0,
             dueDate: task.dueDate,
             assigneeId: task.assigneeId,
-            notes: task.notes || '',
+            notes: task.notes || values.notes || '', // Use project notes as default
           })).filter(task => task.taskTypeId && task.name) // Filter out tasks without required fields
         };
         
@@ -1288,39 +1447,90 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                   const clientPref = clientPreferences?.gradings?.find(
                     (pref) => pref.grading?.id === selectedGrading.gradingId
                   );
-                  const displayRate = clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null
-                    ? clientPref.customRate
-                    : grading?.defaultRate;
+                  
+                  // Priority: customRate > clientPref.customRate > grading.defaultRate
+                  const effectiveRate = selectedGrading.customRate !== undefined && selectedGrading.customRate !== null
+                    ? selectedGrading.customRate
+                    : (clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null
+                      ? clientPref.customRate
+                      : grading?.defaultRate || 0);
+                  
+                  const defaultRate = grading?.defaultRate || 0;
+                  const clientCustomRate = clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null ? clientPref.customRate : null;
+                  const hasCustomRate = selectedGrading.customRate !== undefined && selectedGrading.customRate !== null;
+                  const isUsingClientRate = !hasCustomRate && clientCustomRate !== null;
                   
                   return (
                     <div 
                       key={`${selectedGrading.gradingId}-${index}`}
                       style={{ 
-                        flex: '1 1 300px',
-                        minWidth: 250,
+                        flex: '1 1 350px',
+                        minWidth: 300,
                         padding: 16, 
                         border: '1px solid #d9d9d9', 
                         borderRadius: 8,
                         backgroundColor: '#fafafa'
                       }}
                     >
-                      <div style={{ marginBottom: 8, fontWeight: 500, color: '#262626' }}>
+                      <div style={{ marginBottom: 12, fontWeight: 500, color: '#262626' }}>
                         {grading?.name || 'Unknown Grading'}
-                        <span style={{ color: '#8c8c8c', fontSize: 14, marginLeft: 8 }}>
-                          @ ₹{Number(displayRate || 0).toLocaleString()}/image
-                        </span>
+                        <div style={{ fontSize: 12, color: '#8c8c8c', fontWeight: 'normal', marginTop: 2 }}>
+                          Default: ₹{Number(defaultRate).toLocaleString()}/image
+                        </div>
                       </div>
-                      <InputNumber
-                        placeholder="Enter image quantity"
-                        value={selectedGrading.imageQuantity}
-                        min={1}
-                        onChange={(value) => updateGradingQuantity(index, value || 0)}
-                        disabled={isActiveProject}
-                        style={{ width: '100%' }}
-                        addonAfter="images"
-                      />
-                      <div style={{ marginTop: 8, fontSize: 12, color: '#8c8c8c' }}>
-                        Estimated: ₹{((selectedGrading.imageQuantity || 0) * (displayRate || 0)).toLocaleString()}
+                      
+                      <Row gutter={8}>
+                        <Col span={12}>
+                          <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>Image Quantity</div>
+                          <InputNumber
+                            placeholder="Quantity"
+                            value={selectedGrading.imageQuantity}
+                            min={1}
+                            onChange={(value) => updateGradingQuantity(index, value || 0)}
+                            disabled={isActiveProject}
+                            style={{ width: '100%' }}
+                            size="small"
+                          />
+                        </Col>
+                        <Col span={12}>
+                          <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                            Custom Rate
+                            <span style={{ color: '#8c8c8c', fontWeight: 'normal' }}> (₹/image)</span>
+                            {isUsingClientRate && (
+                              <span style={{ color: '#52c41a', fontSize: 10, marginLeft: 4 }}>★ Client Rate</span>
+                            )}
+                          </div>
+                          <InputNumber
+                            placeholder={clientCustomRate ? `Client: ${clientCustomRate}` : `Default: ${defaultRate}`}
+                            value={selectedGrading.customRate}
+                            min={0}
+                            precision={2}
+                            onChange={(value) => updateGradingCustomRate(index, value)}
+                            disabled={isActiveProject}
+                            style={{ 
+                              width: '100%',
+                              backgroundColor: hasCustomRate ? '#e6f7ff' : (isUsingClientRate ? '#f6ffed' : undefined)
+                            }}
+                            size="small"
+                          />
+                        </Col>
+                      </Row>
+                      
+                      <div style={{ 
+                        marginTop: 12, 
+                        padding: '8px 12px',
+                        backgroundColor: '#f0f0f0',
+                        borderRadius: 4,
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <span style={{ fontSize: 12, color: '#595959' }}>
+                          Estimated Cost:
+                        </span>
+                        <span style={{ fontSize: 14, fontWeight: 600, color: '#1890ff' }}>
+                          ₹{((selectedGrading.imageQuantity || 0) * effectiveRate).toLocaleString()}
+                        </span>
                       </div>
                     </div>
                   );
@@ -1356,21 +1566,6 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         </Col>
 
         <Col span={8}>
-          <Form.Item label="Rate per image (override)">
-            <InputNumber
-              style={{ width: "100%" }}
-              min={0}
-              value={perImageRate}
-              formatter={(v) => (v === null || v === undefined ? "" : `₹ ${v}`)}
-              parser={(v) => String(v).replace(/[₹,\s]/g, "")}
-              onChange={handlePerImageRateChange}
-              placeholder={selectedGrading ? "Leave empty to use client's/custom/default rate" : "Select grading to override rate"}
-              disabled={!selectedGrading || isActiveProject}
-            />
-          </Form.Item>
-        </Col>
-
-        <Col span={8}>
           <Form.Item
             name="deadlineDate"
             label="Project Deadline"
@@ -1386,6 +1581,21 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       </Row>
 
       {/* Description row */}
+      <Row gutter={16}>
+        <Col span={24}>
+          <Form.Item
+            name="name"
+            label="Project Name"
+            rules={[{ required: false, message: "Please enter project name" }]}
+          >
+            <Input
+              placeholder="Enter project name (optional)"
+              style={{ width: "100%" }}
+            />
+          </Form.Item>
+        </Col>
+      </Row>
+
       <Row gutter={16}>
         <Col span={24}>
           <Form.Item
