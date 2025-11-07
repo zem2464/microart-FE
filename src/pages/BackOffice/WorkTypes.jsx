@@ -11,10 +11,22 @@ import {
 import { useQuery, useMutation } from "@apollo/client";
 import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../../cache/userCacheVar";
-import { GET_WORK_TYPES, UPDATE_WORK_TYPE, DELETE_WORK_TYPE } from "../../gql/workTypes";
-import { CommonTable, StatusTag, ActionColumn } from "../../components/common/CommonTable";
+import {
+  GET_WORK_TYPES,
+  UPDATE_WORK_TYPE,
+  DELETE_WORK_TYPE,
+} from "../../gql/workTypes";
+import {
+  CommonTable,
+  StatusTag,
+  ActionColumn,
+} from "../../components/common/CommonTable";
 import { useAppDrawer } from "../../contexts/DrawerContext";
-import { hasPermission, MODULES, generatePermission } from "../../config/permissions";
+import {
+  hasPermission,
+  MODULES,
+  generatePermission,
+} from "../../config/permissions";
 
 const WorkTypes = () => {
   const [loading, setLoading] = useState(false);
@@ -22,10 +34,22 @@ const WorkTypes = () => {
   const userData = useReactiveVar(userCacheVar);
 
   // Permission checks
-  const canCreate = hasPermission(userData, generatePermission(MODULES.WORK_TYPES, 'create'));
-  const canUpdate = hasPermission(userData, generatePermission(MODULES.WORK_TYPES, 'update'));
-  const canDelete = hasPermission(userData, generatePermission(MODULES.WORK_TYPES, 'delete'));
-  const canRead = hasPermission(userData, generatePermission(MODULES.WORK_TYPES, 'read'));
+  const canCreate = hasPermission(
+    userData,
+    generatePermission(MODULES.WORK_TYPES, "create")
+  );
+  const canUpdate = hasPermission(
+    userData,
+    generatePermission(MODULES.WORK_TYPES, "update")
+  );
+  const canDelete = hasPermission(
+    userData,
+    generatePermission(MODULES.WORK_TYPES, "delete")
+  );
+  const canRead = hasPermission(
+    userData,
+    generatePermission(MODULES.WORK_TYPES, "read")
+  );
 
   // Drawer hooks
   const { showWorkTypeFormDrawer, showWorkTypeDetailDrawer } = useAppDrawer();
@@ -40,9 +64,9 @@ const WorkTypes = () => {
     fetchPolicy: "cache-and-network",
     skip: !canRead,
     onError: (error) => {
-      console.error('WorkTypes GraphQL Error:', error);
+      console.error("WorkTypes GraphQL Error:", error);
       message.error(`Failed to load work types: ${error.message}`);
-    }
+    },
   });
 
   const [updateWorkType] = useMutation(UPDATE_WORK_TYPE, {
@@ -137,31 +161,38 @@ const WorkTypes = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
           <p className="mt-4">Loading user data...</p>
-          <p className="text-xs text-gray-400 mt-2">Check console for detailed logs</p>
+          <p className="text-xs text-gray-400 mt-2">
+            Check console for detailed logs
+          </p>
         </div>
       </div>
     );
   }
 
   // TEMPORARY: Always render for debugging - remove access checks
-  console.log('🏠 WorkTypes Component Render State:', {
+  console.log("🏠 WorkTypes Component Render State:", {
     userData,
     canRead,
     canCreate,
     canUpdate,
     canDelete,
     userRole: userData?.role?.name,
-    userPermissions: userData?.role?.permissions
+    userPermissions: userData?.role?.permissions,
   });
 
   // Debug logging
-  console.log('WorkTypes userData:', userData);
-  console.log('WorkTypes data:', data);
-  console.log('WorkTypes loading states:', { queryLoading, loading });
-  console.log('WorkTypes user permissions:', { canCreate, canUpdate, canDelete, canRead });
-  console.log('WorkTypes query skip condition:', !canRead);
+  console.log("WorkTypes userData:", userData);
+  console.log("WorkTypes data:", data);
+  console.log("WorkTypes loading states:", { queryLoading, loading });
+  console.log("WorkTypes user permissions:", {
+    canCreate,
+    canUpdate,
+    canDelete,
+    canRead,
+  });
+  console.log("WorkTypes query skip condition:", !canRead);
   if (queryError) {
-    console.log('WorkTypes query error:', queryError);
+    console.log("WorkTypes query error:", queryError);
   }
 
   // Show loading state
@@ -184,7 +215,7 @@ const WorkTypes = () => {
         workType.description.toLowerCase().includes(searchValue.toLowerCase()))
   );
 
-  console.log('Filtered data for table:', filteredData);
+  console.log("Filtered data for table:", filteredData);
 
   // Show error state
   if (queryError) {
@@ -193,8 +224,8 @@ const WorkTypes = () => {
         <div className="text-center">
           <h3 className="text-red-600">Error Loading Work Types</h3>
           <p className="text-gray-600 mt-2">{queryError.message}</p>
-          <button 
-            onClick={() => refetch()} 
+          <button
+            onClick={() => refetch()}
             className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
             Retry
@@ -211,10 +242,12 @@ const WorkTypes = () => {
         <div className="text-center">
           <h3>No Work Types Found</h3>
           <p className="text-gray-600 mt-2">
-            {canCreate ? "Get started by creating your first work type." : "No work types are currently available."}
+            {canCreate
+              ? "Get started by creating your first work type."
+              : "No work types are currently available."}
           </p>
           {canCreate && (
-            <button 
+            <button
               onClick={handleCreate}
               className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
             >
@@ -254,15 +287,19 @@ const WorkTypes = () => {
       key: "taskTypes",
       render: (taskTypes) => (
         <Space size={[0, 4]} wrap>
-          {taskTypes?.slice(0, 3).map((taskType) => (
-            <Tag 
-              key={taskType.id} 
-              color={taskType.color || 'default'}
-              style={{ margin: '2px' }}
-            >
-              {taskType.name}
-            </Tag>
-          ))}
+          {/* Orderby taskstype with order key */}
+          {taskTypes
+            ?.slice(0, 3)
+            ?.sort((a, b) => a.WorkTypeTask.order - b.WorkTypeTask.order)
+            ?.map((taskType) => (
+              <Tag
+                key={taskType.id}
+                color={taskType.color || "default"}
+                style={{ margin: "2px" }}
+              >
+                {taskType.name}
+              </Tag>
+            ))}
           {taskTypes?.length > 3 && (
             <Tag color="default">+{taskTypes.length - 3} more</Tag>
           )}
@@ -300,7 +337,11 @@ const WorkTypes = () => {
             },
             {
               key: "toggle",
-              icon: record.isActive ? <EyeInvisibleOutlined /> : <EyeOutlined />,
+              icon: record.isActive ? (
+                <EyeInvisibleOutlined />
+              ) : (
+                <EyeOutlined />
+              ),
               label: record.isActive ? "Deactivate" : "Activate",
               onClick: () => handleToggleActive(record),
             }
