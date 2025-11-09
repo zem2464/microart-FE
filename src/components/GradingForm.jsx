@@ -244,15 +244,15 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
                 name="shortCode"
                 rules={[
                   { max: 10, message: 'Short code must be max 10 characters' },
-                  { pattern: /^[A-Z0-9]*$/, message: 'Only uppercase letters and numbers' }
+                  { pattern: /^[A-Z0-9_+-]*$/, message: 'Only uppercase letters, numbers, hyphen, underscore and plus sign allowed (no dots)' }
                 ]}
               >
                 <Input 
-                  placeholder="e.g., BASIC, ADV"
+                  placeholder="e.g., BASIC, ADV, A+"
                   maxLength={10}
                   style={{ textTransform: 'uppercase' }}
                   onChange={(e) => {
-                    const value = e.target.value.toUpperCase();
+                    const value = e.target.value.toUpperCase().replace(/[^A-Z0-9_+-]/g, '');
                     form.setFieldsValue({ shortCode: value });
                   }}
                 />

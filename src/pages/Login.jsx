@@ -86,17 +86,19 @@ const Login = () => {
             </Form.Item>
           </Form>
 
-          <div className="mt-4 text-center">
-            <Text type="secondary" className="text-sm">
-              Demo accounts:
-              <br />
-              <strong>admin@microart.com</strong> /{" "}
-              <strong>manager@microart.com</strong> /{" "}
-              <strong>employee@microart.com</strong>
-              <br />
-              Password: <strong>password123</strong>
-            </Text>
-          </div>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 text-center">
+              <Text type="secondary" className="text-sm">
+                Demo accounts:
+                <br />
+                <strong>admin@microart.com</strong> /{" "}
+                <strong>manager@microart.com</strong> /{" "}
+                <strong>employee@microart.com</strong>
+                <br />
+                Password: <strong>password123</strong>
+              </Text>
+            </div>
+          )}
         </Card>
       </div>
     </div>
