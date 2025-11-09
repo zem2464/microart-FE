@@ -204,16 +204,14 @@ const EnhancedTaskTypes = () => {
               icon: <DeleteOutlined />,
               tooltip: "Delete",
               danger: true,
-              onClick: (taskType) => {
-                // Custom confirmation for delete
-                Popconfirm.confirm({
-                  title: "Are you sure you want to delete this task type?",
-                  content: `This will permanently delete "${taskType.name}".`,
-                  okText: "Yes, Delete",
-                  cancelText: "Cancel",
-                  okType: "danger",
-                  onOk: () => handleDelete(taskType),
-                });
+              onClick: handleDelete,
+              popconfirm: {
+                title: "Delete Task Type?",
+                description: (record) =>
+                  `This will permanently delete. This action cannot be undone.`,
+                okText: "Yes, Delete",
+                cancelText: "Cancel",
+                okButtonProps: { danger: true },
               },
             },
           ]}

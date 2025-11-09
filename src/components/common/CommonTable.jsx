@@ -8,6 +8,7 @@ import {
   Tooltip,
   Tag,
   Typography,
+  Popconfirm,
 } from "antd";
 import {
   SearchOutlined,
@@ -267,19 +268,46 @@ export const StatusTag = ({
 export const ActionColumn = ({ record, actions = [], loading = false }) => {
   return (
     <Space size="small">
-      {actions.map((action, index) => (
-        <Tooltip key={index} title={action.tooltip}>
+      {actions.map((action, index) => {
+        const button = (
           <Button
             type={action.type || "text"}
             icon={action.icon}
-            onClick={() => action.onClick && action.onClick(record)}
+            onClick={() => !action.popconfirm && action.onClick && action.onClick(record)}
             loading={loading && action.loading}
             disabled={action.disabled}
             danger={action.danger}
             size="small"
           />
-        </Tooltip>
-      ))}
+        );
+
+        // If action has popconfirm, wrap button with Popconfirm
+        if (action.popconfirm) {
+          return (
+            <Popconfirm
+              key={index}
+              title={action.popconfirm.title || "Are you sure?"}
+              description={action.popconfirm.description}
+              onConfirm={() => action.onClick && action.onClick(record)}
+              okText={action.popconfirm.okText || "Yes"}
+              cancelText={action.popconfirm.cancelText || "No"}
+              okButtonProps={action.popconfirm.okButtonProps}
+              {...(action.popconfirm.props || {})}
+            >
+              <Tooltip title={action.tooltip}>
+                {button}
+              </Tooltip>
+            </Popconfirm>
+          );
+        }
+
+        // Regular button with tooltip
+        return (
+          <Tooltip key={index} title={action.tooltip}>
+            {button}
+          </Tooltip>
+        );
+      })}
     </Space>
   );
 };
