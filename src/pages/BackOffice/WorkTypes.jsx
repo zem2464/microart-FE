@@ -118,10 +118,10 @@ const WorkTypes = () => {
 
   // Handle delete
   const handleDelete = async (workType) => {
-    if (!canDelete) {
-      message.error("You don't have permission to delete work types");
-      return;
-    }
+    // if (!canDelete) {
+    //   message.error("You don't have permission to delete work types");
+    //   return;
+    // }
     try {
       await deleteWorkType({
         variables: { id: workType.id },
@@ -354,10 +354,10 @@ const WorkTypes = () => {
             icon: <DeleteOutlined />,
             label: "Delete",
             danger: true,
+            onClick: () => {handleDelete(record)}, // Handled in
             popconfirm: {
               title: "Are you sure you want to delete this work type?",
               description: "This action cannot be undone.",
-              onConfirm: () => handleDelete(record),
             },
           });
         }
