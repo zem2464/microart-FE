@@ -78,11 +78,16 @@ export const CommonTable = ({
     showSizeChanger: true,
     showQuickJumper: true,
     showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`,
-    pageSizeOptions: ["10", "25", "50", "100"],
-    ...(typeof pagination === "object" ? pagination : {}),
+    pageSizeOptions: [10, 25, 50, 100],
   };
 
-  const finalPagination = pagination === true ? defaultPagination : pagination;
+  // Merge default pagination with custom pagination if provided
+  const finalPagination = pagination === false 
+    ? false 
+    : {
+        ...defaultPagination,
+        ...(typeof pagination === "object" ? pagination : {}),
+      };
 
   // Enhanced columns with consistent styling
   const enhancedColumns = columns.map((col) => ({

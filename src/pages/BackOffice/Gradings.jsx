@@ -148,14 +148,20 @@ const Gradings = () => {
       title: "Work Type",
       dataIndex: "workType",
       key: "workType",
-      sorter: (a, b) => (a.workType?.name || '').localeCompare(b.workType?.name || ''),
-      render: (workType) => (
-        workType ? (
+      sorter: (a, b) => {
+        const aName = a.workType?.name || '';
+        const bName = b.workType?.name || '';
+        console.log('Sorting:', aName, 'vs', bName, '=', aName.localeCompare(bName));
+        return aName.localeCompare(bName);
+      },
+      render: (workType, record) => {
+        console.log('Rendering workType for', record.name, ':', workType);
+        return workType ? (
           <Tag color="blue">{workType.name}</Tag>
         ) : (
           <Text type="secondary">No work type</Text>
-        )
-      ),
+        );
+      },
     },
     {
       title: "Client Rate",
@@ -332,6 +338,7 @@ const Gradings = () => {
         showAdd={canCreate}
         rowKey="id"
         scroll={{ x: 1200 }}
+        pagination={false}
         summary={(data) => {
           if (!data || data.length === 0) return null;
           

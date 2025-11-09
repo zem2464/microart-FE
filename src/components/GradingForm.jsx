@@ -348,7 +348,7 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
             </Text>
           ) : (
             <div className="space-y-4">
-              {taskTypePricings.map((pricing, index) => (
+              {taskTypePricings.sort((a,b)=>a.order - b.order).map((pricing, index) => (
                 <Card key={pricing.taskTypeId} size="small" className="border-l-4" style={{ borderLeftColor: pricing.taskTypeColor }}>
                   <Row gutter={24} align="middle">
                     <Col span={14}>

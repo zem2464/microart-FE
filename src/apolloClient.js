@@ -43,11 +43,11 @@ const createErrorLink = (client) =>
         isLoggedIn(false);
         meUserData(null);
         isApplicationLoading(false);
-        
+
         client
           .clearStore()
           .catch((e) => console.error("Error clearing store:", e));
-        
+
         localStorage.removeItem("apollo-cache-persist");
         console.warn("Your session has expired. Please login again.");
         window.location.href = "/login";
@@ -56,26 +56,26 @@ const createErrorLink = (client) =>
 
     if (networkError) {
       console.error(`Network error: ${networkError}`);
-      
+
       // Handle network errors that might indicate authentication issues
       if (networkError.statusCode === 401 || networkError.statusCode === 403) {
         console.log('Network authentication error detected, logging out user...');
-        
+
         if (![
           "/login",
           "/login/",
-          "/device-registration", 
+          "/device-registration",
           "/set-initial-password",
           "/change-expire-password",
         ].includes(window.location.pathname)) {
           isLoggedIn(false);
           meUserData(null);
           isApplicationLoading(false);
-          
+
           client
             .clearStore()
             .catch((e) => console.error("Error clearing store:", e));
-          
+
           localStorage.removeItem("apollo-cache-persist");
           window.location.href = "/login";
         }
@@ -144,6 +144,27 @@ const cache = new InMemoryCache({
           },
         },
       },
+    },
+    Grading: {
+      keyFields: ["id"],
+      fields: {
+        taskTypes: {
+          // Don't normalize - keep as a plain array to preserve gradingTask data
+          merge(existing, incoming) {
+            return incoming;
+          },
+          // Read function to ensure we always get the raw data
+          read(existing) {
+            return existing;
+          },
+        },
+      },
+    },
+    TaskType: {
+      keyFields: false, // Disable normalization for TaskType to preserve gradingTask context
+    },
+    WorkType: {
+      keyFields: false, // Disable normalization for WorkType to prevent reference issues
     },
     Project: {
       keyFields: ["id"],
