@@ -54,12 +54,6 @@ const { TextArea } = Input;
 const ProjectList = () => {
   // State management
   const [projects, setProjects] = useState([]);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 25,
-    totalItems: 0,
-    totalPages: 0
-  });
   const [filters, setFilters] = useState({});
   const [searchText, setSearchText] = useState('');
   const [selectedProject, setSelectedProject] = useState(null);
@@ -75,8 +69,6 @@ const ProjectList = () => {
     refetch: refetchProjects 
   } = useQuery(GET_PROJECTS, {
     variables: {
-      page: pagination.page,
-      limit: pagination.limit,
       search: searchText,
       filters
     },
@@ -138,11 +130,7 @@ const ProjectList = () => {
     if (projectsData) console.debug('GET_PROJECTS response:', projectsData);
 
     if (projectsData?.projects) {
-      setProjects(projectsData.projects.projects);
-      setPagination(prev => ({
-        ...prev,
-        ...projectsData.projects.pagination
-      }));
+      setProjects(projectsData.projects.projects || projectsData.projects);
     }
   }, [projectsData]);
 
@@ -172,7 +160,7 @@ const ProjectList = () => {
       dataIndex: 'projectCode',
       key: 'projectCode',
       width: 200,
-      sorter: true,
+      sorter: (a, b) => (a.projectCode || '').localeCompare(b.projectCode || ''),
       ellipsis: { showTitle: false },
       render: (text) => (
         <Tooltip title={text}>
@@ -185,7 +173,7 @@ const ProjectList = () => {
       dataIndex: ['client'],
       key: 'client',
       width: 150,
-      sorter: true,
+      sorter: (a, b) => ((a.client?.clientCode || '').localeCompare(b.client?.clientCode || '')),
       render: (_, record) => {
         const client = record.client || {};
         return (
@@ -201,7 +189,8 @@ const ProjectList = () => {
       key: 'workType',
       width: 120,
       filters: workTypesData?.workTypes?.map(wt => ({ text: wt.name, value: wt.id })) || [],
-      filterSearch: true
+      filterSearch: true,
+      onFilter: (value, record) => record.workType?.id === value
     },
     {
       title: 'Grading',
@@ -221,7 +210,7 @@ const ProjectList = () => {
       key: 'imageQuantity',
       width: 80,
       align: 'center',
-      sorter: true
+      sorter: (a, b) => (a.imageQuantity || 0) - (b.imageQuantity || 0)
     },
     {
       title: 'Cost',
@@ -245,6 +234,7 @@ const ProjectList = () => {
         text: STATUS_MAP[key].label,
         value: key
       })),
+      onFilter: (value, record) => (record.status || '').toString() === value,
       render: (status) => {
         const s = STATUS_MAP[(status || '').toString()];
         const label = s ? s.label : (status || 'Unknown');
@@ -261,6 +251,7 @@ const ProjectList = () => {
         text: PRIORITY_MAP[key].label,
         value: key
       })),
+      onFilter: (value, record) => (record.priority || '').toString() === value,
       render: (priority) => {
         const p = PRIORITY_MAP[(priority || '').toString()];
         const label = p ? p.label : (priority || 'N/A');
@@ -273,7 +264,12 @@ const ProjectList = () => {
       dataIndex: 'deadlineDate',
       key: 'deadlineDate',
       width: 100,
-      sorter: true,
+      sorter: (a, b) => {
+        if (!a.deadlineDate && !b.deadlineDate) return 0;
+        if (!a.deadlineDate) return 1;
+        if (!b.deadlineDate) return -1;
+        return dayjs(a.deadlineDate).unix() - dayjs(b.deadlineDate).unix();
+      },
       render: (date) => date ? dayjs(date).format('MMM DD') : '-'
     },
     {
@@ -406,23 +402,17 @@ const ProjectList = () => {
     }
   };
 
-  const handleTableChange = (pagination, filters, sorter) => {
-    setPagination(prev => ({
-      ...prev,
-      page: pagination.current,
-      limit: pagination.pageSize
-    }));
+  const handleTableChange = (tablePagination, filters, sorter) => {
     setFilters(filters);
   };
 
   const handleSearch = (value) => {
     setSearchText(value);
-    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   // Statistics
   const projectStats = {
-    total: pagination.totalItems,
+    total: projects.length,
     active: projects.filter(p => ['in_progress', 'active'].includes((p.status || '').toString())).length,
     draft: projects.filter(p => (p.status || '').toString() === 'draft').length,
     completed: projects.filter(p => (p.status || '').toString() === 'completed').length
@@ -525,15 +515,7 @@ const ProjectList = () => {
           dataSource={projects}
           rowKey="id"
           loading={projectsLoading}
-          pagination={{
-            current: pagination.page,
-            pageSize: pagination.limit,
-            total: pagination.totalItems,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => 
-              `${range[0]}-${range[1]} of ${total} projects`
-          }}
+          pagination={false}
           onChange={handleTableChange}
           scroll={{ x: 1500 }}
           size="small"

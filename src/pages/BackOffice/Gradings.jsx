@@ -31,6 +31,25 @@ const Gradings = () => {
   const canDelete = hasPermission(userData, generatePermission(MODULES.GRADINGS, 'delete'));
   const canRead = hasPermission(userData, generatePermission(MODULES.GRADINGS, 'read'));
 
+  // Color mapping for work types - each worktype gets a unique color
+  const workTypeColors = {
+    'Clipping Path': '#1890ff',      // blue
+    'Background Removal': '#52c41a',  // green
+    'Image Masking': '#722ed1',       // purple
+    'Photo Retouching': '#fa8c16',    // orange
+    'Ghost Mannequin': '#eb2f96',     // magenta
+    'Color Correction': '#13c2c2',    // cyan
+    'Shadow Creation': '#faad14',     // gold
+    'Image Enhancement': '#f5222d',   // red
+    'Product Photography': '#2f54eb', // geekblue
+    'default': '#8c8c8c'              // gray for unknown types
+  };
+
+  // Function to get color for a work type
+  const getWorkTypeColor = (workTypeName) => {
+    return workTypeColors[workTypeName] || workTypeColors['default'];
+  };
+
   // Drawer hooks
   const { showGradingFormDrawer, showGradingDetailDrawer } = useAppDrawer();
 
@@ -109,6 +128,13 @@ const Gradings = () => {
     grading.workType?.name?.toLowerCase().includes(searchValue.toLowerCase())
   ) || [];
 
+  // Extract unique work types for filter
+  const uniqueWorkTypes = [...new Set(
+    (data?.gradings || [])
+      .map(g => g.workType?.name)
+      .filter(Boolean)
+  )].sort();
+
   // Table columns
   const columns = [
     {
@@ -154,10 +180,26 @@ const Gradings = () => {
         console.log('Sorting:', aName, 'vs', bName, '=', aName.localeCompare(bName));
         return aName.localeCompare(bName);
       },
+      filters: uniqueWorkTypes.map(name => ({
+        text: name,
+        value: name
+      })),
+      filterSearch: true,
+      onFilter: (value, record) => record.workType?.name === value,
       render: (workType, record) => {
         console.log('Rendering workType for', record.name, ':', workType);
         return workType ? (
-          <Tag color="blue">{workType.name}</Tag>
+          <Tag 
+            color={getWorkTypeColor(workType.name)}
+            style={{ 
+              fontWeight: 500,
+              fontSize: '13px',
+              padding: '4px 12px',
+              borderRadius: '4px'
+            }}
+          >
+            {workType.name}
+          </Tag>
         ) : (
           <Text type="secondary">No work type</Text>
         );

@@ -320,12 +320,7 @@ const AuditLogs = () => {
             dataSource={data?.auditLogs || []}
             loading={loading}
             rowKey="id"
-            pagination={{
-              pageSize: 20,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
-            }}
+            pagination={false}
             size="middle"
           />
         </Space>

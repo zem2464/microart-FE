@@ -120,7 +120,7 @@ const EnhancedTaskTypes = () => {
       title: "Name",
       dataIndex: "name",
       key: "name",
-      sorter: true,
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
       render: (text, record) => (
         <div className="flex items-center space-x-3">
           {/* <span style={{ color: record.color, fontSize: "16px" }}>
@@ -168,7 +168,7 @@ const EnhancedTaskTypes = () => {
       dataIndex: "sortOrder",
       key: "sortOrder",
       width: 100,
-      sorter: true,
+      sorter: (a, b) => (a.sortOrder || 0) - (b.sortOrder || 0),
       render: (sortOrder) => sortOrder || 0,
     },
     {
@@ -241,13 +241,7 @@ const EnhancedTaskTypes = () => {
       // Table configuration
       rowKey="id"
       size="middle"
-      pagination={{
-        pageSize: 10,
-        showSizeChanger: true,
-        showQuickJumper: true,
-        showTotal: (total, range) =>
-          `${range[0]}-${range[1]} of ${total} task types`,
-      }}
+      pagination={false}
     />
   );
 };

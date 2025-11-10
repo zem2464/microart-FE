@@ -265,7 +265,7 @@ const WorkTypes = () => {
       title: "Name",
       dataIndex: "name",
       key: "name",
-      sorter: true,
+      sorter: (a, b) => (a.name || '').localeCompare(b.name || ''),
       render: (text, record) => (
         <div className="flex items-center space-x-3">
           <TagsOutlined className="text-blue-500" />
@@ -379,12 +379,7 @@ const WorkTypes = () => {
       onAdd={canCreate ? handleCreate : null}
       addButtonText="Add Work Type"
       showExport={true}
-      pagination={{
-        showSizeChanger: true,
-        showQuickJumper: true,
-        showTotal: (total, range) =>
-          `${range[0]}-${range[1]} of ${total} work types`,
-      }}
+      pagination={false}
     />
   );
 };
