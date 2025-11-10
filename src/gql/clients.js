@@ -2,8 +2,20 @@ import { gql } from '@apollo/client';
 
 // Client Queries
 export const GET_CLIENTS = gql`
-  query GetClients($filters: ClientFilters) {
-    clients(filters: $filters) {
+  query GetClients(
+    $filters: ClientFilters
+    $page: Int
+    $limit: Int
+    $sortBy: String
+    $sortOrder: String
+  ) {
+    clients(
+      filters: $filters
+      page: $page
+      limit: $limit
+      sortBy: $sortBy
+      sortOrder: $sortOrder
+    ) {
       id
       clientCode
       clientType
@@ -14,6 +26,7 @@ export const GET_CLIENTS = gql`
       email
       contactNoWork
       contactNoPersonal
+      phone
       address
       pincode
       colorCorrectionStyle
@@ -69,6 +82,7 @@ export const GET_CLIENTS = gql`
       createdAt
       updatedAt
     }
+    clientsCount(filters: $filters)
   }
 `;
 

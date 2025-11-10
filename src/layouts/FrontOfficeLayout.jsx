@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect } from "react";
 import {
   Layout,
   Menu,
@@ -7,6 +7,8 @@ import {
   Avatar,
   Typography,
   Badge,
+  Space,
+  Tooltip,
 } from "antd";
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import {
@@ -17,11 +19,14 @@ import {
   BellOutlined,
   TeamOutlined,
   DashboardOutlined,
+  PlusOutlined,
+  UserAddOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
+import { useAppDrawer } from "../contexts/DrawerContext";
 
 // Import pages
 import TaskBoard from "../pages/FrontOffice/TaskBoard";
@@ -36,6 +41,26 @@ const FrontOfficeLayout = () => {
   const user = useReactiveVar(userCacheVar);
   const { logout } = useAuth();
   const location = useLocation();
+  const { showClientFormDrawer, showProjectFormDrawer } = useAppDrawer();
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      // Alt+C for Add Client
+      if (e.altKey && e.key === 'c') {
+        e.preventDefault();
+        showClientFormDrawer(null, 'create');
+      }
+      // Alt+P for Add Project
+      if (e.altKey && e.key === 'p') {
+        e.preventDefault();
+        showProjectFormDrawer(null, 'create');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [showClientFormDrawer, showProjectFormDrawer]);
 
   // Allow employees and admin users (when they choose employee view)
   const role = user?.role?.name?.toLowerCase();
@@ -132,6 +157,27 @@ const FrontOfficeLayout = () => {
 
         {/* User Controls */}
         <div className="flex items-center space-x-4 ml-8">
+          {/* Quick Action Buttons */}
+          <Space size="small">
+            <Tooltip title="Add New Client (Alt+C)" placement="bottom">
+              <Button
+                type="primary"
+                shape="circle"
+                icon={<UserAddOutlined />}
+                onClick={() => showClientFormDrawer(null, 'create')}
+                className="bg-green-500 hover:bg-green-600 border-green-500"
+              />
+            </Tooltip>
+            <Tooltip title="Add New Project (Alt+P)" placement="bottom">
+              <Button
+                type="primary"
+                shape="circle"
+                icon={<PlusOutlined />}
+                onClick={() => showProjectFormDrawer(null, 'create')}
+              />
+            </Tooltip>
+          </Space>
+
           <ViewSwitcher size="small" />
           <Badge count={3} size="small">
             <Button type="text" icon={<BellOutlined />} />

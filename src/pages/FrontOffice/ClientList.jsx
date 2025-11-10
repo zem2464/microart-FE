@@ -42,6 +42,7 @@ const { Title, Text } = Typography;
 const ClientList = () => {
   const [filters, setFilters] = useState({});
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+  const [sorter, setSorter] = useState({ field: 'createdAt', order: 'DESC' });
   const [editingCredit, setEditingCredit] = useState({}); // Track which credit limits are being edited
   const [editingStatus, setEditingStatus] = useState({}); // Track which statuses are being edited
   const [tempValues, setTempValues] = useState({}); // Store temporary edit values
@@ -51,10 +52,10 @@ const ClientList = () => {
   const { data, loading, error, refetch } = useQuery(GET_CLIENTS, {
     variables: { 
       filters,
-      pagination: {
-        page: pagination.current,
-        limit: pagination.pageSize
-      }
+      page: pagination.current,
+      limit: pagination.pageSize,
+      sortBy: sorter.field,
+      sortOrder: sorter.order
     },
     fetchPolicy: 'cache-and-network'
   });
@@ -727,10 +728,37 @@ const ClientList = () => {
   const scrollConfig = useMemo(() => ({ x: 1200 }), []);
 
   // Memoize onChange handler
-  const handleTableChange = useCallback((pagination, filters, sorter) => {
-    setPagination(pagination);
-    setFilters(prev => ({ ...prev, ...filters }));
-  }, []);
+  const handleTableChange = useCallback((paginationConfig, filtersConfig, sorterConfig) => {
+    console.log('Table change:', { paginationConfig, filtersConfig, sorterConfig });
+    
+    // Update pagination
+    setPagination({
+      current: paginationConfig.current,
+      pageSize: paginationConfig.pageSize
+    });
+    
+    // Update filters
+    const newFilters = { ...filters };
+    
+    // Handle clientType filter
+    if (filtersConfig.clientType) {
+      newFilters.clientType = filtersConfig.clientType[0];
+    } else {
+      delete newFilters.clientType;
+    }
+    
+    setFilters(newFilters);
+    
+    // Update sorting
+    if (sorterConfig && sorterConfig.field) {
+      setSorter({
+        field: sorterConfig.field,
+        order: sorterConfig.order === 'ascend' ? 'ASC' : 'DESC'
+      });
+    } else {
+      setSorter({ field: 'createdAt', order: 'DESC' });
+    }
+  }, [filters]);
 
   return (
     <div className="p-6">

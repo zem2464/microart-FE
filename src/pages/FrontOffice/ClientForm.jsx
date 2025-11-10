@@ -104,10 +104,14 @@ const ClientForm = ({
     setClientType(value);
     // Reset Business Details fields if switching to Walk-in
     if (value === "walkIn") {
+      // Reset state toggles for walk-in
+      setIsCreditEnabled(false);
+      
       form.setFieldsValue({
         isGstEnabled: false,
         gstNumber: undefined,
         panCard: undefined,
+        isCreditEnabled: false,
         creditDays: undefined,
         creditAmountLimit: undefined,
         openingBalance: undefined,
@@ -361,9 +365,7 @@ const ClientForm = ({
         countryId: clientData.country?.id,
         stateId: clientData.state?.id,
         cityId: clientData.city?.id,
-        phone: clientData.contactNoWork || clientData.phone,
-        alternatePhone:
-          clientData.contactNoPersonal || clientData.alternatePhone,
+        phone: clientData.phone || clientData.contactNoWork,
         workTypes: workTypeIds,
         gradings: gradingIds,
         serviceProviders: serviceProviderIds,
@@ -712,7 +714,6 @@ const ClientForm = ({
             "companyName",
             "email",
             "phone",
-            "alternatePhone",
             "address",
             "pincode",
             "countryId",
@@ -721,21 +722,8 @@ const ClientForm = ({
           ].includes(firstErrorField)
         ) {
           setCurrentStep(0);
-        } else if (
-          [
-            "isGstEnabled",
-            "gstNumber",
-            "panCard",
-            "creditDays",
-            "creditAmountLimit",
-            "openingBalance",
-            "openingBalanceType",
-            "accountMessage",
-          ].includes(firstErrorField)
-        ) {
-          setCurrentStep(1);
         } else {
-          setCurrentStep(2);
+          setCurrentStep(1);
         }
       }
     }
@@ -754,7 +742,7 @@ const ClientForm = ({
   // Helper to get field names for current step
   const getCurrentStepFields = useCallback(() => {
     switch (currentStep) {
-      case 0: // Basic Information & Contact
+      case 0: // Client Information (Basic + Contact + Address + Financial for Walk-in)
         return [
           "clientType",
           "firstName",
@@ -764,24 +752,20 @@ const ClientForm = ({
           "countryId",
           "stateId",
           "cityId",
-        ];
-      case 1: // Business Details
-        return [
-          "isGstEnabled",
-          "gstNumber",
+          "isGSTEnabled",
+          "gstNo",
+          "gstRate",
           "panCard",
+          "isCreditEnabled",
           "creditDays",
           "creditAmountLimit",
           "openingBalance",
           "openingBalanceType",
         ];
-      case 2: // Additional Information
+      case 1: // Business Details (Work Info only, Financial moved to Step 0)
         return [
-          "priority",
-          "transferMode",
-          "colorCorrectionStyle",
-          "clientNotes",
-          "accountMessage",
+          "workTypes",
+          "gradings",
         ];
       default:
         return [];
@@ -830,22 +814,14 @@ const ClientForm = ({
       clientType === "walkIn"
         ? [
             {
-              title: "Basic Information",
+              title: "Client Information",
               icon: <UserOutlined />,
-            },
-            {
-              title: "Contact & Location",
-              icon: <EnvironmentOutlined />,
             },
           ]
         : [
             {
-              title: "Basic Information",
+              title: "Client Information",
               icon: <UserOutlined />,
-            },
-            {
-              title: "Contact & Location",
-              icon: <EnvironmentOutlined />,
             },
             {
               title: "Business Details",
@@ -941,33 +917,8 @@ const ClientForm = ({
               </Col>
             </Row>
 
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="contactNoWork" label="Contact No (Work)">
-                  <Input
-                    placeholder="Enter work contact number"
-                    size="middle"
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item
-                  name="contactNoPersonal"
-                  label="Contact No (Personal)"
-                >
-                  <Input
-                    placeholder="Enter personal contact number"
-                    size="middle"
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-          </div>
-        );
+            <Divider orientation="left">Contact Information</Divider>
 
-      case 1:
-        return (
-          <div className="space-y-4">
             <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
@@ -1014,32 +965,26 @@ const ClientForm = ({
               </Col>
             </Row>
 
-            <Row gutter={16}>
-              <Col span={12}>
-                <Form.Item name="alternatePhone" label="Alternate Phone">
-                  <Input placeholder="Enter alternate phone" size="middle" />
-                </Form.Item>
-              </Col>
-              <Col span={12}>
-                <Form.Item name="website" label="Website">
-                  <Input placeholder="Enter website URL" size="middle" />
-                </Form.Item>
-              </Col>
-            </Row>
-
             <Divider orientation="left">Address Information</Divider>
 
-            <Form.Item
-              name="address"
-              label={
-                <span>
-                  Street Address <span style={{ color: "red" }}>*</span>
-                </span>
-              }
-              rules={[{ required: true, message: "Please enter address!" }]}
-            >
-              <TextArea rows={2} placeholder="Enter full address" />
-            </Form.Item>
+            {clientType !== "walkIn" && (
+              <Form.Item
+                name="address"
+                label={
+                  <span>
+                    Street Address <span style={{ color: "red" }}>*</span>
+                  </span>
+                }
+                rules={[
+                  {
+                    required: clientType !== "walkIn",
+                    message: "Please enter address!",
+                  },
+                ]}
+              >
+                <TextArea rows={2} placeholder="Enter full address" />
+              </Form.Item>
+            )}
 
             <Row gutter={16}>
               <Col span={8}>
@@ -1123,13 +1068,160 @@ const ClientForm = ({
               </Col>
             </Row>
 
+            <Divider orientation="left">Financial Information</Divider>
+
             <Row gutter={16}>
-              {/* postalCode and timezone removed per UI update */}
+              <Col span={8}>
+                <Form.Item
+                  name="isGSTEnabled"
+                  label="GST Enabled"
+                  valuePropName="checked"
+                  initialValue={false}
+                >
+                  <Switch
+                    checkedChildren="Yes"
+                    unCheckedChildren="No"
+                    onChange={handleGSTToggle}
+                  />
+                </Form.Item>
+              </Col>
+              {clientType !== "walkIn" && (
+                <Col span={8}>
+                  <Form.Item
+                    name="isCreditEnabled"
+                    label="Credit Limit Enabled"
+                    valuePropName="checked"
+                    initialValue={false}
+                  >
+                    <Switch
+                      checkedChildren="Yes"
+                      unCheckedChildren="No"
+                      onChange={handleCreditToggle}
+                    />
+                  </Form.Item>
+                </Col>
+              )}
             </Row>
+
+            <Row gutter={16}>
+              {isGSTEnabled && (
+                <>
+                  <Col span={8}>
+                    <Form.Item
+                      name="gstNo"
+                      label={
+                        <span>
+                          GST Number <span style={{ color: "red" }}>*</span>
+                        </span>
+                      }
+                      rules={[
+                        {
+                          required: isGSTEnabled,
+                          message: "GST number is required when GST is enabled!",
+                        },
+                      ]}
+                    >
+                      <Input placeholder="Enter GST number" size="middle" />
+                    </Form.Item>
+                  </Col>
+                  <Col span={8}>
+                    <Form.Item
+                      name="gstRate"
+                      label={
+                        <span>
+                          GST Rate (%) <span style={{ color: "red" }}>*</span>
+                        </span>
+                      }
+                      rules={[
+                        { 
+                          required: isGSTEnabled, 
+                          message: "GST rate is required when GST is enabled!" 
+                        },
+                      ]}
+                    >
+                      <InputNumber
+                        placeholder="Enter GST rate"
+                        size="middle"
+                        style={{ width: "100%" }}
+                        min={0}
+                        max={100}
+                        formatter={(value) => `${value}%`}
+                        parser={(value) => value.replace("%", "")}
+                      />
+                    </Form.Item>
+                  </Col>
+                </>
+              )}
+              <Col span={isGSTEnabled ? 8 : 16}>
+                <Form.Item name="panCard" label="PAN Card">
+                  <Input placeholder="Enter PAN card number" size="middle" />
+                </Form.Item>
+              </Col>
+            </Row>
+
+            {/* Credit and Opening Balance fields only for permanent clients */}
+            {clientType !== "walkIn" && (
+              <>
+                {isCreditEnabled && (
+                  <Row gutter={16}>
+                    <Col span={8}>
+                      <Form.Item name="creditDays" label="Credit in Days">
+                        <InputNumber
+                          placeholder="Enter credit days"
+                          size="middle"
+                          style={{ width: "100%" }}
+                        />
+                      </Form.Item>
+                    </Col>
+                    <Col span={8}>
+                      <Form.Item name="creditAmountLimit" label="Credit in Amount (₹)">
+                        <InputNumber
+                          placeholder="Enter credit amount"
+                          size="middle"
+                          style={{ width: "100%" }}
+                          formatter={(value) =>
+                            `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                          }
+                          parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
+                        />
+                      </Form.Item>
+                    </Col>
+                  </Row>
+                )}
+
+                <Row gutter={16}>
+                  <Col span={8}>
+                    <Form.Item name="openingBalance" label="Opening Balance (₹)">
+                      <InputNumber
+                        placeholder="Enter opening balance"
+                        size="middle"
+                        style={{ width: "100%" }}
+                        formatter={(value) =>
+                          `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                        }
+                        parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
+                      />
+                    </Form.Item>
+                  </Col>
+                  <Col span={8}>
+                    <Form.Item
+                      name="openingBalanceType"
+                      label="Opening Balance Type"
+                      initialValue="to_receive"
+                    >
+                      <Select placeholder="Select balance type" size="middle">
+                        <Option value="to_receive">To Receive (We owe them)</Option>
+                        <Option value="to_pay">To Pay (They owe us)</Option>
+                      </Select>
+                    </Form.Item>
+                  </Col>
+                </Row>
+              </>
+            )}
           </div>
         );
 
-      case 2:
+      case 1:
         return (
           <div className="space-y-4">
             {/* Work Info */}
@@ -1138,17 +1230,7 @@ const ClientForm = ({
               <Col span={12}>
                 <Form.Item
                   name="workTypes"
-                  label={
-                    <span>
-                      Work Types <span style={{ color: "red" }}>*</span>
-                    </span>
-                  }
-                  rules={[
-                    {
-                      required: true,
-                      message: "Select at least one work type!",
-                    },
-                  ]}
+                  label="Work Types"
                 >
                   <Select
                     mode="multiple"
@@ -1165,40 +1247,10 @@ const ClientForm = ({
                   </Select>
                 </Form.Item>
               </Col>
-            </Row>
-
-            <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
-                  name="hasCustomRates"
-                  label="Custom Rate Plan"
-                  valuePropName="checked"
-                  initialValue={false}
-                >
-                  <Switch
-                    checkedChildren="Yes"
-                    unCheckedChildren="No"
-                    onChange={handleCustomRateToggle}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-
-            <Row gutter={16}>
-              <Col span={24}>
-                <Form.Item
                   name="gradings"
-                  label={
-                    <span>
-                      Gradings <span style={{ color: "red" }}>*</span>
-                    </span>
-                  }
-                  rules={[
-                    {
-                      required: true,
-                      message: "Please select at least one grading!",
-                    },
-                  ]}
+                  label="Gradings"
                 >
                   <Select
                     mode="multiple"
@@ -1228,6 +1280,23 @@ const ClientForm = ({
                       </Option>
                     ))}
                   </Select>
+                </Form.Item>
+              </Col>
+            </Row>
+
+            <Row gutter={16}>
+              <Col span={12}>
+                <Form.Item
+                  name="hasCustomRates"
+                  label="Custom Rate Plan"
+                  valuePropName="checked"
+                  initialValue={false}
+                >
+                  <Switch
+                    checkedChildren="Yes"
+                    unCheckedChildren="No"
+                    onChange={handleCustomRateToggle}
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -1349,17 +1418,6 @@ const ClientForm = ({
                           >
                             Preferred Employees for Tasks
                           </Text>
-                          <Text
-                            type="secondary"
-                            style={{
-                              display: "block",
-                              marginBottom: 12,
-                              fontSize: "12px",
-                            }}
-                          >
-                            Select preferred employees for each task. These will
-                            be auto-assigned when creating projects.
-                          </Text>
                           {grading.taskTypes.map((task) => {
                             console.log(
                               `Rendering task ${task.id} for grading ${gradingId}:`,
@@ -1381,17 +1439,6 @@ const ClientForm = ({
                               >
                                 <Col span={8}>
                                   <Text>{task.name}</Text>
-                                  {task.description && (
-                                    <>
-                                      <br />
-                                      <Text
-                                        type="secondary"
-                                        style={{ fontSize: "12px" }}
-                                      >
-                                        {task.description}
-                                      </Text>
-                                    </>
-                                  )}
                                 </Col>
                                 <Col span={16}>
                                   <Select
@@ -1442,8 +1489,6 @@ const ClientForm = ({
                   />
                 </Form.Item>
               </Col>
-            </Row>
-            <Row gutter={16}>
               <Col span={12}>
                 <Form.Item
                   name="serviceProviders"
@@ -1462,19 +1507,9 @@ const ClientForm = ({
                   </Select>
                 </Form.Item>
               </Col>
-              <Col span={12}>
-                <Form.Item name="transferMode" label="Transfer Mode">
-                  <Select placeholder="Select transfer mode" size="middle">
-                    <Option value="email">Email</Option>
-                    <Option value="ftp">FTP</Option>
-                    <Option value="cloud">Cloud Storage</Option>
-                    <Option value="physical">Physical Media</Option>
-                  </Select>
-                </Form.Item>
-              </Col>
             </Row>
             <Row gutter={16}>
-              <Col span={12}>
+              <Col span={8}>
                 <Form.Item
                   name="priority"
                   label={
@@ -1491,7 +1526,17 @@ const ClientForm = ({
                   </Select>
                 </Form.Item>
               </Col>
-              <Col span={12}>
+              <Col span={8}>
+                <Form.Item name="transferMode" label="Transfer Mode">
+                  <Select placeholder="Select transfer mode" size="middle">
+                    <Option value="email">Email</Option>
+                    <Option value="ftp">FTP</Option>
+                    <Option value="cloud">Cloud Storage</Option>
+                    <Option value="physical">Physical Media</Option>
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={8}>
                 <Form.Item name="notes" label="Client Notes">
                   <TextArea
                     rows={2}
@@ -1501,177 +1546,7 @@ const ClientForm = ({
               </Col>
             </Row>
 
-            {/* Custom rates are now handled per grading in Step 3 (Work Information) */}
-
-            {/* Financial Info */}
-            <Divider orientation="left">Financial Information</Divider>
-            <Row gutter={16}>
-              <Col span={8}>
-                <Form.Item
-                  name="isGSTEnabled"
-                  label="GST Enabled"
-                  valuePropName="checked"
-                  initialValue={false}
-                >
-                  <Switch
-                    checkedChildren="Yes"
-                    unCheckedChildren="No"
-                    onChange={handleGSTToggle}
-                  />
-                </Form.Item>
-              </Col>
-              <Col span={8}>
-                <Form.Item
-                  name="isCreditEnabled"
-                  label="Credit Limit Enabled"
-                  valuePropName="checked"
-                  initialValue={false}
-                >
-                  <Switch
-                    checkedChildren="Yes"
-                    unCheckedChildren="No"
-                    onChange={handleCreditToggle}
-                  />
-                </Form.Item>
-              </Col>
-              {isGSTEnabled && (
-                <>
-                  <Col span={8}>
-                    <Form.Item
-                      name="gstNo"
-                      label={
-                        <span>
-                          GST Number <span style={{ color: "red" }}>*</span>
-                        </span>
-                      }
-                      rules={[
-                        {
-                          required: true,
-                          message:
-                            "GST number is required when GST is enabled!",
-                        },
-                      ]}
-                    >
-                      <Input placeholder="Enter GST number" size="middle" />
-                    </Form.Item>
-                  </Col>
-                  <Col span={8}>
-                    <Form.Item
-                      name="gstRate"
-                      label={
-                        <span>
-                          GST Rate (%) <span style={{ color: "red" }}>*</span>
-                        </span>
-                      }
-                      rules={[
-                        { required: true, message: "GST rate is required!" },
-                      ]}
-                    >
-                      <InputNumber
-                        placeholder="Enter GST rate"
-                        size="middle"
-                        style={{ width: "100%" }}
-                        min={0}
-                        max={100}
-                        formatter={(value) => `${value}%`}
-                        parser={(value) => value.replace("%", "")}
-                      />
-                    </Form.Item>
-                  </Col>
-                </>
-              )}
-              {!isGSTEnabled && (
-                <Col span={16}>
-                  <Form.Item name="panCard" label="PAN Card">
-                    <Input placeholder="Enter PAN card number" size="middle" />
-                  </Form.Item>
-                </Col>
-              )}
-            </Row>
-            {isCreditEnabled && (
-              <Row gutter={16}>
-                <Col span={8}>
-                  <Form.Item name="creditDays" label="Credit in Days">
-                    <InputNumber
-                      placeholder="Enter credit days"
-                      size="middle"
-                      style={{ width: "100%" }}
-                    />
-                  </Form.Item>
-                </Col>
-                <Col span={8}>
-                  <Form.Item name="creditAmountLimit" label="Credit in Amount (₹)">
-                    <InputNumber
-                      placeholder="Enter credit amount"
-                      size="middle"
-                      style={{ width: "100%" }}
-                      formatter={(value) =>
-                        `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                      }
-                      parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
-                    />
-                  </Form.Item>
-                </Col>
-              </Row>
-            )}
-            <Row gutter={16}>
-              <Col span={8}>
-                <Form.Item name="openingBalance" label="Opening Balance (₹)">
-                  <InputNumber
-                    placeholder="Enter opening balance"
-                    size="middle"
-                    style={{ width: "100%" }}
-                    formatter={(value) =>
-                      `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                    }
-                    parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={8}>
-                <Form.Item
-                  name="openingBalanceType"
-                  label="Opening Balance Type"
-                  initialValue="to_receive"
-                >
-                  <Select placeholder="Select balance type" size="middle">
-                    <Option value="to_receive">To Receive (We owe them)</Option>
-                    <Option value="to_pay">To Pay (They owe us)</Option>
-                  </Select>
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={24}>
-                <Form.Item
-                  name="accountMessage"
-                  label="Account Related Message"
-                >
-                  <TextArea
-                    rows={2}
-                    placeholder="Message for account/credit management"
-                  />
-                </Form.Item>
-              </Col>
-            </Row>
-            <Row gutter={16}>
-              <Col span={24}>
-                <Form.Item
-                  name="leader"
-                  label="Client Leader (for transactions)"
-                >
-                  <Select placeholder="Select leader" size="middle">
-                    {usersData?.users?.map((user) => (
-                      <Option key={user.id} value={user.id}>
-                        {user.firstName} {user.lastName}
-                      </Option>
-                    ))}
-                  </Select>
-                </Form.Item>
-              </Col>
-            </Row>
+            {/* Custom rates are now handled per grading in Work Information */}
           </div>
         );
 

@@ -1270,9 +1270,53 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                 setCurrentStatus(value);
                 form.setFieldsValue({ status: value });
                 
-                // If changing to active and we have grading selected, load tasks
-                if (value === 'active' && selectedGrading) {
-                  handleGradingSelect(selectedGrading);
+                // If changing to active and we have grading selected, load/regenerate tasks
+                if (value === 'active') {
+                  if (selectedGradings.length > 0 && gradingTasks.length > 0) {
+                    // Regenerate tasks from existing grading tasks for multiple gradings
+                    const initialTasks = gradingTasks
+                      .filter(gradingTask => gradingTask && gradingTask.taskType) // Filter out invalid grading tasks
+                      .map(gradingTask => {
+                        let preferredUserId = null;
+                        if (clientPreferences?.taskPreferences && gradingTask.taskType?.id) {
+                          const taskPreference = clientPreferences.taskPreferences.find(
+                            pref => pref.taskType?.id === gradingTask.taskType?.id
+                          );
+                          if (taskPreference && taskPreference.preferredUserIds && taskPreference.preferredUserIds.length > 0) {
+                            preferredUserId = taskPreference.preferredUserIds[0];
+                          }
+                        }
+
+                        return {
+                          id: null,
+                          gradingTaskId: gradingTask.id,
+                          taskTypeId: gradingTask.taskType?.id || gradingTask.taskTypeId,
+                          name: gradingTask.taskType?.name || gradingTask.name || 'Unnamed Task',
+                          title: gradingTask.taskType?.name || gradingTask.name || 'Unnamed Task',
+                          description: gradingTask.description || gradingTask.taskType?.description || '',
+                          instructions: gradingTask.instructions || '',
+                          status: 'todo',
+                          priority: gradingTask.priority || 'B',
+                          estimatedHours: gradingTask.estimatedHours || 0,
+                          estimatedCost: gradingTask.estimatedCost || 0,
+                          dueDate: null,
+                          assigneeId: preferredUserId,
+                          notes: '',
+                          taskType: gradingTask.taskType,
+                          gradingTask: gradingTask,
+                          customFields: {},
+                          createdAt: new Date().toISOString(),
+                          updatedAt: new Date().toISOString(),
+                        };
+                      });
+                    setProjectTasks(initialTasks);
+                  } else if (selectedGrading && gradingTasks.length === 0) {
+                    // If we have a single grading but no tasks loaded yet, fetch them
+                    handleGradingSelect(selectedGrading);
+                  }
+                } else if (value === 'draft') {
+                  // Clear tasks when changing back to draft
+                  setProjectTasks([]);
                 }
               }}
               style={{ width: '100%' }}
@@ -1590,6 +1634,22 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         </Row>
       )}
 
+      {/* Project Name - Moved to top */}
+      <Row gutter={16}>
+        <Col span={24}>
+          <Form.Item
+            name="name"
+            label="Project Name"
+            rules={[{ required: false, message: "Please enter project name" }]}
+          >
+            <Input
+              placeholder="Enter project name (optional)"
+              style={{ width: "100%" }}
+            />
+          </Form.Item>
+        </Col>
+      </Row>
+
       {/* Quantity, Rate override and Deadline row */}
       <Row gutter={16} style={{ marginTop: 8 }}>
         <Col span={8}>
@@ -1630,21 +1690,6 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       </Row>
 
       {/* Description row */}
-      <Row gutter={16}>
-        <Col span={24}>
-          <Form.Item
-            name="name"
-            label="Project Name"
-            rules={[{ required: false, message: "Please enter project name" }]}
-          >
-            <Input
-              placeholder="Enter project name (optional)"
-              style={{ width: "100%" }}
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-
       <Row gutter={16}>
         <Col span={24}>
           <Form.Item
