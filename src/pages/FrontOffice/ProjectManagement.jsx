@@ -64,7 +64,10 @@ const STATUS_MAP = {
 
 // Helper function to get client display name
 const getClientDisplayName = (client) => {
-  return client.clientCode || "Unknown Client";
+  console.log("Client data:", client);
+  return (
+    client.clientCode || "Unknown Client" + "" + (client.displayName || "")
+  );
 };
 
 const ProjectManagement = () => {
@@ -331,7 +334,7 @@ const ProjectManagement = () => {
   };
 
   // Handler to copy folder name to clipboard
-  const handleCopyFolderName = (project) => {
+  const handleCopyFolderName = (project, onlyFolderName) => {
     const folderName = generateFolderName(project);
     console.log("Project data:", {
       projectGradings: project.projectGradings,
@@ -339,7 +342,9 @@ const ProjectManagement = () => {
       imageQuantity: project.imageQuantity,
     });
     console.log("Generated folder name:", folderName);
-    
+    if (onlyFolderName) {
+      return folderName;
+    }
     // Try modern clipboard API first
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard
@@ -368,10 +373,10 @@ const ProjectManagement = () => {
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        
+
         const successful = document.execCommand("copy");
         document.body.removeChild(textArea);
-        
+
         if (successful) {
           message.success("Folder name copied to clipboard!");
         } else {
@@ -490,9 +495,6 @@ const ProjectManagement = () => {
       render: (_, record) => (
         <Space direction="vertical" size={2} style={{ width: "100%" }}>
           <Space>
-            <Text code>
-              {record.projectCode || record.projectNumber || record.id}
-            </Text>
             <Tooltip title="Copy folder name">
               <Button
                 type="text"
@@ -501,13 +503,10 @@ const ProjectManagement = () => {
                 onClick={() => handleCopyFolderName(record)}
               />
             </Tooltip>
+            <Text strong style={{ whiteSpace: "pre-wrap", maxWidth: 200 }}>
+              {handleCopyFolderName(record, true) /* folder name only */}
+            </Text>
           </Space>
-          <Text strong>
-            {record.name ||
-              record.projectCode ||
-              record.projectNumber ||
-              "Untitled"}
-          </Text>
         </Space>
       ),
     },
@@ -516,7 +515,11 @@ const ProjectManagement = () => {
       dataIndex: "client",
       key: "client",
       width: 150,
-      render: (client) => (client ? getClientDisplayName(client) : "N/A"),
+      render: (client) => (
+        <>
+          <strong>{client.clientCode} </strong>({client?.displayName || "N/A"})
+        </>
+      ),
     },
     {
       title: "Work Type / Grading",

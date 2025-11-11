@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import {
   Layout,
   Menu,
@@ -47,19 +47,19 @@ const FrontOfficeLayout = () => {
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Alt+C for Add Client
-      if (e.altKey && e.key === 'c') {
+      if (e.altKey && e.key === "c") {
         e.preventDefault();
-        showClientFormDrawer(null, 'create');
+        showClientFormDrawer(null, "create");
       }
       // Alt+P for Add Project
-      if (e.altKey && e.key === 'p') {
+      if (e.altKey && e.key === "p") {
         e.preventDefault();
-        showProjectFormDrawer(null, 'create');
+        showProjectFormDrawer(null, "create");
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, [showClientFormDrawer, showProjectFormDrawer]);
 
   // Allow employees and admin users (when they choose employee view)
@@ -87,6 +87,11 @@ const FrontOfficeLayout = () => {
       key: "/projects",
       icon: <ProjectOutlined />,
       label: <Link to="/projects">Projects</Link>,
+    },
+    {
+      key: "/clients",
+      icon: <TeamOutlined />,
+      label: <Link to="/clients">Clients</Link>,
     },
     {
       key: "clients",
@@ -164,7 +169,7 @@ const FrontOfficeLayout = () => {
                 type="primary"
                 shape="circle"
                 icon={<UserAddOutlined />}
-                onClick={() => showClientFormDrawer(null, 'create')}
+                onClick={() => showClientFormDrawer(null, "create")}
                 className="bg-green-500 hover:bg-green-600 border-green-500"
               />
             </Tooltip>
@@ -173,7 +178,7 @@ const FrontOfficeLayout = () => {
                 type="primary"
                 shape="circle"
                 icon={<PlusOutlined />}
-                onClick={() => showProjectFormDrawer(null, 'create')}
+                onClick={() => showProjectFormDrawer(null, "create")}
               />
             </Tooltip>
           </Space>
@@ -202,7 +207,7 @@ const FrontOfficeLayout = () => {
         </div>
       </Header>
 
-      <Content className="p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
+      <Content className="p-2 bg-gray-50 min-h-[calc(100vh-64px)]">
         <div className="w-full max-w-none mx-auto px-4">
           <Routes>
             <Route path="/" element={<TaskBoard />} />

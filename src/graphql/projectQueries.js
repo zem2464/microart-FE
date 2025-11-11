@@ -26,6 +26,7 @@ export const GET_PROJECTS = gql`
         client {
           id
           clientCode
+          displayName
         }
         workType {
           id

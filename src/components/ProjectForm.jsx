@@ -62,7 +62,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   const [selectedGradings, setSelectedGradings] = useState([]);
   const [totalImageQuantity, setTotalImageQuantity] = useState(0);
   const [totalCalculatedBudget, setTotalCalculatedBudget] = useState(0);
-  
+
   // Backward compatibility
   const [selectedGrading, setSelectedGrading] = useState(null);
   const [imageQuantity, setImageQuantity] = useState(0);
@@ -74,17 +74,29 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   const [workTypeGradings, setWorkTypeGradings] = useState([]);
   const [projectTasks, setProjectTasks] = useState([]);
   const [availableUsers, setAvailableUsers] = useState([]);
-  const [currentStatus, setCurrentStatus] = useState('draft'); // Track current form status
+  const [currentStatus, setCurrentStatus] = useState("draft"); // Track current form status
 
   // Helper functions for field restrictions based on project status
-  const isActiveProject = project && mode === "edit" && 
-    (project.status === 'active' || project.status === 'in_progress' || project.status === 'completed');
-  
-  const isDraftProject = project && mode === "edit" && project.status === 'draft';
-  
+  const isActiveProject =
+    project &&
+    mode === "edit" &&
+    (project.status === "active" ||
+      project.status === "in_progress" ||
+      project.status === "completed");
+
+  const isDraftProject =
+    project && mode === "edit" && project.status === "draft";
+
   // Fields that can be edited in active projects (basic details only)
   const isFieldEditableInActive = (fieldName) => {
-    const editableFields = ['description', 'notes', 'deadlineDate', 'imageQuantity', 'priority', 'status'];
+    const editableFields = [
+      "description",
+      "notes",
+      "deadlineDate",
+      "imageQuantity",
+      "priority",
+      "status",
+    ];
     return editableFields.includes(fieldName);
   };
 
@@ -94,7 +106,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     if (newGradings[index]) {
       newGradings[index] = { ...newGradings[index], imageQuantity: quantity };
       setSelectedGradings(newGradings);
-      
+
       // Trigger credit validation after quantity change
       setTimeout(() => {
         validateMultipleGradingsCredit(newGradings);
@@ -107,7 +119,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     if (newGradings[index]) {
       newGradings[index] = { ...newGradings[index], customRate: customRate };
       setSelectedGradings(newGradings);
-      
+
       // Trigger credit validation after rate change
       setTimeout(() => {
         validateMultipleGradingsCredit(newGradings);
@@ -117,26 +129,34 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
   const calculateGradingCost = (gradingData) => {
     if (!gradingData || !gradingData.imageQuantity) return 0;
-    
+
     // Use custom rate if provided, otherwise check client preferences, then default rate
     let rate = gradingData.customRate;
     if (!rate && clientPreferences) {
-      const clientCustomGrading = clientPreferences.gradings?.find(g => g.grading?.id === gradingData.gradingId);
+      const clientCustomGrading = clientPreferences.gradings?.find(
+        (g) => g.grading?.id === gradingData.gradingId
+      );
       rate = clientCustomGrading?.customRate;
     }
     if (!rate) {
       rate = gradingData.grading?.defaultRate || 0;
     }
-    
+
     return rate * gradingData.imageQuantity;
   };
 
   const calculateTotalCost = () => {
-    return selectedGradings.reduce((total, sg) => total + calculateGradingCost(sg), 0);
+    return selectedGradings.reduce(
+      (total, sg) => total + calculateGradingCost(sg),
+      0
+    );
   };
 
   const calculateTotalQuantity = () => {
-    return selectedGradings.reduce((total, sg) => total + (sg.imageQuantity || 0), 0);
+    return selectedGradings.reduce(
+      (total, sg) => total + (sg.imageQuantity || 0),
+      0
+    );
   };
 
   // lazy queries used by handlers (declared early so handlers can include them in deps)
@@ -146,12 +166,18 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   const [refetchGradingTasks] = useLazyQuery(GET_GRADING_TASKS, {
     fetchPolicy: "network-only",
   });
-  const [refetchProjectCreditValidation] = useLazyQuery(VALIDATE_PROJECT_CREDIT, {
-    fetchPolicy: "network-only",
-  });
-  const [refetchMultipleGradingCreditValidation] = useLazyQuery(VALIDATE_MULTIPLE_GRADING_CREDIT, {
-    fetchPolicy: "network-only",
-  });
+  const [refetchProjectCreditValidation] = useLazyQuery(
+    VALIDATE_PROJECT_CREDIT,
+    {
+      fetchPolicy: "network-only",
+    }
+  );
+  const [refetchMultipleGradingCreditValidation] = useLazyQuery(
+    VALIDATE_MULTIPLE_GRADING_CREDIT,
+    {
+      fetchPolicy: "network-only",
+    }
+  );
   const [refetchCustomFields] = useLazyQuery(GET_WORK_TYPE_FIELDS, {
     fetchPolicy: "network-only",
   });
@@ -159,8 +185,6 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   const [getWorkTypeGradings] = useLazyQuery(GET_GRADINGS_BY_WORK_TYPE, {
     fetchPolicy: "network-only",
   });
-
-  
 
   // GraphQL Queries
   const { data: clientsData } = useQuery(GET_CLIENTS, {
@@ -204,8 +228,8 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
   const [updateProject] = useMutation(UPDATE_PROJECT, {
     refetchQueries: [
-      'GetTasks',  // Refetch tasks to update custom fields in task cards
-      'GetMyTasks', // Also refetch user's tasks if applicable
+      "GetTasks", // Refetch tasks to update custom fields in task cards
+      "GetMyTasks", // Also refetch user's tasks if applicable
     ],
     awaitRefetchQueries: true,
     onCompleted: () => {
@@ -221,7 +245,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
   // Helper function to get client display name - prioritize client code
   const getClientDisplayName = (client) => {
-    return client.clientCode || 'Unknown Client';
+    return client.clientCode || "Unknown Client";
   };
 
   // Helper function to get searchable text for client
@@ -254,7 +278,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   // Client selection handler
   const handleClientSelect = async (clientId) => {
     setSelectedClientId(clientId);
-  // clear any previous client credit display (we rely on projectCreditValidation)
+    // clear any previous client credit display (we rely on projectCreditValidation)
     setClientPreferences(null);
     setProjectCreditValidation(null);
 
@@ -288,11 +312,17 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       });
 
       if (data?.clientPreferences) {
-        console.log('🔍 DEBUG: clientPreferences data received:', data.clientPreferences);
-        console.log('🔍 DEBUG: workTypes in clientPreferences:', data.clientPreferences.workTypes);
-        
+        console.log(
+          "🔍 DEBUG: clientPreferences data received:",
+          data.clientPreferences
+        );
+        console.log(
+          "🔍 DEBUG: workTypes in clientPreferences:",
+          data.clientPreferences.workTypes
+        );
+
         // For now, we'll need to get credit info separately or add it to the backend
-  // credit info is fetched separately via VALIDATE_PROJECT_CREDIT
+        // credit info is fetched separately via VALIDATE_PROJECT_CREDIT
 
         setClientPreferences(data.clientPreferences);
         // Also fetch credit info for this client
@@ -305,33 +335,33 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
           // Legacy single grading validation
           try {
             const creditResp = await refetchProjectCreditValidation({
-              variables: { 
+              variables: {
                 clientId: clientId,
                 gradingId: selectedGrading,
                 imageQuantity: imageQuantity,
-                estimatedCost: calculatedBudget
+                estimatedCost: calculatedBudget,
               },
             });
             if (creditResp?.data?.validateProjectCredit) {
               setProjectCreditValidation(creditResp.data.validateProjectCredit);
             }
           } catch (err) {
-            console.warn('Failed to fetch client credit validation', err);
+            console.warn("Failed to fetch client credit validation", err);
           }
         } else {
           // Just get general credit info without specific project details
           try {
             const creditResp = await refetchProjectCreditValidation({
-              variables: { 
+              variables: {
                 clientId: clientId,
-                estimatedCost: 0  // No project selected yet
+                estimatedCost: 0, // No project selected yet
               },
             });
             if (creditResp?.data?.validateProjectCredit) {
               setProjectCreditValidation(creditResp.data.validateProjectCredit);
             }
           } catch (err) {
-            console.warn('Failed to fetch client credit summary', err);
+            console.warn("Failed to fetch client credit summary", err);
           }
         }
       }
@@ -344,7 +374,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   // Load client preferences without resetting form (for edit mode)
   const loadClientPreferences = async (clientId) => {
     if (!clientId) return;
-    
+
     try {
       const { data } = await refetchClientPreferences({
         variables: { clientId: clientId },
@@ -352,12 +382,21 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
       if (data?.clientPreferences) {
         console.log("Client preferences received:", data.clientPreferences);
-        console.log("Work types from preferences:", data.clientPreferences.workTypes);
-        console.log("Gradings from preferences:", data.clientPreferences.gradings);
-        console.log("Task preferences from preferences:", data.clientPreferences.taskPreferences);
-        
+        console.log(
+          "Work types from preferences:",
+          data.clientPreferences.workTypes
+        );
+        console.log(
+          "Gradings from preferences:",
+          data.clientPreferences.gradings
+        );
+        console.log(
+          "Task preferences from preferences:",
+          data.clientPreferences.taskPreferences
+        );
+
         setClientPreferences(data.clientPreferences);
-        
+
         // Also fetch credit summary (for edit mode, validate current project state)
         if (selectedGradings.length > 0) {
           setTimeout(() => {
@@ -366,32 +405,32 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         } else if (selectedGrading && imageQuantity > 0) {
           try {
             const creditResp = await refetchProjectCreditValidation({
-              variables: { 
+              variables: {
                 clientId: clientId,
                 gradingId: selectedGrading,
                 imageQuantity: imageQuantity,
-                estimatedCost: calculatedBudget
+                estimatedCost: calculatedBudget,
               },
             });
             if (creditResp?.data?.validateProjectCredit) {
               setProjectCreditValidation(creditResp.data.validateProjectCredit);
             }
           } catch (err) {
-            console.warn('Failed to fetch client credit validation', err);
+            console.warn("Failed to fetch client credit validation", err);
           }
         } else {
           try {
             const creditResp = await refetchProjectCreditValidation({
-              variables: { 
+              variables: {
                 clientId: clientId,
-                estimatedCost: 0  // No project selected yet
+                estimatedCost: 0, // No project selected yet
               },
             });
             if (creditResp?.data?.validateProjectCredit) {
               setProjectCreditValidation(creditResp.data.validateProjectCredit);
             }
           } catch (err) {
-            console.warn('Failed to fetch client credit summary', err);
+            console.warn("Failed to fetch client credit summary", err);
           }
         }
       } else {
@@ -404,92 +443,109 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   };
 
   // Work type selection handler
-  const handleWorkTypeSelect = useCallback(async (workTypeId, existingCustomFieldValues = null) => {
-    console.log('=== handleWorkTypeSelect called ===');
-    console.log('workTypeId:', workTypeId);
-    console.log('existingCustomFieldValues:', existingCustomFieldValues);
-    
-    setSelectedWorkType(workTypeId);
-    form.setFieldsValue({ grading: undefined });
-    setSelectedGrading(null);
-    setCalculatedBudget(0);
-    setGradingTasks([]);
-    setCustomFields([]);
-    // Only clear custom field values if not in edit mode with existing values
-    if (!existingCustomFieldValues) {
-      console.log('Clearing custom field values (create mode)');
-      setCustomFieldValues({});
-    } else {
-      console.log('Preserving existing custom field values (edit mode)');
-    }
-    setWorkTypeGradings([]);
-    setProjectTasks([]);
+  const handleWorkTypeSelect = useCallback(
+    async (workTypeId, existingCustomFieldValues = null) => {
+      console.log("=== handleWorkTypeSelect called ===");
+      console.log("workTypeId:", workTypeId);
+      console.log("existingCustomFieldValues:", existingCustomFieldValues);
 
-    // Only fetch if workTypeId is provided
-    if (!workTypeId) {
-      return;
-    }
+      setSelectedWorkType(workTypeId);
+      form.setFieldsValue({ grading: undefined });
+      setSelectedGrading(null);
+      setCalculatedBudget(0);
+      setGradingTasks([]);
+      setCustomFields([]);
+      // Only clear custom field values if not in edit mode with existing values
+      if (!existingCustomFieldValues) {
+        console.log("Clearing custom field values (create mode)");
+        setCustomFieldValues({});
+      } else {
+        console.log("Preserving existing custom field values (edit mode)");
+      }
+      setWorkTypeGradings([]);
+      setProjectTasks([]);
 
-    try {
-      // Fetch both custom fields and gradings for the selected work type in parallel
-      const [customFieldsResult, gradingsResult] = await Promise.all([
-        refetchCustomFields({
-          variables: {
-            workTypeId: workTypeId,
-          },
-        }),
-        getWorkTypeGradings({
-          variables: {
-            workTypeIds: [workTypeId],
-          },
-        })
-      ]);
+      // Only fetch if workTypeId is provided
+      if (!workTypeId) {
+        return;
+      }
 
-      // Process custom fields
-      if (customFieldsResult.data?.workTypeFields) {
-        const fields = [...customFieldsResult.data.workTypeFields].sort((a, b) => a.displayOrder - b.displayOrder);
-        console.log('Fetched work type fields:', fields);
-        setCustomFields(fields);
-        
-        // If we have existing custom field values (edit mode), use those
-        if (existingCustomFieldValues && Object.keys(existingCustomFieldValues).length > 0) {
-          console.log('Setting existing custom field values:', existingCustomFieldValues);
-          setCustomFieldValues(existingCustomFieldValues);
-          // Set existing values in form
-          form.setFieldsValue(existingCustomFieldValues);
-          console.log('Form fields set with existing values');
-        } else {
-          // Initialize custom field values with default values (create mode)
-          console.log('Setting default custom field values');
-          const defaultValues = {};
-          fields.forEach(field => {
-            if (field.defaultValue) {
-              try {
-                defaultValues[field.fieldKey] = field.fieldType === 'checkbox' 
-                  ? field.defaultValue === 'true' || field.defaultValue === true
-                  : field.defaultValue;
-              } catch (error) {
-                defaultValues[field.fieldKey] = field.defaultValue;
+      try {
+        // Fetch both custom fields and gradings for the selected work type in parallel
+        const [customFieldsResult, gradingsResult] = await Promise.all([
+          refetchCustomFields({
+            variables: {
+              workTypeId: workTypeId,
+            },
+          }),
+          getWorkTypeGradings({
+            variables: {
+              workTypeIds: [workTypeId],
+            },
+          }),
+        ]);
+
+        // Process custom fields
+        if (customFieldsResult.data?.workTypeFields) {
+          const fields = [...customFieldsResult.data.workTypeFields].sort(
+            (a, b) => a.displayOrder - b.displayOrder
+          );
+          console.log("Fetched work type fields:", fields);
+          setCustomFields(fields);
+
+          // If we have existing custom field values (edit mode), use those
+          if (
+            existingCustomFieldValues &&
+            Object.keys(existingCustomFieldValues).length > 0
+          ) {
+            console.log(
+              "Setting existing custom field values:",
+              existingCustomFieldValues
+            );
+            setCustomFieldValues(existingCustomFieldValues);
+            // Set existing values in form
+            form.setFieldsValue(existingCustomFieldValues);
+            console.log("Form fields set with existing values");
+          } else {
+            // Initialize custom field values with default values (create mode)
+            console.log("Setting default custom field values");
+            const defaultValues = {};
+            fields.forEach((field) => {
+              if (field.defaultValue) {
+                try {
+                  defaultValues[field.fieldKey] =
+                    field.fieldType === "checkbox"
+                      ? field.defaultValue === "true" ||
+                        field.defaultValue === true
+                      : field.defaultValue;
+                } catch (error) {
+                  defaultValues[field.fieldKey] = field.defaultValue;
+                }
               }
-            }
-          });
-          console.log('Default values:', defaultValues);
-          setCustomFieldValues(defaultValues);
-          
-          // Set default values in form
-          form.setFieldsValue(defaultValues);
-        }
-      }
+            });
+            console.log("Default values:", defaultValues);
+            setCustomFieldValues(defaultValues);
 
-      // Process gradings
-      if (gradingsResult.data?.gradingsByWorkType) {
-        setWorkTypeGradings(gradingsResult.data.gradingsByWorkType.filter(grading => grading.isActive));
+            // Set default values in form
+            form.setFieldsValue(defaultValues);
+          }
+        }
+
+        // Process gradings
+        if (gradingsResult.data?.gradingsByWorkType) {
+          setWorkTypeGradings(
+            gradingsResult.data.gradingsByWorkType.filter(
+              (grading) => grading.isActive
+            )
+          );
+        }
+      } catch (error) {
+        console.error("Error fetching work type data:", error);
+        message.error("Failed to load data for this work type");
       }
-    } catch (error) {
-      console.error("Error fetching work type data:", error);
-      message.error("Failed to load data for this work type");
-    }
-  }, [refetchCustomFields, getWorkTypeGradings, form]);
+    },
+    [refetchCustomFields, getWorkTypeGradings, form]
+  );
 
   // Grading selection handler
   const handleGradingSelect = async (gradingId) => {
@@ -497,11 +553,18 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     setCalculatedBudget(0);
     setGradingTasks([]);
     setProjectTasks([]);
-  // initialize per-image rate: prefer client's custom rate if available
-  const clientCustomRate = clientPreferences?.gradings?.find(g => g.grading?.id === gradingId)?.customRate;
-  const gradingDefault = workTypeGradings?.find(g => g.id === gradingId)?.defaultRate;
-  const initialRate = clientCustomRate !== undefined && clientCustomRate !== null ? clientCustomRate : (gradingDefault || null);
-  setPerImageRate(initialRate);
+    // initialize per-image rate: prefer client's custom rate if available
+    const clientCustomRate = clientPreferences?.gradings?.find(
+      (g) => g.grading?.id === gradingId
+    )?.customRate;
+    const gradingDefault = workTypeGradings?.find(
+      (g) => g.id === gradingId
+    )?.defaultRate;
+    const initialRate =
+      clientCustomRate !== undefined && clientCustomRate !== null
+        ? clientCustomRate
+        : gradingDefault || null;
+    setPerImageRate(initialRate);
 
     // Only fetch if gradingId is provided
     if (!gradingId) {
@@ -518,20 +581,27 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
       if (data?.gradingTasks) {
         setGradingTasks(data.gradingTasks);
-        
+
         // Only initialize project tasks when status is active (create mode) or active projects (edit mode)
-        if (currentStatus === 'active' || (mode === "edit" && isActiveProject)) {
+        if (
+          currentStatus === "active" ||
+          (mode === "edit" && isActiveProject)
+        ) {
           // Initialize project tasks with enhanced structure and preferred users
-          const initialTasks = data.gradingTasks.map(gradingTask => {
+          const initialTasks = data.gradingTasks.map((gradingTask) => {
             // Find preferred user for this task type from client preferences
             let preferredUserId = null;
             if (clientPreferences?.taskPreferences) {
               const taskPreference = clientPreferences.taskPreferences.find(
-                pref => pref.taskType.id === gradingTask.taskType.id
+                (pref) => pref.taskType.id === gradingTask.taskType.id
               );
-              
+
               // Use the first preferred user ID if available
-              if (taskPreference && taskPreference.preferredUserIds && taskPreference.preferredUserIds.length > 0) {
+              if (
+                taskPreference &&
+                taskPreference.preferredUserIds &&
+                taskPreference.preferredUserIds.length > 0
+              ) {
                 preferredUserId = taskPreference.preferredUserIds[0];
               }
             }
@@ -541,7 +611,10 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
               taskTypeId: gradingTask.taskType.id,
               gradingTaskId: gradingTask.id,
               name: gradingTask.taskType.name,
-              description: gradingTask.taskType.description || gradingTask.instructions || "",
+              description:
+                gradingTask.taskType.description ||
+                gradingTask.instructions ||
+                "",
               assigneeId: preferredUserId, // Pre-select preferred user
               status: "todo",
               priority: "B",
@@ -574,41 +647,50 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
   // Multiple grading selection handler
   const handleMultipleGradingSelect = async (selectedGradingIds) => {
-    const currentSelectedIds = selectedGradings.map(sg => sg.gradingId);
-    
+    const currentSelectedIds = selectedGradings.map((sg) => sg.gradingId);
+
     // Find newly added and removed gradings
-    const addedIds = selectedGradingIds.filter(id => !currentSelectedIds.includes(id));
-    const removedIds = currentSelectedIds.filter(id => !selectedGradingIds.includes(id));
-    
+    const addedIds = selectedGradingIds.filter(
+      (id) => !currentSelectedIds.includes(id)
+    );
+    const removedIds = currentSelectedIds.filter(
+      (id) => !selectedGradingIds.includes(id)
+    );
+
     let newSelectedGradings = [...selectedGradings];
-    
+
     // Remove unselected gradings
-    newSelectedGradings = newSelectedGradings.filter(sg => !removedIds.includes(sg.gradingId));
-    
+    newSelectedGradings = newSelectedGradings.filter(
+      (sg) => !removedIds.includes(sg.gradingId)
+    );
+
     // Add newly selected gradings
-    addedIds.forEach(gradingId => {
-      const grading = workTypeGradings?.find(g => g.id === gradingId);
+    addedIds.forEach((gradingId) => {
+      const grading = workTypeGradings?.find((g) => g.id === gradingId);
       if (grading) {
         // Check if client has a custom rate for this grading
         const clientPref = clientPreferences?.gradings?.find(
           (pref) => pref.grading?.id === gradingId
         );
-        const clientCustomRate = clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null 
-          ? clientPref.customRate 
-          : null;
-        
+        const clientCustomRate =
+          clientPref &&
+          clientPref.customRate !== undefined &&
+          clientPref.customRate !== null
+            ? clientPref.customRate
+            : null;
+
         newSelectedGradings.push({
           gradingId: gradingId,
           grading: grading,
           imageQuantity: 1, // Default quantity
           customRate: clientCustomRate, // Pre-fill with client's custom rate if available
-          sequence: newSelectedGradings.length + 1
+          sequence: newSelectedGradings.length + 1,
         });
       }
     });
-    
+
     setSelectedGradings(newSelectedGradings);
-    
+
     // If this is the first selection or all selections were removed, handle legacy state
     if (newSelectedGradings.length === 0) {
       setSelectedGrading(null);
@@ -619,13 +701,18 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       // For single selection, maintain backward compatibility
       const singleGrading = newSelectedGradings[0];
       setSelectedGrading(singleGrading.gradingId);
-      
+
       // Set per-image rate for single selection
-      const clientCustomRate = clientPreferences?.gradings?.find(g => g.grading?.id === singleGrading.gradingId)?.customRate;
+      const clientCustomRate = clientPreferences?.gradings?.find(
+        (g) => g.grading?.id === singleGrading.gradingId
+      )?.customRate;
       const gradingDefault = singleGrading.grading?.defaultRate;
-      const initialRate = clientCustomRate !== undefined && clientCustomRate !== null ? clientCustomRate : (gradingDefault || null);
+      const initialRate =
+        clientCustomRate !== undefined && clientCustomRate !== null
+          ? clientCustomRate
+          : gradingDefault || null;
       setPerImageRate(initialRate);
-      
+
       // Fetch grading tasks for the single selection
       if (singleGrading.gradingId) {
         try {
@@ -637,16 +724,23 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
           if (data?.gradingTasks) {
             setGradingTasks(data.gradingTasks);
-            
+
             // Initialize project tasks if needed
-            if (currentStatus === 'active' || (mode === "edit" && isActiveProject)) {
-              const initialTasks = data.gradingTasks.map(gradingTask => {
+            if (
+              currentStatus === "active" ||
+              (mode === "edit" && isActiveProject)
+            ) {
+              const initialTasks = data.gradingTasks.map((gradingTask) => {
                 let preferredUserId = null;
                 if (clientPreferences?.taskPreferences) {
                   const taskPreference = clientPreferences.taskPreferences.find(
-                    pref => pref.taskType.id === gradingTask.taskType.id
+                    (pref) => pref.taskType.id === gradingTask.taskType.id
                   );
-                  if (taskPreference && taskPreference.preferredUserIds && taskPreference.preferredUserIds.length > 0) {
+                  if (
+                    taskPreference &&
+                    taskPreference.preferredUserIds &&
+                    taskPreference.preferredUserIds.length > 0
+                  ) {
                     preferredUserId = taskPreference.preferredUserIds[0];
                   }
                 }
@@ -655,17 +749,26 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                   id: null,
                   gradingTaskId: gradingTask.id,
                   taskTypeId: gradingTask.taskType.id,
-                  name: gradingTask.taskType.name || gradingTask.name || 'Unnamed Task',
-                  title: gradingTask.taskType.name || gradingTask.name || 'Unnamed Task',
-                  description: gradingTask.description || gradingTask.taskType.description || '',
-                  instructions: gradingTask.instructions || '',
-                  status: 'todo',
-                  priority: gradingTask.priority || 'B',
+                  name:
+                    gradingTask.taskType.name ||
+                    gradingTask.name ||
+                    "Unnamed Task",
+                  title:
+                    gradingTask.taskType.name ||
+                    gradingTask.name ||
+                    "Unnamed Task",
+                  description:
+                    gradingTask.description ||
+                    gradingTask.taskType.description ||
+                    "",
+                  instructions: gradingTask.instructions || "",
+                  status: "todo",
+                  priority: gradingTask.priority || "B",
                   estimatedHours: gradingTask.estimatedHours || 0,
                   estimatedCost: gradingTask.estimatedCost || 0,
                   dueDate: null,
                   assigneeId: preferredUserId,
-                  notes: '',
+                  notes: "",
                   taskType: gradingTask.taskType,
                   gradingTask: gradingTask,
                   customFields: {},
@@ -688,7 +791,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       // For multiple gradings, we'll need to handle task generation differently
       // This might require updating the task generation logic
     }
-    
+
     // Trigger credit validation for the new grading selection
     if (newSelectedGradings.length > 0 && selectedClientId) {
       setTimeout(() => {
@@ -702,7 +805,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   // Load work type data without resetting form (for edit mode)
   const loadWorkTypeData = async (workTypeId) => {
     if (!workTypeId) return;
-    
+
     try {
       const [customFieldsResult, gradingsResult] = await Promise.all([
         refetchCustomFields({
@@ -710,11 +813,13 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         }),
         getWorkTypeGradings({
           variables: { workTypeIds: [workTypeId] },
-        })
+        }),
       ]);
 
       if (customFieldsResult.data?.workTypeFields) {
-        const fields = [...customFieldsResult.data.workTypeFields].sort((a, b) => a.displayOrder - b.displayOrder);
+        const fields = [...customFieldsResult.data.workTypeFields].sort(
+          (a, b) => a.displayOrder - b.displayOrder
+        );
         setCustomFields(fields);
       }
 
@@ -729,7 +834,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   // Load grading data without resetting form (for edit mode)
   const loadGradingData = async (gradingId) => {
     if (!gradingId) return;
-    
+
     try {
       const { data } = await refetchGradingTasks({
         variables: { gradingId: gradingId },
@@ -737,43 +842,53 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
       if (data?.gradingTasks) {
         setGradingTasks(data.gradingTasks);
-        
-        // Only create project tasks when status is active (create mode) or active projects (edit mode) 
-        if (currentStatus === 'active' || (mode === "edit" && isActiveProject)) {
+
+        // Only create project tasks when status is active (create mode) or active projects (edit mode)
+        if (
+          currentStatus === "active" ||
+          (mode === "edit" && isActiveProject)
+        ) {
           // Create initial project tasks from grading tasks
           const initialTasks = data.gradingTasks.map((gradingTask) => {
-          let preferredUserId = null;
-          if (clientPreferences?.taskPreferences) {
-            const taskPreference = clientPreferences.taskPreferences.find(
-              pref => pref.taskType.id === gradingTask.taskType.id
-            );
-            
-            if (taskPreference && taskPreference.preferredUserIds && taskPreference.preferredUserIds.length > 0) {
-              preferredUserId = taskPreference.preferredUserIds[0];
-            }
-          }
+            let preferredUserId = null;
+            if (clientPreferences?.taskPreferences) {
+              const taskPreference = clientPreferences.taskPreferences.find(
+                (pref) => pref.taskType.id === gradingTask.taskType.id
+              );
 
-          return {
-            id: gradingTask.taskType.id,
-            taskTypeId: gradingTask.taskType.id,
-            gradingTaskId: gradingTask.id,
-            name: gradingTask.taskType.name,
-            description: gradingTask.taskType.description || gradingTask.instructions || "",
-            assigneeId: preferredUserId,
-            status: "todo",
-            priority: "B",
-            estimatedHours: gradingTask.estimatedHours || 0,
-            actualHours: 0,
-            estimatedCost: gradingTask.employeeRate || 0,
-            startDate: null,
-            dueDate: null,
-            dependencies: [],
-            blockedBy: [],
-            comments: [],
-            customFields: {},
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          };
+              if (
+                taskPreference &&
+                taskPreference.preferredUserIds &&
+                taskPreference.preferredUserIds.length > 0
+              ) {
+                preferredUserId = taskPreference.preferredUserIds[0];
+              }
+            }
+
+            return {
+              id: gradingTask.taskType.id,
+              taskTypeId: gradingTask.taskType.id,
+              gradingTaskId: gradingTask.id,
+              name: gradingTask.taskType.name,
+              description:
+                gradingTask.taskType.description ||
+                gradingTask.instructions ||
+                "",
+              assigneeId: preferredUserId,
+              status: "todo",
+              priority: "B",
+              estimatedHours: gradingTask.estimatedHours || 0,
+              actualHours: 0,
+              estimatedCost: gradingTask.employeeRate || 0,
+              startDate: null,
+              dueDate: null,
+              dependencies: [],
+              blockedBy: [],
+              comments: [],
+              customFields: {},
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
           });
           setProjectTasks(initialTasks);
         }
@@ -800,25 +915,40 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     // Prevent storing tree node objects or other complex objects
     // Only allow primitive values: string, number, boolean, or arrays of primitives
     if (value !== null && value !== undefined) {
-      if (typeof value === 'object' && !Array.isArray(value)) {
-        console.warn('Attempted to set non-primitive value for custom field:', fieldKey, value);
+      if (typeof value === "object" && !Array.isArray(value)) {
+        console.warn(
+          "Attempted to set non-primitive value for custom field:",
+          fieldKey,
+          value
+        );
         return; // Don't store object values
       }
-      if (Array.isArray(value) && value.some(v => typeof v === 'object' && v !== null)) {
-        console.warn('Attempted to set array with objects for custom field:', fieldKey, value);
+      if (
+        Array.isArray(value) &&
+        value.some((v) => typeof v === "object" && v !== null)
+      ) {
+        console.warn(
+          "Attempted to set array with objects for custom field:",
+          fieldKey,
+          value
+        );
         // Filter out objects from array
-        value = value.filter(v => typeof v !== 'object' || v === null);
+        value = value.filter((v) => typeof v !== "object" || v === null);
       }
     }
-    
-    setCustomFieldValues(prev => ({
+
+    setCustomFieldValues((prev) => ({
       ...prev,
-      [fieldKey]: value
+      [fieldKey]: value,
     }));
   };
 
   // Budget calculation function
-  const calculateBudget = async (gradingId, quantity, overrideRate = undefined) => {
+  const calculateBudget = async (
+    gradingId,
+    quantity,
+    overrideRate = undefined
+  ) => {
     if (!gradingId || !quantity) {
       setCalculatedBudget(0);
       setProjectCreditValidation(null);
@@ -829,14 +959,17 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       const grading = workTypeGradings?.find((g) => g.id === gradingId);
       if (grading) {
         // determine rate to use: overrideRate > perImageRate > client customRate > grading.defaultRate
-        const clientCustom = clientPreferences?.gradings?.find(g => g.grading?.id === gradingId)?.customRate;
-        const rateToUse = (overrideRate !== undefined && overrideRate !== null)
-          ? overrideRate
-          : (perImageRate !== null && perImageRate !== undefined)
+        const clientCustom = clientPreferences?.gradings?.find(
+          (g) => g.grading?.id === gradingId
+        )?.customRate;
+        const rateToUse =
+          overrideRate !== undefined && overrideRate !== null
+            ? overrideRate
+            : perImageRate !== null && perImageRate !== undefined
             ? perImageRate
-            : (clientCustom !== undefined && clientCustom !== null)
-              ? clientCustom
-              : grading.defaultRate || 0;
+            : clientCustom !== undefined && clientCustom !== null
+            ? clientCustom
+            : grading.defaultRate || 0;
 
         const budget = rateToUse * quantity;
         setCalculatedBudget(budget);
@@ -854,7 +987,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
           if (data?.validateProjectCredit) {
             setProjectCreditValidation(data.validateProjectCredit);
-            
+
             // Show warning if credit validation fails
             if (!data.validateProjectCredit.canCreateProject) {
               message.warning(data.validateProjectCredit.message);
@@ -868,7 +1001,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   };
 
   // Credit validation for multiple gradings
-  const validateMultipleGradingsCredit = async (gradings = selectedGradings) => {
+  const validateMultipleGradingsCredit = async (
+    gradings = selectedGradings
+  ) => {
     if (!selectedClientId || !gradings || gradings.length === 0) {
       setProjectCreditValidation(null);
       return;
@@ -876,23 +1011,26 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
     try {
       // Prepare project gradings data for validation
-      const projectGradingsData = gradings.map(sg => {
-        const grading = workTypeGradings?.find(g => g.id === sg.gradingId);
+      const projectGradingsData = gradings.map((sg) => {
+        const grading = workTypeGradings?.find((g) => g.id === sg.gradingId);
         const clientPref = clientPreferences?.gradings?.find(
           (pref) => pref.grading?.id === sg.gradingId
         );
-        
+
         // Use same priority logic as display: customRate > clientPref.customRate > grading.defaultRate
-        const effectiveRate = sg.customRate !== undefined && sg.customRate !== null
-          ? sg.customRate
-          : (clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null
+        const effectiveRate =
+          sg.customRate !== undefined && sg.customRate !== null
+            ? sg.customRate
+            : clientPref &&
+              clientPref.customRate !== undefined &&
+              clientPref.customRate !== null
             ? clientPref.customRate
-            : grading?.defaultRate || 0);
-        
+            : grading?.defaultRate || 0;
+
         return {
           gradingId: sg.gradingId,
           imageQuantity: sg.imageQuantity || 0,
-          customRate: effectiveRate // Send the calculated effective rate instead of just the custom rate
+          customRate: effectiveRate, // Send the calculated effective rate instead of just the custom rate
         };
       });
 
@@ -905,7 +1043,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
       if (data?.validateMultipleGradingCredit) {
         setProjectCreditValidation(data.validateMultipleGradingCredit);
-        
+
         // Show warning if credit validation fails
         if (!data.validateMultipleGradingCredit.canCreateProject) {
           message.warning(data.validateMultipleGradingCredit.message);
@@ -915,8 +1053,6 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       console.error("Error validating multiple gradings credit:", error);
     }
   };
-
-  
 
   // Set available users when users data is loaded
   useEffect(() => {
@@ -930,44 +1066,62 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     if (project && mode === "edit" && project.workTypeId) {
       // Prefetch gradings immediately when we have project data with workTypeId
       getWorkTypeGradings({
-        variables: { workTypeIds: [project.workTypeId || project.workType?.id] },
-      }).then((result) => {
-        if (result.data?.gradingsByWorkType) {
-          setWorkTypeGradings(result.data.gradingsByWorkType);
-        }
-      }).catch((error) => {
-        console.error("Error prefetching gradings for edit mode:", error);
-      });
+        variables: {
+          workTypeIds: [project.workTypeId || project.workType?.id],
+        },
+      })
+        .then((result) => {
+          if (result.data?.gradingsByWorkType) {
+            setWorkTypeGradings(result.data.gradingsByWorkType);
+          }
+        })
+        .catch((error) => {
+          console.error("Error prefetching gradings for edit mode:", error);
+        });
     }
   }, [project, mode, getWorkTypeGradings]);
 
   // If client preferences load after grading was selected, prefer client custom rate
   useEffect(() => {
     if (selectedGrading && clientPreferences) {
-      const clientCustom = clientPreferences?.gradings?.find(g => g.grading?.id === selectedGrading)?.customRate;
-      const gradingDefault = workTypeGradings?.find(g => g.id === selectedGrading)?.defaultRate || null;
+      const clientCustom = clientPreferences?.gradings?.find(
+        (g) => g.grading?.id === selectedGrading
+      )?.customRate;
+      const gradingDefault =
+        workTypeGradings?.find((g) => g.id === selectedGrading)?.defaultRate ||
+        null;
       // Only override perImageRate if user hasn't manually overridden it (i.e., it's null or equal to default)
-      if ((perImageRate === null || perImageRate === gradingDefault) && clientCustom !== undefined && clientCustom !== null) {
+      if (
+        (perImageRate === null || perImageRate === gradingDefault) &&
+        clientCustom !== undefined &&
+        clientCustom !== null
+      ) {
         setPerImageRate(clientCustom);
         if (imageQuantity > 0) {
           calculateBudget(selectedGrading, imageQuantity, clientCustom);
         }
       }
     }
-  }, [clientPreferences, selectedGrading, perImageRate, imageQuantity, workTypeGradings]);
+  }, [
+    clientPreferences,
+    selectedGrading,
+    perImageRate,
+    imageQuantity,
+    workTypeGradings,
+  ]);
 
   // Update totals when selectedGradings changes
   useEffect(() => {
     const newTotalQuantity = calculateTotalQuantity();
     const newTotalCost = calculateTotalCost();
-    
+
     setTotalImageQuantity(newTotalQuantity);
     setTotalCalculatedBudget(newTotalCost);
-    
+
     // Update backward compatibility fields
     setImageQuantity(newTotalQuantity);
     setCalculatedBudget(newTotalCost);
-    
+
     // Trigger credit validation if we have selected client and gradings
     if (selectedClientId && selectedGradings.length > 0) {
       setTimeout(() => {
@@ -986,17 +1140,19 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     if (project && mode === "edit") {
       // Async IIFE to ensure proper order
       (async () => {
-        console.log('=== ProjectForm Edit Mode Initialization ===');
-        console.log('Project data:', project);
-        console.log('Project customFields:', project.customFields);
-        console.log('Project notes:', project.notes);
-        
+        console.log("=== ProjectForm Edit Mode Initialization ===");
+        console.log("Project data:", project);
+        console.log("Project customFields:", project.customFields);
+        console.log("Project notes:", project.notes);
+
         form.setFieldsValue({
           clientId: project.clientId || project.client?.id,
           workTypeId: project.workTypeId || project.workType?.id,
           gradingId: project.gradingId || project.grading?.id, // Keep for backward compatibility
           imageQuantity: project.imageQuantity || project.totalImageQuantity,
-          deadlineDate: project.deadlineDate ? dayjs(project.deadlineDate) : null,
+          deadlineDate: project.deadlineDate
+            ? dayjs(project.deadlineDate)
+            : null,
           name: project.name,
           description: project.description,
           notes: project.notes,
@@ -1016,18 +1172,21 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         if (workTypeId) {
           setSelectedWorkType(workTypeId);
           // Pass existing custom field values to preserve them in edit mode
-          console.log('Calling handleWorkTypeSelect with customFields:', project.customFields);
+          console.log(
+            "Calling handleWorkTypeSelect with customFields:",
+            project.customFields
+          );
           await handleWorkTypeSelect(workTypeId, project.customFields || null);
         }
 
         // Initialize multiple gradings or fallback to single grading
         if (project.projectGradings && project.projectGradings.length > 0) {
-          const mappedGradings = project.projectGradings.map(pg => ({
+          const mappedGradings = project.projectGradings.map((pg) => ({
             gradingId: pg.gradingId || pg.grading?.id,
             grading: pg.grading,
             imageQuantity: pg.imageQuantity || 0,
             customRate: pg.customRate,
-            sequence: pg.sequence
+            sequence: pg.sequence,
           }));
           setSelectedGradings(mappedGradings);
         } else if (gradingId) {
@@ -1037,7 +1196,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
             grading: project.grading,
             imageQuantity: project.imageQuantity || 0,
             customRate: null,
-            sequence: 1
+            sequence: 1,
           };
           setSelectedGradings([singleGrading]);
           setSelectedGrading(gradingId);
@@ -1059,19 +1218,19 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
           setCalculatedBudget(project.estimatedCost);
         }
         // Custom fields are now set by handleWorkTypeSelect with existing values
-        
+
         // Initialize current status
-        setCurrentStatus(project.status || 'draft');
+        setCurrentStatus(project.status || "draft");
       })();
     } else {
       form.resetFields();
       // Set default values for new project
-      form.setFieldsValue({ status: 'draft' });
-      
+      form.setFieldsValue({ status: "draft" });
+
       // Reset all state for new project
       setSelectedClientId(null);
-      setCurrentStatus('draft'); // Reset status for new project
-    // clear any previous client credit display (we rely on projectCreditValidation)
+      setCurrentStatus("draft"); // Reset status for new project
+      // clear any previous client credit display (we rely on projectCreditValidation)
       setClientPreferences(null);
       setSelectedWorkType(null);
       setSelectedGrading(null);
@@ -1095,9 +1254,13 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       }
 
       // Validate that all selected gradings have image quantities
-      const invalidGradings = selectedGradings.filter(sg => !sg.gradingId || (sg.imageQuantity || 0) <= 0);
+      const invalidGradings = selectedGradings.filter(
+        (sg) => !sg.gradingId || (sg.imageQuantity || 0) <= 0
+      );
       if (invalidGradings.length > 0) {
-        message.error("Please ensure all selected gradings have valid image quantities");
+        message.error(
+          "Please ensure all selected gradings have valid image quantities"
+        );
         setLoading(false);
         return;
       }
@@ -1105,66 +1268,95 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       // Final credit validation before submission (for new projects)
       if (mode !== "edit" && selectedClientId && projectCreditValidation) {
         if (!projectCreditValidation.canCreateProject) {
-          message.error("Cannot create project: " + projectCreditValidation.message);
+          message.error(
+            "Cannot create project: " + projectCreditValidation.message
+          );
           setLoading(false);
           return;
         }
       }
       // Always use the form field value for status (both create and edit mode)
-      const desiredStatus = values.status || currentStatus || 'draft';
-      console.log('🔧 Form status:', values.status, 'current status:', currentStatus, 'final:', desiredStatus);
+      const desiredStatus = values.status || currentStatus || "draft";
+      console.log(
+        "🔧 Form status:",
+        values.status,
+        "current status:",
+        currentStatus,
+        "final:",
+        desiredStatus
+      );
 
       const projectData = {
         clientId: values.clientId,
         workTypeId: values.workTypeId,
         // Send multiple gradings or fallback to single grading for backward compatibility
-        projectGradings: selectedGradings.length > 0 ? selectedGradings.map((sg, index) => ({
-          gradingId: sg.gradingId,
-          imageQuantity: sg.imageQuantity || 0,
-          customRate: sg.customRate,
-          sequence: index + 1
-        })) : (values.gradingId ? [{
-          gradingId: values.gradingId,
-          imageQuantity: values.imageQuantity || 0,
-          customRate: null,
-          sequence: 1
-        }] : []),
+        projectGradings:
+          selectedGradings.length > 0
+            ? selectedGradings.map((sg, index) => ({
+                gradingId: sg.gradingId,
+                imageQuantity: sg.imageQuantity || 0,
+                customRate: sg.customRate,
+                sequence: index + 1,
+              }))
+            : values.gradingId
+            ? [
+                {
+                  gradingId: values.gradingId,
+                  imageQuantity: values.imageQuantity || 0,
+                  customRate: null,
+                  sequence: 1,
+                },
+              ]
+            : [],
         // For backward compatibility, also send single grading fields
-        gradingId: selectedGradings.length > 0 ? selectedGradings[0]?.gradingId : values.gradingId,
+        gradingId:
+          selectedGradings.length > 0
+            ? selectedGradings[0]?.gradingId
+            : values.gradingId,
         imageQuantity: totalImageQuantity || values.imageQuantity,
         estimatedCost: totalCalculatedBudget || calculatedBudget, // Use total budget
         name: values.name,
         description: values.description,
-        deadlineDate: values.deadlineDate ? values.deadlineDate.toISOString() : null,
+        deadlineDate: values.deadlineDate
+          ? values.deadlineDate.toISOString()
+          : null,
         priority: values.priority,
         notes: values.notes,
         // Clean customFieldValues to ensure proper format
         // If customFieldValues has 'key', 'value', 'children' properties, it's a tree node object - skip it
-        customFields: (customFieldValues && typeof customFieldValues === 'object' && !customFieldValues.key && !customFieldValues.value && !customFieldValues.children) 
-          ? Object.keys(customFieldValues).reduce((acc, key) => {
-              const value = customFieldValues[key];
-              // Only include if value is a primitive type or array of primitives
-              if (value !== null && value !== undefined) {
-                if (typeof value !== 'object') {
-                  acc[key] = value;
-                } else if (Array.isArray(value)) {
-                  // For arrays, ensure all elements are primitives
-                  const primitiveValues = value.filter(v => v !== null && v !== undefined && typeof v !== 'object');
-                  if (primitiveValues.length > 0) {
-                    acc[key] = primitiveValues;
+        customFields:
+          customFieldValues &&
+          typeof customFieldValues === "object" &&
+          !customFieldValues.key &&
+          !customFieldValues.value &&
+          !customFieldValues.children
+            ? Object.keys(customFieldValues).reduce((acc, key) => {
+                const value = customFieldValues[key];
+                // Only include if value is a primitive type or array of primitives
+                if (value !== null && value !== undefined) {
+                  if (typeof value !== "object") {
+                    acc[key] = value;
+                  } else if (Array.isArray(value)) {
+                    // For arrays, ensure all elements are primitives
+                    const primitiveValues = value.filter(
+                      (v) =>
+                        v !== null && v !== undefined && typeof v !== "object"
+                    );
+                    if (primitiveValues.length > 0) {
+                      acc[key] = primitiveValues;
+                    }
                   }
                 }
-              }
-              return acc;
-            }, {})
-          : {},
+                return acc;
+              }, {})
+            : {},
         // In edit mode, use form field value; in create mode, use footer button value
-        status: desiredStatus
+        status: desiredStatus,
       };
 
-      console.log('🚀 Project data being sent:', projectData);
-      console.log('📋 Custom fields being sent:', projectData.customFields);
-      console.log('🔍 Original customFieldValues:', customFieldValues);
+      console.log("🚀 Project data being sent:", projectData);
+      console.log("📋 Custom fields being sent:", projectData.customFields);
+      console.log("🔍 Original customFieldValues:", customFieldValues);
 
       if (mode === "edit" && project) {
         // Update project - don't include tasks field as ProjectUpdateInput doesn't support it
@@ -1179,23 +1371,28 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         const createProjectData = {
           ...projectData,
           // If saving as draft, do not submit tasks to backend (tasks should be hidden until project is started)
-          tasks: (desiredStatus === 'draft') ? [] : projectTasks.map(task => ({
-            taskTypeId: task.taskTypeId,
-            gradingTaskId: task.gradingTaskId,
-            name: task.name || task.title || 'Unnamed Task',
-            title: task.title || task.name || 'Unnamed Task',
-            description: task.description || '',
-            instructions: task.instructions || '',
-            status: task.status || 'todo',
-            priority: task.priority || 'B',
-            estimatedHours: task.estimatedHours || 0,
-            estimatedCost: task.estimatedCost || 0,
-            dueDate: task.dueDate,
-            assigneeId: task.assigneeId,
-            notes: task.notes || values.notes || '', // Use project notes as default
-          })).filter(task => task.taskTypeId && task.name) // Filter out tasks without required fields
+          tasks:
+            desiredStatus === "draft"
+              ? []
+              : projectTasks
+                  .map((task) => ({
+                    taskTypeId: task.taskTypeId,
+                    gradingTaskId: task.gradingTaskId,
+                    name: task.name || task.title || "Unnamed Task",
+                    title: task.title || task.name || "Unnamed Task",
+                    description: task.description || "",
+                    instructions: task.instructions || "",
+                    status: task.status || "todo",
+                    priority: task.priority || "B",
+                    estimatedHours: task.estimatedHours || 0,
+                    estimatedCost: task.estimatedCost || 0,
+                    dueDate: task.dueDate,
+                    assigneeId: task.assigneeId,
+                    notes: task.notes || values.notes || "", // Use project notes as default
+                  }))
+                  .filter((task) => task.taskTypeId && task.name), // Filter out tasks without required fields
         };
-        
+
         await createProject({
           variables: { input: createProjectData },
         });
@@ -1218,7 +1415,10 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
   }, [form]);
 
   // Check if form should be disabled due to credit issues
-  const isFormDisabledByCredit = projectCreditValidation && !projectCreditValidation.canCreateProject && mode !== "edit";
+  const isFormDisabledByCredit =
+    projectCreditValidation &&
+    !projectCreditValidation.canCreateProject &&
+    mode !== "edit";
 
   return (
     <Form
@@ -1229,20 +1429,22 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     >
       {/* Status is now handled by the form field directly */}
       {/* Credit Validation Alert */}
-      {projectCreditValidation && projectCreditValidation.creditLimitEnabled && !projectCreditValidation.canCreateProject && (
-        <Alert
-          message="Credit Limit Exceeded"
-          description={projectCreditValidation.message}
-          type="error"
-          showIcon
-          style={{ marginBottom: 16 }}
-          action={
-            <Button size="small" type="text">
-              Contact Admin
-            </Button>
-          }
-        />
-      )}
+      {projectCreditValidation &&
+        projectCreditValidation.creditLimitEnabled &&
+        !projectCreditValidation.canCreateProject && (
+          <Alert
+            message="Credit Limit Exceeded"
+            description={projectCreditValidation.message}
+            type="error"
+            showIcon
+            style={{ marginBottom: 16 }}
+            action={
+              <Button size="small" type="text">
+                Contact Admin
+              </Button>
+            }
+          />
+        )}
 
       {/* Active Project Field Restriction Notice */}
       {isActiveProject && (
@@ -1261,7 +1463,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
           <Form.Item
             name="status"
             label="Project Status"
-            rules={[{ required: true, message: "Please select project status" }]}
+            rules={[
+              { required: true, message: "Please select project status" },
+            ]}
           >
             <Radio.Group
               onChange={(e) => {
@@ -1269,39 +1473,61 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                 // Update form state and current status
                 setCurrentStatus(value);
                 form.setFieldsValue({ status: value });
-                
+
                 // If changing to active and we have grading selected, load/regenerate tasks
-                if (value === 'active') {
+                if (value === "active") {
                   if (selectedGradings.length > 0 && gradingTasks.length > 0) {
                     // Regenerate tasks from existing grading tasks for multiple gradings
                     const initialTasks = gradingTasks
-                      .filter(gradingTask => gradingTask && gradingTask.taskType) // Filter out invalid grading tasks
-                      .map(gradingTask => {
+                      .filter(
+                        (gradingTask) => gradingTask && gradingTask.taskType
+                      ) // Filter out invalid grading tasks
+                      .map((gradingTask) => {
                         let preferredUserId = null;
-                        if (clientPreferences?.taskPreferences && gradingTask.taskType?.id) {
-                          const taskPreference = clientPreferences.taskPreferences.find(
-                            pref => pref.taskType?.id === gradingTask.taskType?.id
-                          );
-                          if (taskPreference && taskPreference.preferredUserIds && taskPreference.preferredUserIds.length > 0) {
-                            preferredUserId = taskPreference.preferredUserIds[0];
+                        if (
+                          clientPreferences?.taskPreferences &&
+                          gradingTask.taskType?.id
+                        ) {
+                          const taskPreference =
+                            clientPreferences.taskPreferences.find(
+                              (pref) =>
+                                pref.taskType?.id === gradingTask.taskType?.id
+                            );
+                          if (
+                            taskPreference &&
+                            taskPreference.preferredUserIds &&
+                            taskPreference.preferredUserIds.length > 0
+                          ) {
+                            preferredUserId =
+                              taskPreference.preferredUserIds[0];
                           }
                         }
 
                         return {
                           id: null,
                           gradingTaskId: gradingTask.id,
-                          taskTypeId: gradingTask.taskType?.id || gradingTask.taskTypeId,
-                          name: gradingTask.taskType?.name || gradingTask.name || 'Unnamed Task',
-                          title: gradingTask.taskType?.name || gradingTask.name || 'Unnamed Task',
-                          description: gradingTask.description || gradingTask.taskType?.description || '',
-                          instructions: gradingTask.instructions || '',
-                          status: 'todo',
-                          priority: gradingTask.priority || 'B',
+                          taskTypeId:
+                            gradingTask.taskType?.id || gradingTask.taskTypeId,
+                          name:
+                            gradingTask.taskType?.name ||
+                            gradingTask.name ||
+                            "Unnamed Task",
+                          title:
+                            gradingTask.taskType?.name ||
+                            gradingTask.name ||
+                            "Unnamed Task",
+                          description:
+                            gradingTask.description ||
+                            gradingTask.taskType?.description ||
+                            "",
+                          instructions: gradingTask.instructions || "",
+                          status: "todo",
+                          priority: gradingTask.priority || "B",
                           estimatedHours: gradingTask.estimatedHours || 0,
                           estimatedCost: gradingTask.estimatedCost || 0,
                           dueDate: null,
                           assigneeId: preferredUserId,
-                          notes: '',
+                          notes: "",
                           taskType: gradingTask.taskType,
                           gradingTask: gradingTask,
                           customFields: {},
@@ -1314,57 +1540,82 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                     // If we have a single grading but no tasks loaded yet, fetch them
                     handleGradingSelect(selectedGrading);
                   }
-                } else if (value === 'draft') {
+                } else if (value === "draft") {
                   // Clear tasks when changing back to draft
                   setProjectTasks([]);
                 }
               }}
-              style={{ width: '100%' }}
+              style={{ width: "100%" }}
               buttonStyle="solid"
             >
               {/* Draft Option - Only show if project is currently draft or in create mode */}
-              {(mode === "create" || (mode === "edit" && project?.status === "draft")) && (
-                <Radio.Button value="draft" style={{ marginRight: 8, marginBottom: 8 }}>
+              {(mode === "create" ||
+                (mode === "edit" && project?.status === "draft")) && (
+                <Radio.Button
+                  value="draft"
+                  style={{ marginRight: 8, marginBottom: 8 }}
+                >
                   <FileTextOutlined style={{ marginRight: 6 }} />
                   Draft
                 </Radio.Button>
               )}
-              
+
               {/* Active Option */}
-              <Radio.Button value="active" style={{ marginRight: 8, marginBottom: 8 }}>
+              <Radio.Button
+                value="active"
+                style={{ marginRight: 8, marginBottom: 8 }}
+              >
                 <PlayCircleOutlined style={{ marginRight: 6 }} />
                 Active
               </Radio.Button>
-              
+
               {/* Other status options for active projects in edit mode */}
-              {mode === "edit" && (project?.status === "active" || project?.status === "in_progress" || project?.status === "completed") && (
-                <>
-                  <Radio.Button value="in_progress" style={{ marginRight: 8, marginBottom: 8 }}>
-                    <SyncOutlined style={{ marginRight: 6 }} />
-                    In Progress
-                  </Radio.Button>
-                  
-                  <Radio.Button value="review" style={{ marginRight: 8, marginBottom: 8 }}>
-                    <EyeOutlined style={{ marginRight: 6 }} />
-                    Review
-                  </Radio.Button>
-                  
-                  <Radio.Button value="completed" style={{ marginRight: 8, marginBottom: 8 }}>
-                    <CheckCircleOutlined style={{ marginRight: 6 }} />
-                    Completed
-                  </Radio.Button>
-                  
-                  <Radio.Button value="cancelled" style={{ marginRight: 8, marginBottom: 8 }}>
-                    <StopOutlined style={{ marginRight: 6 }} />
-                    Cancelled
-                  </Radio.Button>
-                  
-                  <Radio.Button value="on_hold" style={{ marginRight: 8, marginBottom: 8 }}>
-                    <PauseCircleOutlined style={{ marginRight: 6 }} />
-                    On Hold
-                  </Radio.Button>
-                </>
-              )}
+              {mode === "edit" &&
+                (project?.status === "active" ||
+                  project?.status === "in_progress" ||
+                  project?.status === "completed") && (
+                  <>
+                    <Radio.Button
+                      value="in_progress"
+                      style={{ marginRight: 8, marginBottom: 8 }}
+                    >
+                      <SyncOutlined style={{ marginRight: 6 }} />
+                      In Progress
+                    </Radio.Button>
+
+                    <Radio.Button
+                      value="review"
+                      style={{ marginRight: 8, marginBottom: 8 }}
+                    >
+                      <EyeOutlined style={{ marginRight: 6 }} />
+                      Review
+                    </Radio.Button>
+
+                    <Radio.Button
+                      value="completed"
+                      style={{ marginRight: 8, marginBottom: 8 }}
+                    >
+                      <CheckCircleOutlined style={{ marginRight: 6 }} />
+                      Completed
+                    </Radio.Button>
+
+                    <Radio.Button
+                      value="cancelled"
+                      style={{ marginRight: 8, marginBottom: 8 }}
+                    >
+                      <StopOutlined style={{ marginRight: 6 }} />
+                      Cancelled
+                    </Radio.Button>
+
+                    <Radio.Button
+                      value="on_hold"
+                      style={{ marginRight: 8, marginBottom: 8 }}
+                    >
+                      <PauseCircleOutlined style={{ marginRight: 6 }} />
+                      On Hold
+                    </Radio.Button>
+                  </>
+                )}
             </Radio.Group>
           </Form.Item>
         </Col>
@@ -1394,7 +1645,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                 if (!client) return props.label;
                 return (
                   <span>
-                    <strong>{client.clientCode}</strong>
+                    <strong>{client.clientCode}</strong>({client.displayName})
                   </span>
                 );
               }}
@@ -1402,8 +1653,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
               {clientsData?.clients?.map((client) => (
                 <Option key={client.id} value={client.id}>
                   <div>
-                    <div style={{ fontWeight: "bold" }}>
-                      {client.clientCode}
+                    <div>
+                      <strong>{client.clientCode}</strong> ({client.displayName}
+                      )
                     </div>
                   </div>
                 </Option>
@@ -1427,35 +1679,40 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
               {(() => {
                 console.log("Filtering work types:");
                 console.log("Available work types:", workTypesData?.workTypes);
-                console.log("Client preferences workTypes:", clientPreferences?.workTypes);
-                
+                console.log(
+                  "Client preferences workTypes:",
+                  clientPreferences?.workTypes
+                );
+
                 // Ensure workTypesData.workTypes exists before filtering
                 const workTypes = workTypesData?.workTypes || [];
-                
+
                 return workTypes.filter((workType) => {
                   if (clientPreferences?.workTypes?.length > 0) {
                     const isPreferred = clientPreferences.workTypes.some(
                       (pref) => pref.id === workType.id
                     );
-                    console.log(`Work type ${workType.name} (${workType.id}) is preferred:`, isPreferred);
+                    console.log(
+                      `Work type ${workType.name} (${workType.id}) is preferred:`,
+                      isPreferred
+                    );
                     return isPreferred;
                   }
                   console.log(`No client preferences, showing all work types`);
                   return true;
                 });
-              })()
-                .map((workType) => (
-                  <Option key={workType.id} value={workType.id}>
-                    {workType.name}
-                    {clientPreferences?.workTypes?.some(
-                      (pref) => pref.id === workType.id
-                    ) && (
-                      <span style={{ color: "#52c41a", marginLeft: 8 }}>
-                        ★ Preferred
-                      </span>
-                    )}
-                  </Option>
-                ))}
+              })().map((workType) => (
+                <Option key={workType.id} value={workType.id}>
+                  {workType.name}
+                  {clientPreferences?.workTypes?.some(
+                    (pref) => pref.id === workType.id
+                  ) && (
+                    <span style={{ color: "#52c41a", marginLeft: 8 }}>
+                      ★ Preferred
+                    </span>
+                  )}
+                </Option>
+              ))}
             </Select>
           </Form.Item>
         </Col>
@@ -1463,15 +1720,21 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         <Col span={7}>
           <Form.Item
             label="Grading Selection"
-            rules={[{ required: true, message: "Please select at least one grading" }]}
+            rules={[
+              { required: true, message: "Please select at least one grading" },
+            ]}
           >
             <Select
               mode="multiple"
-              placeholder={selectedWorkType ? "Select gradings" : "Please select work type first"}
+              placeholder={
+                selectedWorkType
+                  ? "Select gradings"
+                  : "Please select work type first"
+              }
               disabled={!selectedWorkType || isActiveProject}
-              value={selectedGradings.map(sg => sg.gradingId)}
+              value={selectedGradings.map((sg) => sg.gradingId)}
               onChange={handleMultipleGradingSelect}
-              style={{ width: '100%' }}
+              style={{ width: "100%" }}
               optionLabelProp="label"
             >
               {(workTypeGradings || [])
@@ -1487,21 +1750,41 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                   const clientPref = clientPreferences?.gradings?.find(
                     (pref) => pref.grading?.id === grading.id
                   );
-                  const displayRate = clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null
-                    ? clientPref.customRate
-                    : grading.defaultRate;
-                  const shortCodeDisplay = grading.shortCode ? `[${grading.shortCode}] ` : '';
-                  const label = `${shortCodeDisplay}${grading.name} - ₹${Number(displayRate || 0).toLocaleString()}`;
+                  const displayRate =
+                    clientPref &&
+                    clientPref.customRate !== undefined &&
+                    clientPref.customRate !== null
+                      ? clientPref.customRate
+                      : grading.defaultRate;
+                  const shortCodeDisplay = grading.shortCode
+                    ? `[${grading.shortCode}] `
+                    : "";
+                  const label = `${shortCodeDisplay}${grading.name} - ₹${Number(
+                    displayRate || 0
+                  ).toLocaleString()}`;
                   return (
                     <Option key={grading.id} value={grading.id} label={label}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
                         <span>
                           {grading.shortCode && (
-                            <span style={{ color: '#1890ff', fontWeight: 'bold', marginRight: 4 }}>
+                            <span
+                              style={{
+                                color: "#1890ff",
+                                fontWeight: "bold",
+                                marginRight: 4,
+                              }}
+                            >
                               [{grading.shortCode}]
                             </span>
                           )}
-                          {grading.name} - ₹{Number(displayRate || 0).toLocaleString()}
+                          {grading.name} - ₹
+                          {Number(displayRate || 0).toLocaleString()}
                         </span>
                         {clientPref && (
                           <span style={{ color: "#52c41a", marginLeft: 8 }}>
@@ -1528,101 +1811,186 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         <Row gutter={16} style={{ marginTop: 16 }}>
           <Col span={24}>
             <div style={{ marginBottom: 16 }}>
-              <h4 style={{ marginBottom: 12, color: '#1890ff' }}>Image Quantities per Grading</h4>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 16 }}>
+              <h4 style={{ marginBottom: 12, color: "#1890ff" }}>
+                Image Quantities per Grading
+              </h4>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
                 {selectedGradings.map((selectedGrading, index) => {
-                  const grading = workTypeGradings?.find(g => g.id === selectedGrading.gradingId);
+                  const grading = workTypeGradings?.find(
+                    (g) => g.id === selectedGrading.gradingId
+                  );
                   const clientPref = clientPreferences?.gradings?.find(
                     (pref) => pref.grading?.id === selectedGrading.gradingId
                   );
-                  
+
                   // Priority: customRate > clientPref.customRate > grading.defaultRate
-                  const effectiveRate = selectedGrading.customRate !== undefined && selectedGrading.customRate !== null
-                    ? selectedGrading.customRate
-                    : (clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null
+                  const effectiveRate =
+                    selectedGrading.customRate !== undefined &&
+                    selectedGrading.customRate !== null
+                      ? selectedGrading.customRate
+                      : clientPref &&
+                        clientPref.customRate !== undefined &&
+                        clientPref.customRate !== null
                       ? clientPref.customRate
-                      : grading?.defaultRate || 0);
-                  
+                      : grading?.defaultRate || 0;
+
                   const defaultRate = grading?.defaultRate || 0;
-                  const clientCustomRate = clientPref && clientPref.customRate !== undefined && clientPref.customRate !== null ? clientPref.customRate : null;
-                  const hasCustomRate = selectedGrading.customRate !== undefined && selectedGrading.customRate !== null;
-                  const isUsingClientRate = !hasCustomRate && clientCustomRate !== null;
-                  
+                  const clientCustomRate =
+                    clientPref &&
+                    clientPref.customRate !== undefined &&
+                    clientPref.customRate !== null
+                      ? clientPref.customRate
+                      : null;
+                  const hasCustomRate =
+                    selectedGrading.customRate !== undefined &&
+                    selectedGrading.customRate !== null;
+                  const isUsingClientRate =
+                    !hasCustomRate && clientCustomRate !== null;
+
                   return (
-                    <div 
+                    <div
                       key={`${selectedGrading.gradingId}-${index}`}
-                      style={{ 
-                        flex: '1 1 350px',
+                      style={{
+                        flex: "1 1 350px",
                         minWidth: 300,
-                        padding: 16, 
-                        border: '1px solid #d9d9d9', 
+                        padding: 16,
+                        border: "1px solid #d9d9d9",
                         borderRadius: 8,
-                        backgroundColor: '#fafafa'
+                        backgroundColor: "#fafafa",
                       }}
                     >
-                      <div style={{ marginBottom: 12, fontWeight: 500, color: '#262626' }}>
+                      <div
+                        style={{
+                          marginBottom: 12,
+                          fontWeight: 500,
+                          color: "#262626",
+                        }}
+                      >
                         {grading?.shortCode && (
-                          <span style={{ color: '#1890ff', fontWeight: 'bold', marginRight: 4 }}>
+                          <span
+                            style={{
+                              color: "#1890ff",
+                              fontWeight: "bold",
+                              marginRight: 4,
+                            }}
+                          >
                             [{grading.shortCode}]
                           </span>
                         )}
-                        {grading?.name || 'Unknown Grading'}
-                        <div style={{ fontSize: 12, color: '#8c8c8c', fontWeight: 'normal', marginTop: 2 }}>
+                        {grading?.name || "Unknown Grading"}
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "#8c8c8c",
+                            fontWeight: "normal",
+                            marginTop: 2,
+                          }}
+                        >
                           Default: ₹{Number(defaultRate).toLocaleString()}/image
                         </div>
                       </div>
-                      
+
                       <Row gutter={8}>
                         <Col span={12}>
-                          <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>Image Quantity</div>
+                          <div
+                            style={{
+                              marginBottom: 4,
+                              fontSize: 12,
+                              fontWeight: 500,
+                            }}
+                          >
+                            Image Quantity
+                          </div>
                           <InputNumber
                             placeholder="Quantity"
                             value={selectedGrading.imageQuantity}
                             min={1}
-                            onChange={(value) => updateGradingQuantity(index, value || 0)}
+                            onChange={(value) =>
+                              updateGradingQuantity(index, value || 0)
+                            }
                             disabled={isActiveProject}
-                            style={{ width: '100%' }}
+                            style={{ width: "100%" }}
                             size="small"
                           />
                         </Col>
                         <Col span={12}>
-                          <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                          <div
+                            style={{
+                              marginBottom: 4,
+                              fontSize: 12,
+                              fontWeight: 500,
+                            }}
+                          >
                             Custom Rate
-                            <span style={{ color: '#8c8c8c', fontWeight: 'normal' }}> (₹/image)</span>
+                            <span
+                              style={{ color: "#8c8c8c", fontWeight: "normal" }}
+                            >
+                              {" "}
+                              (₹/image)
+                            </span>
                             {isUsingClientRate && (
-                              <span style={{ color: '#52c41a', fontSize: 10, marginLeft: 4 }}>★ Client Rate</span>
+                              <span
+                                style={{
+                                  color: "#52c41a",
+                                  fontSize: 10,
+                                  marginLeft: 4,
+                                }}
+                              >
+                                ★ Client Rate
+                              </span>
                             )}
                           </div>
                           <InputNumber
-                            placeholder={clientCustomRate ? `Client: ${clientCustomRate}` : `Default: ${defaultRate}`}
+                            placeholder={
+                              clientCustomRate
+                                ? `Client: ${clientCustomRate}`
+                                : `Default: ${defaultRate}`
+                            }
                             value={selectedGrading.customRate}
                             min={0}
                             precision={2}
-                            onChange={(value) => updateGradingCustomRate(index, value)}
+                            onChange={(value) =>
+                              updateGradingCustomRate(index, value)
+                            }
                             disabled={isActiveProject}
-                            style={{ 
-                              width: '100%',
-                              backgroundColor: hasCustomRate ? '#e6f7ff' : (isUsingClientRate ? '#f6ffed' : undefined)
+                            style={{
+                              width: "100%",
+                              backgroundColor: hasCustomRate
+                                ? "#e6f7ff"
+                                : isUsingClientRate
+                                ? "#f6ffed"
+                                : undefined,
                             }}
                             size="small"
                           />
                         </Col>
                       </Row>
-                      
-                      <div style={{ 
-                        marginTop: 12, 
-                        padding: '8px 12px',
-                        backgroundColor: '#f0f0f0',
-                        borderRadius: 4,
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}>
-                        <span style={{ fontSize: 12, color: '#595959' }}>
+
+                      <div
+                        style={{
+                          marginTop: 12,
+                          padding: "8px 12px",
+                          backgroundColor: "#f0f0f0",
+                          borderRadius: 4,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span style={{ fontSize: 12, color: "#595959" }}>
                           Estimated Cost:
                         </span>
-                        <span style={{ fontSize: 14, fontWeight: 600, color: '#1890ff' }}>
-                          ₹{((selectedGrading.imageQuantity || 0) * effectiveRate).toLocaleString()}
+                        <span
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: "#1890ff",
+                          }}
+                        >
+                          ₹
+                          {(
+                            (selectedGrading.imageQuantity || 0) * effectiveRate
+                          ).toLocaleString()}
                         </span>
                       </div>
                     </div>
@@ -1654,21 +2022,25 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       <Row gutter={16} style={{ marginTop: 8 }}>
         <Col span={8}>
           <Form.Item label="Total Image Quantity">
-            <div style={{ 
-              padding: '8px 12px', 
-              border: '1px solid #d9d9d9', 
-              borderRadius: '6px',
-              backgroundColor: '#f5f5f5',
-              minHeight: '40px',
-              display: 'flex',
-              alignItems: 'center',
-              fontSize: '16px',
-              fontWeight: '500'
-            }}>
+            <div
+              style={{
+                padding: "8px 12px",
+                border: "1px solid #d9d9d9",
+                borderRadius: "6px",
+                backgroundColor: "#f5f5f5",
+                minHeight: "40px",
+                display: "flex",
+                alignItems: "center",
+                fontSize: "16px",
+                fontWeight: "500",
+              }}
+            >
               {totalImageQuantity > 0 ? (
                 <span>{totalImageQuantity.toLocaleString()} images</span>
               ) : (
-                <span style={{ color: '#999' }}>Select gradings to see total</span>
+                <span style={{ color: "#999" }}>
+                  Select gradings to see total
+                </span>
               )}
             </div>
           </Form.Item>
@@ -1683,7 +2055,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
             <DatePicker
               placeholder="Select deadline"
               style={{ width: "100%" }}
-              disabledDate={(current) => current && current < dayjs().startOf('day')}
+              disabledDate={(current) =>
+                current && current < dayjs().startOf("day")
+              }
             />
           </Form.Item>
         </Col>
@@ -1695,7 +2069,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
           <Form.Item
             name="description"
             label="Project Description"
-            rules={[{ required: true, message: "Please enter project description" }]}
+            rules={[
+              { required: true, message: "Please enter project description" },
+            ]}
           >
             <Input.TextArea
               placeholder="Enter project description"
@@ -1723,19 +2099,27 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         </Col>
         <Col span={8}>
           <Form.Item label="Estimated Cost (₹)">
-            <div style={{ 
-              padding: '4px 11px', 
-              backgroundColor: '#f5f5f5', 
-              border: '1px solid #d9d9d9',
-              borderRadius: '6px',
-              minHeight: '32px',
-              display: 'flex',
-              alignItems: 'center'
-            }}>
-              <span style={{ color: '#595959', fontWeight: 'bold' }}>
+            <div
+              style={{
+                padding: "4px 11px",
+                backgroundColor: "#f5f5f5",
+                border: "1px solid #d9d9d9",
+                borderRadius: "6px",
+                minHeight: "32px",
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              <span style={{ color: "#595959", fontWeight: "bold" }}>
                 ₹{totalCalculatedBudget?.toLocaleString() || "0"}
               </span>
-              <span style={{ color: '#8c8c8c', marginLeft: '8px', fontSize: '12px' }}>
+              <span
+                style={{
+                  color: "#8c8c8c",
+                  marginLeft: "8px",
+                  fontSize: "12px",
+                }}
+              >
                 (Auto-calculated from all gradings)
               </span>
             </div>
@@ -1746,10 +2130,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       {/* Notes Section */}
       <Row gutter={16}>
         <Col span={24}>
-          <Form.Item
-            name="notes"
-            label="Internal Notes"
-          >
+          <Form.Item name="notes" label="Internal Notes">
             <Input.TextArea
               placeholder="Internal notes (not visible to client)"
               rows={3}
@@ -1758,11 +2139,8 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
         </Col>
       </Row>
 
-
-
       {/* Credit information is shown below in Project Summary (uses projectCreditValidation) */}
 
-      
       {/* Custom Fields Section */}
       {customFields.length > 0 && (
         <Row gutter={16} style={{ marginTop: 16 }}>
@@ -1770,7 +2148,12 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
             <Card
               title={
                 <Text strong>
-                  Additional Fields for {workTypesData?.workTypes?.find(wt => wt.id === selectedWorkType)?.name}
+                  Additional Fields for{" "}
+                  {
+                    workTypesData?.workTypes?.find(
+                      (wt) => wt.id === selectedWorkType
+                    )?.name
+                  }
                 </Text>
               }
               size="small"
@@ -1778,7 +2161,10 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
             >
               <Row gutter={16}>
                 {(customFields || []).map((field) => (
-                  <Col span={field.fieldType === 'textarea' ? 24 : 12} key={field.id}>
+                  <Col
+                    span={field.fieldType === "textarea" ? 24 : 12}
+                    key={field.id}
+                  >
                     <CustomFieldRenderer
                       field={field}
                       value={customFieldValues[field.fieldKey]}
@@ -1794,18 +2180,26 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       )}
 
       {/* Draft Project Task Notice */}
-      {(currentStatus === 'draft' || (mode === "edit" && isDraftProject)) && (
+      {(currentStatus === "draft" || (mode === "edit" && isDraftProject)) && (
         <Row gutter={16} style={{ marginTop: 16 }}>
           <Col span={24}>
             <Card
               size="small"
-              style={{ backgroundColor: "#fff7e6", border: "1px solid #ffd666" }}
+              style={{
+                backgroundColor: "#fff7e6",
+                border: "1px solid #ffd666",
+              }}
             >
               <div style={{ textAlign: "center", color: "#d89614" }}>
                 <Typography.Text>
-                  📋 <strong>Tasks will be created automatically when this project is activated.</strong>
+                  📋{" "}
+                  <strong>
+                    Tasks will be created automatically when this project is
+                    activated.
+                  </strong>
                   <br />
-                  Tasks are based on the selected grading and will be assigned according to client preferences.
+                  Tasks are based on the selected grading and will be assigned
+                  according to client preferences.
                 </Typography.Text>
               </div>
             </Card>
@@ -1814,38 +2208,61 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       )}
 
       {/* Task Management Section - Show for active projects in both create and edit mode */}
-      {projectTasks.length > 0 && (currentStatus === 'active' || (mode === "edit" && isActiveProject)) && (
-        <Row gutter={16} style={{ marginTop: 16 }}>
-          <Col span={24}>
-            <Card
-              title={<Text strong>Project Tasks Management</Text>}
-              size="small"
-              style={{ backgroundColor: "#f0f9ff" }}
-            >
-              <TaskManager
-                tasks={projectTasks}
-                onTaskUpdate={handleTaskUpdate}
-                availableUsers={availableUsers}
-                workType={workTypesData?.workTypes?.find(wt => wt.id === selectedWorkType)}
-                grading={workTypeGradings?.find(g => g.id === selectedGrading)}
-                gradingTasks={gradingTasks}
-                clientPreferences={clientPreferences}
-                customFields={customFieldValues ? Object.entries(customFieldValues).map(([key, value]) => {
-                  const field = customFields.find(f => f.fieldKey === key);
-                  return {
-                    label: field ? field.fieldName : key,
-                    value: value
-                  };
-                }) : []}
-                readOnly={loading || isFormDisabledByCredit}
-                layout="row"
-                clientCode={selectedClientId ? (clientsData?.clients?.find(c => c.id === selectedClientId)?.clientCode || clientsData?.clients?.find(c => c.id === selectedClientId)?.code) : null}
-                projectDescription={form.getFieldValue('description')}
-              />
-            </Card>
-          </Col>
-        </Row>
-      )}
+      {projectTasks.length > 0 &&
+        (currentStatus === "active" ||
+          (mode === "edit" && isActiveProject)) && (
+          <Row gutter={16} style={{ marginTop: 16 }}>
+            <Col span={24}>
+              <Card
+                title={<Text strong>Project Tasks Management</Text>}
+                size="small"
+                style={{ backgroundColor: "#f0f9ff" }}
+              >
+                <TaskManager
+                  tasks={projectTasks}
+                  onTaskUpdate={handleTaskUpdate}
+                  availableUsers={availableUsers}
+                  workType={workTypesData?.workTypes?.find(
+                    (wt) => wt.id === selectedWorkType
+                  )}
+                  grading={workTypeGradings?.find(
+                    (g) => g.id === selectedGrading
+                  )}
+                  gradingTasks={gradingTasks}
+                  clientPreferences={clientPreferences}
+                  customFields={
+                    customFieldValues
+                      ? Object.entries(customFieldValues).map(
+                          ([key, value]) => {
+                            const field = customFields.find(
+                              (f) => f.fieldKey === key
+                            );
+                            return {
+                              label: field ? field.fieldName : key,
+                              value: value,
+                            };
+                          }
+                        )
+                      : []
+                  }
+                  readOnly={loading || isFormDisabledByCredit}
+                  layout="row"
+                  clientCode={
+                    selectedClientId
+                      ? clientsData?.clients?.find(
+                          (c) => c.id === selectedClientId
+                        )?.clientCode ||
+                        clientsData?.clients?.find(
+                          (c) => c.id === selectedClientId
+                        )?.code
+                      : null
+                  }
+                  projectDescription={form.getFieldValue("description")}
+                />
+              </Card>
+            </Col>
+          </Row>
+        )}
 
       {/* Removed duplicate Deadline and Description fields (already present above as 'deadlineDate' and 'description') */}
 
@@ -1854,59 +2271,90 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       <Row gutter={16}>
         <Col span={24}>
           {/* Invoice-Style Summary Card */}
-          <Card 
+          <Card
             title={
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
                 <span>Project Invoice Summary</span>
                 {projectCreditValidation?.creditLimitEnabled && (
                   <div style={{ fontSize: "12px", fontWeight: "normal" }}>
                     {projectCreditValidation.canCreateProject ? (
-                      <span style={{ color: "#52c41a" }}>✓ Credit Approved</span>
+                      <span style={{ color: "#52c41a" }}>
+                        ✓ Credit Approved
+                      </span>
                     ) : (
-                      <span style={{ color: "#ff4d4f" }}>⚠ Credit Exceeded</span>
+                      <span style={{ color: "#ff4d4f" }}>
+                        ⚠ Credit Exceeded
+                      </span>
                     )}
                   </div>
                 )}
               </div>
             }
-            style={{ 
-              backgroundColor: projectCreditValidation?.canCreateProject === false ? "#fff2f0" : "#f6ffed",
-              borderColor: projectCreditValidation?.canCreateProject === false ? "#ffccc7" : "#b7eb8f",
-              marginBottom: 16 
+            style={{
+              backgroundColor:
+                projectCreditValidation?.canCreateProject === false
+                  ? "#fff2f0"
+                  : "#f6ffed",
+              borderColor:
+                projectCreditValidation?.canCreateProject === false
+                  ? "#ffccc7"
+                  : "#b7eb8f",
+              marginBottom: 16,
             }}
           >
             <Row gutter={[16, 8]}>
               {/* Main Project Details */}
               <Col span={12}>
-                <div style={{ borderRight: "1px solid #f0f0f0", paddingRight: "16px" }}>
-                  <Text strong style={{ fontSize: "16px", display: "block", marginBottom: "8px" }}>
+                <div
+                  style={{
+                    borderRight: "1px solid #f0f0f0",
+                    paddingRight: "16px",
+                  }}
+                >
+                  <Text
+                    strong
+                    style={{
+                      fontSize: "16px",
+                      display: "block",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Project Details
                   </Text>
                   <div style={{ marginBottom: "4px" }}>
                     <Text type="secondary">Client: </Text>
                     <Text>
-                      {selectedClientId 
-                        ? clientsData?.clients?.find(c => c.id === selectedClientId)?.displayName || "Selected Client"
-                        : "Not Selected"
-                      }
+                      {selectedClientId
+                        ? clientsData?.clients?.find(
+                            (c) => c.id === selectedClientId
+                          )?.displayName || "Selected Client"
+                        : "Not Selected"}
                     </Text>
                   </div>
                   <div style={{ marginBottom: "4px" }}>
                     <Text type="secondary">Work Type: </Text>
                     <Text>
-                      {selectedWorkType 
-                        ? workTypesData?.workTypes?.find(wt => wt.id === selectedWorkType)?.name || "Selected Work Type"
-                        : "Not Selected"
-                      }
+                      {selectedWorkType
+                        ? workTypesData?.workTypes?.find(
+                            (wt) => wt.id === selectedWorkType
+                          )?.name || "Selected Work Type"
+                        : "Not Selected"}
                     </Text>
                   </div>
                   <div style={{ marginBottom: "4px" }}>
                     <Text type="secondary">Grading: </Text>
                     <Text>
-                      {selectedGrading 
-                        ? workTypeGradings?.find(g => g.id === selectedGrading)?.name || "Selected Grading"
-                        : "Not Selected"
-                      }
+                      {selectedGrading
+                        ? workTypeGradings?.find(
+                            (g) => g.id === selectedGrading
+                          )?.name || "Selected Grading"
+                        : "Not Selected"}
                     </Text>
                   </div>
                   <div style={{ marginBottom: "4px" }}>
@@ -1916,14 +2364,21 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                   <div>
                     <Text type="secondary">Rate per image: </Text>
                     {(() => {
-                      const gradingObj = workTypeGradings?.find(g => g.id === selectedGrading);
-                      const clientCustom = clientPreferences?.gradings?.find(g => g.grading?.id === selectedGrading)?.customRate;
-                      const rateToShow = (perImageRate !== null && perImageRate !== undefined)
-                        ? perImageRate
-                        : (clientCustom !== undefined && clientCustom !== null)
+                      const gradingObj = workTypeGradings?.find(
+                        (g) => g.id === selectedGrading
+                      );
+                      const clientCustom = clientPreferences?.gradings?.find(
+                        (g) => g.grading?.id === selectedGrading
+                      )?.customRate;
+                      const rateToShow =
+                        perImageRate !== null && perImageRate !== undefined
+                          ? perImageRate
+                          : clientCustom !== undefined && clientCustom !== null
                           ? clientCustom
                           : gradingObj?.defaultRate || 0;
-                      return <Text>₹{Number(rateToShow).toLocaleString()}</Text>;
+                      return (
+                        <Text>₹{Number(rateToShow).toLocaleString()}</Text>
+                      );
                     })()}
                   </div>
                 </div>
@@ -1931,65 +2386,118 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
               {/* Credit Information */}
               <Col span={12}>
-                <Text strong style={{ fontSize: "16px", display: "block", marginBottom: "8px" }}>
+                <Text
+                  strong
+                  style={{
+                    fontSize: "16px",
+                    display: "block",
+                    marginBottom: "8px",
+                  }}
+                >
                   💳 Credit Information
                 </Text>
                 {projectCreditValidation ? (
                   <>
                     {projectCreditValidation.creditLimitEnabled ? (
                       <>
-                        <div style={{ 
-                          backgroundColor: projectCreditValidation.canCreateProject ? "#f6ffed" : "#fff2f0",
-                          padding: "8px",
-                          borderRadius: "4px",
-                          marginBottom: "8px",
-                          border: `1px solid ${projectCreditValidation.canCreateProject ? "#b7eb8f" : "#ffccc7"}`
-                        }}>
+                        <div
+                          style={{
+                            backgroundColor:
+                              projectCreditValidation.canCreateProject
+                                ? "#f6ffed"
+                                : "#fff2f0",
+                            padding: "8px",
+                            borderRadius: "4px",
+                            marginBottom: "8px",
+                            border: `1px solid ${
+                              projectCreditValidation.canCreateProject
+                                ? "#b7eb8f"
+                                : "#ffccc7"
+                            }`,
+                          }}
+                        >
                           <div style={{ marginBottom: "4px" }}>
                             <Text type="secondary">Credit Limit: </Text>
-                            <Text strong>₹{projectCreditValidation.creditLimit?.toLocaleString()}</Text>
+                            <Text strong>
+                              ₹
+                              {projectCreditValidation.creditLimit?.toLocaleString()}
+                            </Text>
                           </div>
                           <div style={{ marginBottom: "4px" }}>
                             <Text type="secondary">Used Credit: </Text>
-                            <Text>₹{projectCreditValidation.usedCredit?.toLocaleString()}</Text>
+                            <Text>
+                              ₹
+                              {projectCreditValidation.usedCredit?.toLocaleString()}
+                            </Text>
                           </div>
                           <div style={{ marginBottom: "4px" }}>
                             <Text type="secondary">Available Credit: </Text>
-                            <Text strong style={{ color: projectCreditValidation.availableCredit < 0 ? "#ff4d4f" : "#52c41a" }}>
-                              ₹{projectCreditValidation.availableCredit?.toLocaleString()}
+                            <Text
+                              strong
+                              style={{
+                                color:
+                                  projectCreditValidation.availableCredit < 0
+                                    ? "#ff4d4f"
+                                    : "#52c41a",
+                              }}
+                            >
+                              ₹
+                              {projectCreditValidation.availableCredit?.toLocaleString()}
                             </Text>
                           </div>
                           <div style={{ marginBottom: "4px" }}>
                             <Text type="secondary">Required for Project: </Text>
-                            <Text strong>₹{projectCreditValidation.requiredCredit?.toLocaleString()}</Text>
+                            <Text strong>
+                              ₹
+                              {projectCreditValidation.requiredCredit?.toLocaleString()}
+                            </Text>
                           </div>
-                          <div style={{ 
-                            padding: "4px 8px", 
-                            borderRadius: "4px", 
-                            backgroundColor: projectCreditValidation.canCreateProject ? "#52c41a" : "#ff4d4f",
-                            color: "white",
-                            textAlign: "center",
-                            marginTop: "8px"
-                          }}>
+                          <div
+                            style={{
+                              padding: "4px 8px",
+                              borderRadius: "4px",
+                              backgroundColor:
+                                projectCreditValidation.canCreateProject
+                                  ? "#52c41a"
+                                  : "#ff4d4f",
+                              color: "white",
+                              textAlign: "center",
+                              marginTop: "8px",
+                            }}
+                          >
                             <Text strong style={{ color: "white" }}>
-                              {projectCreditValidation.canCreateProject ? "✓ Credit Approved" : "⚠ Credit Exceeded"}
+                              {projectCreditValidation.canCreateProject
+                                ? "✓ Credit Approved"
+                                : "⚠ Credit Exceeded"}
                             </Text>
                           </div>
                         </div>
                         {!projectCreditValidation.canCreateProject && (
-                          <div style={{ fontSize: "11px", color: "#ff4d4f", textAlign: "center" }}>
-                            Remaining after project: ₹{(projectCreditValidation.availableCredit - projectCreditValidation.requiredCredit).toLocaleString()}
+                          <div
+                            style={{
+                              fontSize: "11px",
+                              color: "#ff4d4f",
+                              textAlign: "center",
+                            }}
+                          >
+                            Remaining after project: ₹
+                            {(
+                              projectCreditValidation.availableCredit -
+                              projectCreditValidation.requiredCredit
+                            ).toLocaleString()}
                           </div>
                         )}
                       </>
                     ) : (
-                      <div style={{ 
-                        textAlign: "center", 
-                        padding: "20px",
-                        backgroundColor: "#f6ffed",
-                        borderRadius: "6px",
-                        border: "1px solid #b7eb8f"
-                      }}>
+                      <div
+                        style={{
+                          textAlign: "center",
+                          padding: "20px",
+                          backgroundColor: "#f6ffed",
+                          borderRadius: "6px",
+                          border: "1px solid #b7eb8f",
+                        }}
+                      >
                         <Text style={{ color: "#52c41a", fontSize: "16px" }}>
                           ✓ Unlimited Credit - No Restrictions
                         </Text>
@@ -1997,42 +2505,68 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                     )}
                   </>
                 ) : (
-                  <div style={{ 
-                    textAlign: "center", 
-                    padding: "20px",
-                    backgroundColor: "#fafafa",
-                    borderRadius: "6px",
-                    border: "1px dashed #d9d9d9"
-                  }}>
-                    <Text type="secondary">Select client and grading to view credit information</Text>
+                  <div
+                    style={{
+                      textAlign: "center",
+                      padding: "20px",
+                      backgroundColor: "#fafafa",
+                      borderRadius: "6px",
+                      border: "1px dashed #d9d9d9",
+                    }}
+                  >
+                    <Text type="secondary">
+                      Select client and grading to view credit information
+                    </Text>
                   </div>
                 )}
               </Col>
 
               {/* Total Amount Section */}
               <Col span={24}>
-                <div style={{ 
-                  borderTop: "2px solid #f0f0f0", 
-                  marginTop: "16px", 
-                  paddingTop: "16px", 
-                  textAlign: "center",
-                  backgroundColor: projectCreditValidation?.canCreateProject === false ? "#fff1f0" : "#f9f9f9",
-                  padding: "16px",
-                  borderRadius: "6px"
-                }}>
-                  <Text strong style={{ fontSize: "18px", display: "block", marginBottom: "8px" }}>
+                <div
+                  style={{
+                    borderTop: "2px solid #f0f0f0",
+                    marginTop: "16px",
+                    paddingTop: "16px",
+                    textAlign: "center",
+                    backgroundColor:
+                      projectCreditValidation?.canCreateProject === false
+                        ? "#fff1f0"
+                        : "#f9f9f9",
+                    padding: "16px",
+                    borderRadius: "6px",
+                  }}
+                >
+                  <Text
+                    strong
+                    style={{
+                      fontSize: "18px",
+                      display: "block",
+                      marginBottom: "8px",
+                    }}
+                  >
                     Total Project Amount
                   </Text>
-                  <div style={{ fontSize: "28px", fontWeight: "bold", color: projectCreditValidation?.canCreateProject === false ? "#ff4d4f" : "#1890ff" }}>
+                  <div
+                    style={{
+                      fontSize: "28px",
+                      fontWeight: "bold",
+                      color:
+                        projectCreditValidation?.canCreateProject === false
+                          ? "#ff4d4f"
+                          : "#1890ff",
+                    }}
+                  >
                     ₹{calculatedBudget.toLocaleString()}
                   </div>
-                  {projectCreditValidation && !projectCreditValidation.canCreateProject && (
-                    <div style={{ marginTop: "8px" }}>
-                      <Text type="danger" style={{ fontSize: "12px" }}>
-                        {projectCreditValidation.message}
-                      </Text>
-                    </div>
-                  )}
+                  {projectCreditValidation &&
+                    !projectCreditValidation.canCreateProject && (
+                      <div style={{ marginTop: "8px" }}>
+                        <Text type="danger" style={{ fontSize: "12px" }}>
+                          {projectCreditValidation.message}
+                        </Text>
+                      </div>
+                    )}
                 </div>
               </Col>
 
@@ -2040,14 +2574,42 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
               {projectTasks && projectTasks.length > 0 && (
                 <Col span={24}>
                   <div style={{ marginTop: "16px" }}>
-                    <Text strong style={{ fontSize: "14px", display: "block", marginBottom: "8px" }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: "14px",
+                        display: "block",
+                        marginBottom: "8px",
+                      }}
+                    >
                       Task Breakdown
                     </Text>
-                    <div style={{ maxHeight: "200px", overflowY: "auto", border: "1px solid #f0f0f0", borderRadius: "4px", padding: "8px" }}>
+                    <div
+                      style={{
+                        maxHeight: "200px",
+                        overflowY: "auto",
+                        border: "1px solid #f0f0f0",
+                        borderRadius: "4px",
+                        padding: "8px",
+                      }}
+                    >
                       {projectTasks.map((task, index) => (
-                        <div key={index} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: index < projectTasks.length - 1 ? "1px solid #f5f5f5" : "none" }}>
+                        <div
+                          key={index}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            padding: "4px 0",
+                            borderBottom:
+                              index < projectTasks.length - 1
+                                ? "1px solid #f5f5f5"
+                                : "none",
+                          }}
+                        >
                           <span>{task.name || `Task ${index + 1}`}</span>
-                          <span>₹{task.estimatedCost?.toLocaleString() || "0"}</span>
+                          <span>
+                            ₹{task.estimatedCost?.toLocaleString() || "0"}
+                          </span>
                         </div>
                       ))}
                     </div>
@@ -2058,8 +2620,6 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
           </Card>
         </Col>
       </Row>
-
-
     </Form>
   );
 };
