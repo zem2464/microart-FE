@@ -60,7 +60,7 @@ const ClientForm = ({
   const [skippedAssignments, setSkippedAssignments] = useState([]); // Store skipped invalid task assignments for inline UI
   const [clientType, setClientType] = useState("permanent"); // Track client type
   const [isGSTEnabled, setIsGSTEnabled] = useState(false);
-  const [isCreditEnabled, setIsCreditEnabled] = useState(false);
+  const [isCreditEnabled, setIsCreditEnabled] = useState(true); // Default to enabled
   const [hasCustomRates, setHasCustomRates] = useState(false);
 
   const { data: gradingsData } = useQuery(GET_GRADINGS_BY_WORK_TYPES, {
@@ -101,7 +101,9 @@ const ClientForm = ({
 
   // Handler for client type change
   const handleClientTypeChange = (value) => {
+    const previousType = clientType;
     setClientType(value);
+    
     // Reset Business Details fields if switching to Walk-in
     if (value === "walkIn") {
       // Reset state toggles for walk-in
@@ -118,6 +120,24 @@ const ClientForm = ({
         openingBalanceType: undefined,
         accountMessage: undefined,
       });
+      
+      // Clear business details (work types, gradings, task preferences)
+      setSelectedWorkTypes([]);
+      setSelectedGradings([]);
+      setGradingCustomRates({});
+      setGradingTaskAssignments({});
+      form.setFieldsValue({
+        workTypes: [],
+        gradings: [],
+      });
+      
+      // If on step 1, move back to step 0 since walk-in has only 1 step
+      if (currentStep === 1) {
+        setCurrentStep(0);
+      }
+    } else if (value === "permanent" && previousType === "walkIn") {
+      // When converting from walk-in to permanent, show a message
+      message.info("Permanent clients require Work Types and Gradings. Please fill Business Details in the next step.");
     }
   };
 
@@ -420,9 +440,14 @@ const ClientForm = ({
         setHasCustomRates(clientData.hasCustomRates);
       }
     } else {
-      // Set default clientType for new clients
-      form.setFieldsValue({ clientType: "permanent" });
+      // Set default values for new clients
+      form.setFieldsValue({ 
+        clientType: "permanent",
+        isCreditEnabled: true,
+        creditDays: 30
+      });
       setClientType("permanent"); // Also update state
+      setIsCreditEnabled(true); // Enable credit limit by default
     }
     // Removed 'form' from dependencies to prevent infinite loops
     // Form instance is stable and accessed within the effect
@@ -499,10 +524,23 @@ const ClientForm = ({
         return;
       }
 
+      // Warn if permanent client has no work types or gradings
+      const finalClientType = values.clientType || clientType || "permanent";
+      if (finalClientType === "permanent") {
+        const hasWorkTypes = values.workTypes && values.workTypes.length > 0;
+        const hasGradings = values.gradings && values.gradings.length > 0;
+        
+        if (!hasWorkTypes || !hasGradings) {
+          message.warning(
+            "Permanent clients typically have Work Types and Gradings configured. You can add them later if needed."
+          );
+        }
+      }
+
       // Transform data for backend
       const input = {
         ...values,
-        clientType: values.clientType || clientType || "permanent",
+        clientType: finalClientType,
         isActive: values.isActive !== false,
       };
 
@@ -667,8 +705,8 @@ const ClientForm = ({
         // Remove read-only fields that are fetched but shouldn't be sent in update
         delete updateInput.__typename;
         delete updateInput.id;
-        delete updateInput.clientCode;
-        delete updateInput.clientType; // clientType is only for create, not update
+        delete updateInput.clientCode; // clientCode is auto-generated on type change
+        // clientType can now be updated - backend will generate new code if type changes
         delete updateInput.createdAt;
         delete updateInput.updatedAt;
         delete updateInput.totalBalance;
@@ -846,6 +884,11 @@ const ClientForm = ({
                   rules={[
                     { required: true, message: "Please select client type!" },
                   ]}
+                  tooltip={
+                    client
+                      ? "Changing client type will generate a new client code (e.g., PC-00001 ↔ WC-00001)"
+                      : undefined
+                  }
                 >
                   <Select
                     placeholder="Select client type"
@@ -1438,7 +1481,7 @@ const ClientForm = ({
                     name="isCreditEnabled"
                     label="Credit Limit Enabled"
                     valuePropName="checked"
-                    initialValue={false}
+                    initialValue={true}
                   >
                     <Switch
                       checkedChildren="Yes"
@@ -1513,7 +1556,11 @@ const ClientForm = ({
                 {isCreditEnabled && (
                   <Row gutter={16}>
                     <Col span={8}>
-                      <Form.Item name="creditDays" label="Credit in Days">
+                      <Form.Item 
+                        name="creditDays" 
+                        label="Credit in Days"
+                        initialValue={30}
+                      >
                         <InputNumber
                           placeholder="Enter credit days"
                           size="middle"
