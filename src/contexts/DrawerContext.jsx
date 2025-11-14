@@ -44,9 +44,16 @@ export const AppDrawerProvider = ({ children }) => {
 
 	// Project Drawers
 	const [projectFormDrawer, setProjectFormDrawer] = useState({ open: false, project: null, mode: 'create', onSuccess: null });
+	const [projectCreditExceeded, setProjectCreditExceeded] = useState(false);
 	const [projectDetailDrawer, setProjectDetailDrawer] = useState({ open: false, project: null });
-	const showProjectFormDrawer = (project = null, mode = 'create', onSuccess = null) => setProjectFormDrawer({ open: true, project, mode, onSuccess });
-	const closeProjectFormDrawer = () => setProjectFormDrawer({ open: false, project: null, mode: 'create', onSuccess: null });
+	const showProjectFormDrawer = (project = null, mode = 'create', onSuccess = null) => {
+		setProjectFormDrawer({ open: true, project, mode, onSuccess });
+		setProjectCreditExceeded(false); // Reset on open
+	};
+	const closeProjectFormDrawer = () => {
+		setProjectFormDrawer({ open: false, project: null, mode: 'create', onSuccess: null });
+		setProjectCreditExceeded(false);
+	};
 	const showProjectDetailDrawer = (project) => setProjectDetailDrawer({ open: true, project });
 	const closeProjectDetailDrawer = () => setProjectDetailDrawer({ open: false, project: null });
 
@@ -245,12 +252,27 @@ export const AppDrawerProvider = ({ children }) => {
 					footer={
 						<Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
 							<Button onClick={closeProjectFormDrawer} size="middle">Cancel</Button>
-							<Button type="primary" size="middle" onClick={() => {
-								const form = document.querySelector('form');
-								if (form) form.requestSubmit();
-							}}>
-								{projectFormDrawer.mode === 'edit' ? 'Update Project' : 'Save Project'}
-							</Button>
+							{projectCreditExceeded && projectFormDrawer.mode !== 'edit' ? (
+								<Button 
+									type="primary" 
+									size="middle" 
+									danger
+									onClick={() => {
+										// Trigger the credit request submission
+										const event = new CustomEvent('request-credit-approval');
+										window.dispatchEvent(event);
+									}}
+								>
+									Request Fly-on-Credit Approval
+								</Button>
+							) : (
+								<Button type="primary" size="middle" onClick={() => {
+									const form = document.querySelector('form');
+									if (form) form.requestSubmit();
+								}}>
+									{projectFormDrawer.mode === 'edit' ? 'Update Project' : 'Save Project'}
+								</Button>
+							)}
 						</Space>
 					}
 				>
@@ -259,6 +281,7 @@ export const AppDrawerProvider = ({ children }) => {
 						mode={projectFormDrawer.mode}
 						onClose={closeProjectFormDrawer}
 						onSuccess={projectFormDrawer.onSuccess}
+						onCreditExceeded={(exceeded) => setProjectCreditExceeded(exceeded)}
 					/>
 				</ModuleDrawer>
 			)}

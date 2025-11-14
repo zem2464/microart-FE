@@ -1698,6 +1698,7 @@ const ClientForm = ({
         form={form}
         layout="vertical"
         requiredMark="optional"
+        autoComplete="off"
         initialValues={{
           clientType: "permanent",
           isActive: true,

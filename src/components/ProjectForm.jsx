@@ -13,6 +13,7 @@ import {
   CREATE_PROJECT,
   UPDATE_PROJECT,
   GET_AVAILABLE_USERS,
+  REQUEST_CREDIT_APPROVAL,
 } from "../graphql/projectQueries";
 import dayjs from "dayjs";
 import CustomFieldRenderer from "./CustomFieldRenderer";
@@ -49,10 +50,11 @@ import {
 const { Option } = Select;
 const { Text } = Typography;
 
-const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
+const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState(null);
+  const [creditExceeded, setCreditExceeded] = useState(false);
   // client credit info is now represented by `projectCreditValidation` which
   // contains creditLimit, availableCredit, usedCredit and creditLimitEnabled
   const [projectCreditValidation, setProjectCreditValidation] = useState(null);
@@ -240,6 +242,21 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     onError: (error) => {
       message.error(`Error updating project: ${error.message}`);
       setLoading(false);
+    },
+  });
+
+  const [requestCreditApproval] = useMutation(REQUEST_CREDIT_APPROVAL, {
+    onCompleted: (data) => {
+      setLoading(false);
+      message.success("Credit approval request submitted successfully!");
+      message.info("Your request has been sent to admin and client leader for approval.");
+      onSuccess?.();
+      onClose();
+    },
+    onError: (error) => {
+      console.error("Credit approval error:", error);
+      setLoading(false);
+      message.error(`Error requesting credit approval: ${error.message}`);
     },
   });
 
@@ -732,9 +749,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
             ) {
               const initialTasks = data.gradingTasks.map((gradingTask) => {
                 let preferredUserId = null;
-                if (clientPreferences?.taskPreferences) {
+                if (clientPreferences?.taskPreferences && gradingTask?.taskType) {
                   const taskPreference = clientPreferences.taskPreferences.find(
-                    (pref) => pref.taskType.id === gradingTask.taskType.id
+                    (pref) => pref?.taskType?.id === gradingTask.taskType.id
                   );
                   if (
                     taskPreference &&
@@ -748,18 +765,18 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                 return {
                   id: null,
                   gradingTaskId: gradingTask.id,
-                  taskTypeId: gradingTask.taskType.id,
+                  taskTypeId: gradingTask?.taskType?.id,
                   name:
-                    gradingTask.taskType.name ||
+                    gradingTask?.taskType?.name ||
                     gradingTask.name ||
                     "Unnamed Task",
                   title:
-                    gradingTask.taskType.name ||
+                    gradingTask?.taskType?.name ||
                     gradingTask.name ||
                     "Unnamed Task",
                   description:
                     gradingTask.description ||
-                    gradingTask.taskType.description ||
+                    gradingTask?.taskType?.description ||
                     "",
                   instructions: gradingTask.instructions || "",
                   status: "todo",
@@ -1043,9 +1060,17 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
 
       if (data?.validateMultipleGradingCredit) {
         setProjectCreditValidation(data.validateMultipleGradingCredit);
+        
+        const exceeded = !data.validateMultipleGradingCredit.canCreateProject;
+        setCreditExceeded(exceeded);
+        
+        // Notify parent component about credit exceeded status
+        if (onCreditExceeded) {
+          onCreditExceeded(exceeded, data.validateMultipleGradingCredit);
+        }
 
         // Show warning if credit validation fails
-        if (!data.validateMultipleGradingCredit.canCreateProject) {
+        if (exceeded) {
           message.warning(data.validateMultipleGradingCredit.message);
         }
       }
@@ -1060,6 +1085,19 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       setAvailableUsers(usersData.availableUsers);
     }
   }, [usersData]);
+
+  // Listen for credit approval request event from parent drawer
+  useEffect(() => {
+    const handleCreditRequestEvent = () => {
+      handleRequestCreditApproval();
+    };
+    
+    window.addEventListener('request-credit-approval', handleCreditRequestEvent);
+    
+    return () => {
+      window.removeEventListener('request-credit-approval', handleCreditRequestEvent);
+    };
+  }, [selectedGradings, selectedClientId, customFieldValues, projectCreditValidation, form]);
 
   // Prefetch gradings for edit mode when project data is available
   useEffect(() => {
@@ -1243,6 +1281,126 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     }
   }, [project, mode, form, handleWorkTypeSelect]);
 
+  // Handler for requesting credit approval
+  const handleRequestCreditApproval = async () => {
+    setLoading(true);
+    try {
+      // Get all form values
+      const values = form.getFieldsValue();
+      
+      console.log("Form values:", values);
+      console.log("Selected client ID:", selectedClientId);
+      console.log("Selected gradings:", selectedGradings);
+      
+      // Validate required fields
+      if (!values.clientId && !selectedClientId) {
+        message.error("Please select a client");
+        setLoading(false);
+        return;
+      }
+      
+      if (!values.workTypeId) {
+        message.error("Please select a work type");
+        setLoading(false);
+        return;
+      }
+      
+      // Validate grading selection
+      if (selectedGradings.length === 0 && !values.gradingId) {
+        message.error("Please select at least one grading");
+        setLoading(false);
+        return;
+      }
+
+      // Validate that all selected gradings have image quantities
+      const invalidGradings = selectedGradings.filter(
+        (sg) => !sg.gradingId || (sg.imageQuantity || 0) <= 0
+      );
+      if (invalidGradings.length > 0) {
+        message.error(
+          "Please ensure all selected gradings have valid image quantities"
+        );
+        setLoading(false);
+        return;
+      }
+
+      // Prepare project gradings data
+      const projectGradingsInput = selectedGradings.map((sg, index) => ({
+        gradingId: sg.gradingId,
+        imageQuantity: sg.imageQuantity || 0,
+        customRate: sg.customRate,
+        sequence: index + 1,
+      }));
+
+      // Calculate totals
+      const totalImageQty = projectGradingsInput.reduce((sum, pg) => sum + pg.imageQuantity, 0);
+      const totalEstCost = calculateTotalCost();
+
+      // Clean custom field values - ensure only serializable data
+      // Exclude tree node properties (key, value, children) and only include valid custom field keys
+      const cleanCustomFields = {};
+      if (customFieldValues && typeof customFieldValues === 'object') {
+        Object.keys(customFieldValues).forEach(key => {
+          // Skip tree node properties
+          if (key === 'key' || key === 'value' || key === 'children') {
+            return;
+          }
+          
+          const value = customFieldValues[key];
+          // Only include primitive values and arrays of primitives
+          if (value !== null && value !== undefined) {
+            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+              cleanCustomFields[key] = value;
+            } else if (Array.isArray(value)) {
+              cleanCustomFields[key] = value.filter(v => 
+                typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
+              );
+            }
+          }
+        });
+      }
+
+      console.log("Original customFieldValues:", customFieldValues);
+      console.log("Cleaned customFields:", cleanCustomFields);
+
+      // Prepare input data for project creation with status='requested'
+      const projectInput = {
+        clientId: values.clientId || selectedClientId,
+        workTypeId: values.workTypeId,
+        description: values.description || "",
+        deadlineDate: values.deadlineDate ? dayjs(values.deadlineDate).toISOString() : null,
+        status: "requested", // Important: Set status to requested
+        intendedStatus: values.status || "active", // Store the intended status after approval
+        requestNotes: `Project cost exceeds credit limit. Total cost: ₹${totalEstCost.toLocaleString()}, Available credit: ₹${projectCreditValidation?.availableCredit?.toLocaleString() || 0}`,
+        priority: values.priority || "B",
+        notes: values.notes || "",
+        clientNotes: values.clientNotes || "",
+        projectGradings: projectGradingsInput,
+        customFields: cleanCustomFields,
+      };
+
+      console.log("Creating project with input:", projectInput);
+
+      // Create project with status='requested' - backend will auto-create credit request
+      const { data } = await createProject({
+        variables: { input: projectInput }
+      });
+
+      if (data?.createProject) {
+        console.log("Project created successfully with credit request:", data.createProject.id);
+        message.success("Credit approval request submitted successfully!");
+        message.info("Your request has been sent to admin and client leader for approval.");
+        setLoading(false);
+        onSuccess?.();
+        onClose();
+      }
+    } catch (error) {
+      console.error("Error requesting credit approval:", error);
+      message.error(`Failed to request credit approval: ${error.message}`);
+      setLoading(false);
+    }
+  };
+
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
@@ -1266,10 +1424,21 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
       }
 
       // Final credit validation before submission (for new projects)
+      // Skip validation for edit mode if project has approved credit request
+      const hasApprovedCredit = project?.creditRequest?.status === 'approved';
       if (mode !== "edit" && selectedClientId && projectCreditValidation) {
         if (!projectCreditValidation.canCreateProject) {
           message.error(
             "Cannot create project: " + projectCreditValidation.message
+          );
+          setLoading(false);
+          return;
+        }
+      } else if (mode === "edit" && !hasApprovedCredit && selectedClientId && projectCreditValidation) {
+        // For edit mode without approved credit, still validate
+        if (!projectCreditValidation.canCreateProject) {
+          message.error(
+            "Cannot update project: " + projectCreditValidation.message
           );
           setLoading(false);
           return;
@@ -1414,18 +1583,13 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
     }
   }, [form]);
 
-  // Check if form should be disabled due to credit issues
-  const isFormDisabledByCredit =
-    projectCreditValidation &&
-    !projectCreditValidation.canCreateProject &&
-    mode !== "edit";
-
   return (
     <Form
       form={form}
       layout="vertical"
       onFinish={handleSubmit}
-      disabled={loading || isFormDisabledByCredit}
+      disabled={loading}
+      autoComplete="off"
     >
       {/* Status is now handled by the form field directly */}
       {/* Credit Validation Alert */}
@@ -2245,7 +2409,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess }) => {
                         )
                       : []
                   }
-                  readOnly={loading || isFormDisabledByCredit}
+                  readOnly={loading}
                   layout="row"
                   clientCode={
                     selectedClientId

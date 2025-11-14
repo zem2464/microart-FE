@@ -78,6 +78,16 @@ export const GET_PROJECTS = gql`
         customFields
         createdAt
         updatedAt
+        creditRequest {
+          id
+          requestedAmount
+          availableCredit
+          creditLimit
+          excessAmount
+          status
+          intendedStatus
+          requestNotes
+        }
       }
       pagination {
         page
@@ -398,6 +408,168 @@ export const VALIDATE_MULTIPLE_GRADING_CREDIT = gql`
       creditLimit
       usedCredit
       creditLimitEnabled
+    }
+  }
+`;
+
+// Credit Request Mutations
+export const REQUEST_CREDIT_APPROVAL = gql`
+  mutation RequestCreditApproval($input: RequestCreditApprovalInput!) {
+    requestCreditApproval(input: $input) {
+      creditRequest {
+        id
+        projectId
+        clientId
+        requestedAmount
+        availableCredit
+        creditLimit
+        excessAmount
+        intendedStatus
+        status
+        requestNotes
+        createdAt
+      }
+      project {
+        id
+        projectCode
+        status
+      }
+    }
+  }
+`;
+
+export const APPROVE_CREDIT_REQUEST = gql`
+  mutation ApproveCreditRequest($requestId: ID!, $input: CreditRequestDecisionInput) {
+    approveCreditRequest(requestId: $requestId, input: $input) {
+      creditRequest {
+        id
+        status
+        approvedBy
+        approvedAt
+        approvalNotes
+      }
+      project {
+        id
+        projectCode
+        status
+      }
+      tasksCreated
+    }
+  }
+`;
+
+export const REJECT_CREDIT_REQUEST = gql`
+  mutation RejectCreditRequest($requestId: ID!, $input: CreditRequestDecisionInput!) {
+    rejectCreditRequest(requestId: $requestId, input: $input) {
+      creditRequest {
+        id
+        status
+        rejectedBy
+        rejectedAt
+        approvalNotes
+      }
+      project {
+        id
+        projectCode
+        status
+      }
+    }
+  }
+`;
+
+// Credit Request Queries
+export const GET_PENDING_CREDIT_REQUESTS = gql`
+  query GetPendingCreditRequests($clientId: ID) {
+    pendingCreditRequests(clientId: $clientId) {
+      id
+      projectId
+      clientId
+      requestedAmount
+      availableCredit
+      creditLimit
+      excessAmount
+      intendedStatus
+      status
+      requestNotes
+      requestedBy
+      createdAt
+      project {
+        id
+        projectCode
+        name
+        description
+        status
+      }
+      client {
+        id
+        clientCode
+        displayName
+        companyName
+      }
+      requester {
+        id
+        firstName
+        lastName
+        email
+      }
+    }
+  }
+`;
+
+export const GET_CREDIT_REQUEST = gql`
+  query GetCreditRequest($id: ID!) {
+    creditRequest(id: $id) {
+      id
+      projectId
+      clientId
+      requestedAmount
+      availableCredit
+      creditLimit
+      excessAmount
+      intendedStatus
+      status
+      requestNotes
+      approvalNotes
+      requestedBy
+      approvedBy
+      approvedAt
+      rejectedBy
+      rejectedAt
+      createdAt
+      updatedAt
+      project {
+        id
+        projectCode
+        name
+        description
+        status
+      }
+      client {
+        id
+        clientCode
+        displayName
+        companyName
+        creditLimit
+        creditUsed
+      }
+      requester {
+        id
+        firstName
+        lastName
+        email
+      }
+      approver {
+        id
+        firstName
+        lastName
+        email
+      }
+      rejector {
+        id
+        firstName
+        lastName
+        email
+      }
     }
   }
 `;

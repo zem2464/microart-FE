@@ -151,6 +151,7 @@ const ProjectList = () => {
     cancelled: { label: "Cancelled", color: "red" },
     active: { label: "Active", color: "green" },
     on_hold: { label: "On Hold", color: "purple" },
+    requested: { label: "Pending Approval", color: "purple" },
   };
 
   // Map backend priority codes (A/B/C) to labels/colors

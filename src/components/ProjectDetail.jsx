@@ -25,8 +25,8 @@ const ProjectDetail = ({ project, onClose }) => {
       sortOrder: 'DESC'
     },
     // Skip fetching tasks if project is not provided, if tasks are already included,
-    // or if the project is in Draft status (tasks should remain hidden until started)
-    skip: !project || (project.tasks && project.tasks.length > 0) || ((project.status || '').toString().toUpperCase() === 'DRAFT'),
+    // or if the project is in Draft or Requested status (tasks should remain hidden until approved/started)
+    skip: !project || (project.tasks && project.tasks.length > 0) || ['DRAFT', 'REQUESTED'].includes((project.status || '').toString().toUpperCase()),
     fetchPolicy: 'cache-and-network'
   });
 
@@ -87,9 +87,9 @@ const ProjectDetail = ({ project, onClose }) => {
           </Card>
 
           <Card title={`Tasks (${totalTasks})`} loading={tasksLoading}>
-            {/* If project is a draft, do not show tasks and explain why */}
-            {((project.status || '').toString().toUpperCase() === 'DRAFT') ? (
-              <Empty description={<span>Project is in Draft — tasks are hidden until the project is started.</span>} />
+            {/* If project is a draft or pending approval, do not show tasks and explain why */}
+            {['DRAFT', 'REQUESTED'].includes((project.status || '').toString().toUpperCase()) ? (
+              <Empty description={<span>Project is in {project.status === 'REQUESTED' ? 'Pending Approval' : 'Draft'} — tasks are hidden until the project is {project.status === 'REQUESTED' ? 'approved' : 'started'}.</span>} />
             ) : (
               totalTasks > 0 ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

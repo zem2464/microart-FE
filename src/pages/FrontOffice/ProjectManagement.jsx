@@ -36,6 +36,8 @@ import {
   PauseCircleOutlined,
   FileTextOutlined,
   CopyOutlined,
+  CheckOutlined,
+  CloseOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation } from "@apollo/client";
 import {
@@ -43,6 +45,9 @@ import {
   DELETE_PROJECT,
   ACTIVATE_PROJECT,
   UPDATE_PROJECT,
+  GET_PENDING_CREDIT_REQUESTS,
+  APPROVE_CREDIT_REQUEST,
+  REJECT_CREDIT_REQUEST,
 } from "../../graphql/projectQueries";
 import { GET_CLIENTS } from "../../graphql/clientQueries";
 import { GENERATE_PROJECT_INVOICE } from "../../gql/clientLedger";
@@ -60,6 +65,7 @@ const STATUS_MAP = {
   IN_PROGRESS: { label: "In Progress", color: "blue" },
   COMPLETED: { label: "Completed", color: "blue" },
   CANCELLED: { label: "Cancelled", color: "red" },
+  REQUESTED: { label: "Pending Approval", color: "purple" },
 };
 
 // Helper function to get client display name
@@ -82,6 +88,15 @@ const ProjectManagement = () => {
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
   const [actualImageCount, setActualImageCount] = useState(0);
+
+  // Credit approval modal state
+  const [creditApprovalModalVisible, setCreditApprovalModalVisible] = useState(false);
+  const [selectedCreditRequest, setSelectedCreditRequest] = useState(null);
+  const [approvalNotes, setApprovalNotes] = useState("");
+
+  // Status editing state (inline editing like ClientList)
+  const [editingStatus, setEditingStatus] = useState({});
+  const [tempValues, setTempValues] = useState({});
 
   // GraphQL Queries
   const {
@@ -136,6 +151,16 @@ const ProjectManagement = () => {
     },
     onError: (error) => {
       message.error(`Error activating project: ${error.message}`);
+    },
+  });
+
+  const [updateProjectStatus] = useMutation(UPDATE_PROJECT, {
+    onCompleted: () => {
+      message.success("Project status updated successfully!");
+      refetchProjects();
+    },
+    onError: (error) => {
+      message.error(`Error updating project status: ${error.message}`);
     },
   });
 
@@ -222,6 +247,32 @@ const ProjectManagement = () => {
     },
     onError: (err) => {
       message.error(`Error generating invoice: ${err.message}`);
+    },
+  });
+
+  const [approveCreditRequest] = useMutation(APPROVE_CREDIT_REQUEST, {
+    onCompleted: (data) => {
+      message.success(`Credit request approved! Project activated and ${data.approveCreditRequest.tasksCreated} tasks created.`);
+      setCreditApprovalModalVisible(false);
+      setSelectedCreditRequest(null);
+      setApprovalNotes("");
+      refetchProjects();
+    },
+    onError: (error) => {
+      message.error(`Error approving credit request: ${error.message}`);
+    },
+  });
+
+  const [rejectCreditRequest] = useMutation(REJECT_CREDIT_REQUEST, {
+    onCompleted: () => {
+      message.success("Credit request rejected. Project reverted to draft status.");
+      setCreditApprovalModalVisible(false);
+      setSelectedCreditRequest(null);
+      setApprovalNotes("");
+      refetchProjects();
+    },
+    onError: (error) => {
+      message.error(`Error rejecting credit request: ${error.message}`);
     },
   });
 
@@ -486,6 +537,99 @@ const ProjectManagement = () => {
     });
   };
 
+  // Credit approval handlers
+  const handleShowCreditApproval = async (project) => {
+    try {
+      // Use the credit request from the project data
+      if (!project.creditRequest) {
+        message.error("No credit request found for this project");
+        return;
+      }
+      
+      setSelectedCreditRequest({
+        id: project.creditRequest.id, // Use the actual credit request ID
+        project: project,
+        requestedAmount: project.creditRequest.requestedAmount,
+        availableCredit: project.creditRequest.availableCredit,
+        excessAmount: project.creditRequest.excessAmount,
+        creditLimit: project.creditRequest.creditLimit,
+        status: project.creditRequest.status,
+        intendedStatus: project.creditRequest.intendedStatus,
+        requestNotes: project.creditRequest.requestNotes,
+      });
+      setCreditApprovalModalVisible(true);
+    } catch (error) {
+      message.error(`Error loading credit request: ${error.message}`);
+    }
+  };
+
+  const handleApproveCreditRequest = () => {
+    if (!selectedCreditRequest) return;
+    
+    // We need to query the actual credit request ID for this project
+    // For now, we'll use the project ID (this should be improved)
+    approveCreditRequest({
+      variables: {
+        requestId: selectedCreditRequest.id,
+        input: {
+          approvalNotes: approvalNotes || "Approved"
+        }
+      }
+    });
+  };
+
+  const handleRejectCreditRequest = () => {
+    if (!selectedCreditRequest || !approvalNotes) {
+      message.error("Please provide a reason for rejection");
+      return;
+    }
+    
+    rejectCreditRequest({
+      variables: {
+        requestId: selectedCreditRequest.id,
+        input: {
+          approvalNotes: approvalNotes
+        }
+      }
+    });
+  };
+
+  // Status editing handlers (inline editing like ClientList)
+  const handleEditStatus = (projectId, currentStatus) => {
+    setEditingStatus((prev) => ({ ...prev, [projectId]: true }));
+    setTempValues((prev) => ({
+      ...prev,
+      [`status_${projectId}`]: currentStatus,
+    }));
+  };
+
+  const handleCancelStatusEdit = (projectId) => {
+    setEditingStatus((prev) => ({ ...prev, [projectId]: false }));
+    const newValues = { ...tempValues };
+    delete newValues[`status_${projectId}`];
+    setTempValues(newValues);
+  };
+
+  const handleSaveStatusEdit = async (projectId) => {
+    const newStatus = tempValues[`status_${projectId}`];
+    try {
+      await updateProjectStatus({
+        variables: {
+          id: projectId,
+          input: {
+            status: newStatus
+          }
+        }
+      });
+      setEditingStatus((prev) => ({ ...prev, [projectId]: false }));
+      const newValues = { ...tempValues };
+      delete newValues[`status_${projectId}`];
+      setTempValues(newValues);
+    } catch (error) {
+      message.error("Failed to update project status");
+    }
+  };
+
   // Table columns
   const columns = [
     {
@@ -520,6 +664,82 @@ const ProjectManagement = () => {
           <strong>{client.clientCode} </strong>({client?.displayName || "N/A"})
         </>
       ),
+    },
+    {
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
+      width: 180,
+      render: (status, record) => {
+        const isEditing = editingStatus[record.id];
+        const tempValue = tempValues[`status_${record.id}`];
+
+        const statusOptions = [
+          { value: 'draft', label: 'Draft', color: 'default' },
+          { value: 'active', label: 'Active', color: 'blue' },
+        ];
+
+        if (isEditing) {
+          return (
+            <div className="flex items-center space-x-2">
+              <Select
+                value={tempValue}
+                onChange={(value) =>
+                  setTempValues((prev) => ({
+                    ...prev,
+                    [`status_${record.id}`]: value,
+                  }))
+                }
+                size="small"
+                style={{ width: 120 }}
+              >
+                {statusOptions.map(option => (
+                  <Select.Option key={option.value} value={option.value}>
+                    {option.label}
+                  </Select.Option>
+                ))}
+              </Select>
+              <div className="flex space-x-1">
+                <Tooltip title="Save">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CheckOutlined />}
+                    onClick={() => handleSaveStatusEdit(record.id)}
+                    style={{ color: "#52c41a" }}
+                  />
+                </Tooltip>
+                <Tooltip title="Cancel">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CloseOutlined />}
+                    onClick={() => handleCancelStatusEdit(record.id)}
+                    style={{ color: "#ff4d4f" }}
+                  />
+                </Tooltip>
+              </div>
+            </div>
+          );
+        }
+
+        const currentStatus = statusOptions.find(s => s.value === status?.toLowerCase());
+        
+        return (
+          <div className="group">
+            <div
+              className="cursor-pointer hover:bg-gray-50 px-2 py-1 rounded flex items-center justify-between"
+              onClick={() => handleEditStatus(record.id, status?.toLowerCase())}
+              title="Click to edit status"
+            >
+              <Tag color={currentStatus?.color || 'default'}>
+                {currentStatus?.label || status?.toUpperCase()}
+              </Tag>
+              <EditOutlined className="opacity-0 group-hover:opacity-100 text-xs ml-1" />
+            </div>
+          </div>
+        );
+      },
     },
     {
       title: "Work Type / Grading",
@@ -580,26 +800,6 @@ const ProjectManagement = () => {
       },
     },
     {
-      title: "Status",
-      dataIndex: "status",
-      key: "status",
-      width: 100,
-      filters: Object.keys(STATUS_MAP).map((key) => ({
-        text: STATUS_MAP[key].label,
-        value: key,
-      })),
-      sorter: (a, b) =>
-        ("" + (a.status || "")).localeCompare("" + (b.status || "")),
-      render: (status) => {
-        const key = (status || "").toString().toUpperCase();
-        const cfg = STATUS_MAP[key] || {
-          label: status || "Unknown",
-          color: "default",
-        };
-        return <Tag color={cfg.color}>{cfg.label}</Tag>;
-      },
-    },
-    {
       title: "Deadline",
       dataIndex: "deadlineDate",
       key: "deadlineDate",
@@ -642,6 +842,16 @@ const ProjectManagement = () => {
                 type="text"
                 icon={<PlayCircleOutlined />}
                 onClick={() => handleActivateProject(record)}
+              />
+            </Tooltip>
+          )}
+          {(record.status || "").toString().toUpperCase() === "REQUESTED" && (
+            <Tooltip title="Approve Credit Request">
+              <Button
+                type="text"
+                icon={<CheckCircleOutlined />}
+                style={{ color: "#722ed1" }}
+                onClick={() => handleShowCreditApproval(record)}
               />
             </Tooltip>
           )}
@@ -996,6 +1206,113 @@ const ProjectManagement = () => {
           </div>
         )}
       </Modal>
+
+      {/* Credit Approval Modal */}
+      <Modal
+        title="Approve Credit Request"
+        open={creditApprovalModalVisible}
+        onCancel={() => {
+          setCreditApprovalModalVisible(false);
+          setSelectedCreditRequest(null);
+          setApprovalNotes("");
+        }}
+        footer={[
+          <Button 
+            key="reject" 
+            danger
+            onClick={handleRejectCreditRequest}
+          >
+            Reject
+          </Button>,
+          <Button
+            key="approve"
+            type="primary"
+            onClick={handleApproveCreditRequest}
+          >
+            Approve
+          </Button>,
+        ]}
+        width={700}
+      >
+        {selectedCreditRequest && (
+          <div>
+            <Alert
+              message="Credit Limit Exceeded"
+              description="This project exceeds the client's available credit limit. Review the details and approve or reject the request."
+              type="warning"
+              showIcon
+              style={{ marginBottom: 20 }}
+            />
+
+            <Descriptions
+              title="Project Details"
+              column={2}
+              bordered
+              size="small"
+              style={{ marginBottom: 20 }}
+            >
+              <Descriptions.Item label="Project Code" span={2}>
+                {selectedCreditRequest.project?.projectCode}
+              </Descriptions.Item>
+              <Descriptions.Item label="Client">
+                {selectedCreditRequest.project?.client?.displayName || selectedCreditRequest.project?.client?.clientCode}
+              </Descriptions.Item>
+              <Descriptions.Item label="Work Type">
+                {selectedCreditRequest.project?.workType?.name}
+              </Descriptions.Item>
+              <Descriptions.Item label="Total Cost" span={2}>
+                <Text strong style={{ color: "#ff4d4f", fontSize: "16px" }}>
+                  ₹{(selectedCreditRequest.requestedAmount || 0).toLocaleString()}
+                </Text>
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Card 
+              title="Credit Information" 
+              size="small"
+              style={{ marginBottom: 20 }}
+            >
+              <Row gutter={[16, 16]}>
+                <Col span={8}>
+                  <Statistic 
+                    title="Available Credit" 
+                    value={selectedCreditRequest.availableCredit || 0}
+                    prefix="₹"
+                    valueStyle={{ color: "#52c41a" }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic 
+                    title="Requested Amount" 
+                    value={selectedCreditRequest.requestedAmount || 0}
+                    prefix="₹"
+                    valueStyle={{ color: "#ff4d4f" }}
+                  />
+                </Col>
+                <Col span={8}>
+                  <Statistic 
+                    title="Excess Amount" 
+                    value={selectedCreditRequest.excessAmount || 0}
+                    prefix="₹"
+                    valueStyle={{ color: "#faad14" }}
+                  />
+                </Col>
+              </Row>
+            </Card>
+
+            <div style={{ marginBottom: 16 }}>
+              <Text strong>Approval Notes:</Text>
+              <Input.TextArea
+                rows={4}
+                value={approvalNotes}
+                onChange={(e) => setApprovalNotes(e.target.value)}
+                placeholder="Add notes for approval or rejection (required for rejection)"
+                style={{ marginTop: 8 }}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 };
@@ -1023,8 +1340,8 @@ const ProjectDetails = ({ project, tasks, tasksLoading, onBack }) => {
                 <Text code>{project.projectNumber}</Text>
               </Descriptions.Item>
               <Descriptions.Item label="Status">
-                <Tag color={project.status === "ACTIVE" ? "green" : "orange"}>
-                  {project.status}
+                <Tag color={(STATUS_MAP[project.status.toLowerCase()] || {}).color || "default"}>
+                  {(STATUS_MAP[project.status.toLowerCase()] || {}).label || project.status}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Client">
