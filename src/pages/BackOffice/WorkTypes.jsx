@@ -379,7 +379,14 @@ const WorkTypes = () => {
       onAdd={canCreate ? handleCreate : null}
       addButtonText="Add Work Type"
       showExport={true}
-      pagination={false}
+      pagination={{
+        pageSize: 10,
+        showSizeChanger: true,
+        showQuickJumper: true,
+        showTotal: (total, range) =>
+          `${range[0]}-${range[1]} of ${total} work types`,
+        pageSizeOptions: [10, 25, 50, 100],
+      }}
     />
   );
 };

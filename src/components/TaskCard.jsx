@@ -21,6 +21,7 @@ import {
   Tooltip,
   Popconfirm,
   Alert,
+  Checkbox,
 } from "antd";
 import {
   UserOutlined,
@@ -2061,12 +2062,31 @@ const TaskCard = ({
                     </span>
                   }
                 >
-                  <Select loading={updateTaskLoading}>
-                    <Option value="TODO">To Do</Option>
-                    <Option value="IN_PROGRESS">In Progress</Option>
-                    <Option value="REVISION">In Review</Option>
-                    <Option value="COMPLETED">Done</Option>
-                  </Select>
+                  <Checkbox.Group
+                    style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}
+                    onChange={(checkedValues) => {
+                      // Only allow one checkbox to be checked at a time
+                      if (checkedValues.length > 0) {
+                        const newStatus = checkedValues[checkedValues.length - 1];
+                        form.setFieldsValue({ status: newStatus });
+                        handleFieldUpdate('status', newStatus);
+                      }
+                    }}
+                    value={form.getFieldValue('status') ? [form.getFieldValue('status')] : []}
+                  >
+                    <Checkbox value="TODO" style={{ marginBottom: '4px' }}>
+                      <span style={{ color: '#42526E' }}>To Do</span>
+                    </Checkbox>
+                    <Checkbox value="IN_PROGRESS" style={{ marginBottom: '4px' }}>
+                      <span style={{ color: '#0052CC', fontWeight: 500 }}>In Progress</span>
+                    </Checkbox>
+                    <Checkbox value="REVISION" style={{ marginBottom: '4px' }}>
+                      <span style={{ color: '#FF8B00', fontWeight: 500 }}>In Review</span>
+                    </Checkbox>
+                    <Checkbox value="COMPLETED" style={{ marginBottom: '4px' }}>
+                      <span style={{ color: '#36B37E', fontWeight: 500 }}>Done</span>
+                    </Checkbox>
+                  </Checkbox.Group>
                 </Form.Item>
 
                 <Form.Item

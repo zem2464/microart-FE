@@ -50,7 +50,14 @@ import {
 const { Option } = Select;
 const { Text } = Typography;
 
-const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) => {
+const ProjectForm = ({
+  project,
+  mode,
+  onClose,
+  onSuccess,
+  onCreditExceeded,
+  onFooterDataChange,
+}) => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState(null);
@@ -59,7 +66,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
   // contains creditLimit, availableCredit, usedCredit and creditLimitEnabled
   const [projectCreditValidation, setProjectCreditValidation] = useState(null);
   const [clientPreferences, setClientPreferences] = useState(null);
-  const [selectedWorkType, setSelectedWorkType] = useState(null);
+  const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
   // Multiple gradings support
   const [selectedGradings, setSelectedGradings] = useState([]);
   const [totalImageQuantity, setTotalImageQuantity] = useState(0);
@@ -88,6 +95,13 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
 
   const isDraftProject =
     project && mode === "edit" && project.status === "draft";
+
+  // Update parent with footer data whenever totals change
+  useEffect(() => {
+    if (onFooterDataChange) {
+      onFooterDataChange({ totalImageQuantity, totalCalculatedBudget });
+    }
+  }, [totalImageQuantity, totalCalculatedBudget, onFooterDataChange]);
 
   // Fields that can be edited in active projects (basic details only)
   const isFieldEditableInActive = (fieldName) => {
@@ -249,7 +263,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
     onCompleted: (data) => {
       setLoading(false);
       message.success("Credit approval request submitted successfully!");
-      message.info("Your request has been sent to admin and client leader for approval.");
+      message.info(
+        "Your request has been sent to admin and client leader for approval."
+      );
       onSuccess?.();
       onClose();
     },
@@ -306,7 +322,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
       imageQuantity: 0,
     });
     setImageQuantity(0);
-    setSelectedWorkType(null);
+    setSelectedWorkTypes([]);
     setSelectedGrading(null);
     setCalculatedBudget(0);
     setGradingTasks([]);
@@ -459,21 +475,29 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
     }
   };
 
-  // Work type selection handler
+  // Work type selection handler - updated to handle multiple work types
   const handleWorkTypeSelect = useCallback(
-    async (workTypeId, existingCustomFieldValues = null) => {
+    async (workTypeIds, existingCustomFieldValues = null) => {
       console.log("=== handleWorkTypeSelect called ===");
-      console.log("workTypeId:", workTypeId);
+      console.log("workTypeIds:", workTypeIds);
       console.log("existingCustomFieldValues:", existingCustomFieldValues);
 
-      setSelectedWorkType(workTypeId);
-      form.setFieldsValue({ grading: undefined });
+      setSelectedWorkTypes(workTypeIds || []);
+      // Don't clear grading-related states when just switching work types
       setSelectedGrading(null);
       setCalculatedBudget(0);
       setGradingTasks([]);
       setCustomFields([]);
+
+      // Determine if we're in edit mode with existing values
+      const hasExistingValues =
+        existingCustomFieldValues &&
+        typeof existingCustomFieldValues === "object" &&
+        !Array.isArray(existingCustomFieldValues) &&
+        Object.keys(existingCustomFieldValues).length > 0;
+
       // Only clear custom field values if not in edit mode with existing values
-      if (!existingCustomFieldValues) {
+      if (!hasExistingValues) {
         console.log("Clearing custom field values (create mode)");
         setCustomFieldValues({});
       } else {
@@ -482,22 +506,26 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
       setWorkTypeGradings([]);
       setProjectTasks([]);
 
-      // Only fetch if workTypeId is provided
-      if (!workTypeId) {
+      // Only fetch if workTypeIds is provided and has values
+      if (!workTypeIds || workTypeIds.length === 0) {
         return;
       }
 
       try {
-        // Fetch both custom fields and gradings for the selected work type in parallel
+        // Fetch custom fields for the first work type (or merge from all work types if needed)
+        // For now, using the first work type for custom fields
+        const primaryWorkTypeId = workTypeIds[0];
+
+        // Fetch both custom fields and gradings for all selected work types in parallel
         const [customFieldsResult, gradingsResult] = await Promise.all([
           refetchCustomFields({
             variables: {
-              workTypeId: workTypeId,
+              workTypeId: primaryWorkTypeId,
             },
           }),
           getWorkTypeGradings({
             variables: {
-              workTypeIds: [workTypeId],
+              workTypeIds: workTypeIds,
             },
           }),
         ]);
@@ -511,10 +539,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
           setCustomFields(fields);
 
           // If we have existing custom field values (edit mode), use those
-          if (
-            existingCustomFieldValues &&
-            Object.keys(existingCustomFieldValues).length > 0
-          ) {
+          if (hasExistingValues) {
             console.log(
               "Setting existing custom field values:",
               existingCustomFieldValues
@@ -749,7 +774,10 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
             ) {
               const initialTasks = data.gradingTasks.map((gradingTask) => {
                 let preferredUserId = null;
-                if (clientPreferences?.taskPreferences && gradingTask?.taskType) {
+                if (
+                  clientPreferences?.taskPreferences &&
+                  gradingTask?.taskType
+                ) {
                   const taskPreference = clientPreferences.taskPreferences.find(
                     (pref) => pref?.taskType?.id === gradingTask.taskType.id
                   );
@@ -1006,7 +1034,14 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
             setProjectCreditValidation(data.validateProjectCredit);
 
             // Show warning if credit validation fails
-            if (!data.validateProjectCredit.canCreateProject) {
+            // BUT skip if:
+            // 1. Project is already in fly-on-credit mode (status='requested')
+            // 2. Project has an approved credit request
+            // 3. Creating new project and credit is already exceeded (fly-on-credit button visible)
+            const isInFlyOnCreditMode = project?.status === 'requested' || project?.creditRequest?.status === 'approved';
+            const isNewProjectWithExceededCredit = mode === 'create' && creditExceeded;
+            
+            if (!data.validateProjectCredit.canCreateProject && !isInFlyOnCreditMode && !isNewProjectWithExceededCredit) {
               message.warning(data.validateProjectCredit.message);
             }
           }
@@ -1060,17 +1095,24 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
 
       if (data?.validateMultipleGradingCredit) {
         setProjectCreditValidation(data.validateMultipleGradingCredit);
-        
+
         const exceeded = !data.validateMultipleGradingCredit.canCreateProject;
         setCreditExceeded(exceeded);
-        
+
         // Notify parent component about credit exceeded status
         if (onCreditExceeded) {
           onCreditExceeded(exceeded, data.validateMultipleGradingCredit);
         }
 
         // Show warning if credit validation fails
-        if (exceeded) {
+        // BUT skip if:
+        // 1. Project is already in fly-on-credit mode (status='requested')
+        // 2. Project has an approved credit request
+        // 3. Creating new project and credit is already exceeded (fly-on-credit button visible)
+        const isInFlyOnCreditMode = project?.status === 'requested' || project?.creditRequest?.status === 'approved';
+        const isNewProjectWithExceededCredit = mode === 'create' && creditExceeded;
+        
+        if (exceeded && !isInFlyOnCreditMode && !isNewProjectWithExceededCredit) {
           message.warning(data.validateMultipleGradingCredit.message);
         }
       }
@@ -1091,13 +1133,25 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
     const handleCreditRequestEvent = () => {
       handleRequestCreditApproval();
     };
-    
-    window.addEventListener('request-credit-approval', handleCreditRequestEvent);
-    
+
+    window.addEventListener(
+      "request-credit-approval",
+      handleCreditRequestEvent
+    );
+
     return () => {
-      window.removeEventListener('request-credit-approval', handleCreditRequestEvent);
+      window.removeEventListener(
+        "request-credit-approval",
+        handleCreditRequestEvent
+      );
     };
-  }, [selectedGradings, selectedClientId, customFieldValues, projectCreditValidation, form]);
+  }, [
+    selectedGradings,
+    selectedClientId,
+    customFieldValues,
+    projectCreditValidation,
+    form,
+  ]);
 
   // Prefetch gradings for edit mode when project data is available
   useEffect(() => {
@@ -1183,9 +1237,23 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
         console.log("Project customFields:", project.customFields);
         console.log("Project notes:", project.notes);
 
+        // Derive work types from projectGradings
+        const workTypeIds =
+          project.projectGradings && project.projectGradings.length > 0
+            ? [
+                ...new Set(
+                  project.projectGradings
+                    .map((pg) => pg.grading?.workType?.id)
+                    .filter(Boolean)
+                ),
+              ]
+            : project.workTypeId
+            ? [project.workTypeId]
+            : [];
+
         form.setFieldsValue({
           clientId: project.clientId || project.client?.id,
-          workTypeId: project.workTypeId || project.workType?.id,
+          workTypeIds: workTypeIds,
           gradingId: project.gradingId || project.grading?.id, // Keep for backward compatibility
           imageQuantity: project.imageQuantity || project.totalImageQuantity,
           deadlineDate: project.deadlineDate
@@ -1200,21 +1268,20 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
 
         // Initialize state for edit mode
         const clientId = project.clientId || project.client?.id;
-        const workTypeId = project.workTypeId || project.workType?.id;
         const gradingId = project.gradingId || project.grading?.id;
 
         if (clientId) {
           setSelectedClientId(clientId);
           await loadClientPreferences(clientId);
         }
-        if (workTypeId) {
-          setSelectedWorkType(workTypeId);
+        if (workTypeIds && workTypeIds.length > 0) {
+          setSelectedWorkTypes(workTypeIds);
           // Pass existing custom field values to preserve them in edit mode
           console.log(
             "Calling handleWorkTypeSelect with customFields:",
             project.customFields
           );
-          await handleWorkTypeSelect(workTypeId, project.customFields || null);
+          await handleWorkTypeSelect(workTypeIds, project.customFields || null);
         }
 
         // Initialize multiple gradings or fallback to single grading
@@ -1270,7 +1337,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
       setCurrentStatus("draft"); // Reset status for new project
       // clear any previous client credit display (we rely on projectCreditValidation)
       setClientPreferences(null);
-      setSelectedWorkType(null);
+      setSelectedWorkTypes([]);
       setSelectedGrading(null);
       setImageQuantity(0);
       setCalculatedBudget(0);
@@ -1287,24 +1354,24 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
     try {
       // Get all form values
       const values = form.getFieldsValue();
-      
+
       console.log("Form values:", values);
       console.log("Selected client ID:", selectedClientId);
       console.log("Selected gradings:", selectedGradings);
-      
+
       // Validate required fields
       if (!values.clientId && !selectedClientId) {
         message.error("Please select a client");
         setLoading(false);
         return;
       }
-      
-      if (!values.workTypeId) {
-        message.error("Please select a work type");
+
+      if (!values.workTypeIds || values.workTypeIds.length === 0) {
+        message.error("Please select at least one work type");
         setLoading(false);
         return;
       }
-      
+
       // Validate grading selection
       if (selectedGradings.length === 0 && !values.gradingId) {
         message.error("Please select at least one grading");
@@ -1333,27 +1400,37 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
       }));
 
       // Calculate totals
-      const totalImageQty = projectGradingsInput.reduce((sum, pg) => sum + pg.imageQuantity, 0);
+      const totalImageQty = projectGradingsInput.reduce(
+        (sum, pg) => sum + pg.imageQuantity,
+        0
+      );
       const totalEstCost = calculateTotalCost();
 
       // Clean custom field values - ensure only serializable data
       // Exclude tree node properties (key, value, children) and only include valid custom field keys
       const cleanCustomFields = {};
-      if (customFieldValues && typeof customFieldValues === 'object') {
-        Object.keys(customFieldValues).forEach(key => {
+      if (customFieldValues && typeof customFieldValues === "object") {
+        Object.keys(customFieldValues).forEach((key) => {
           // Skip tree node properties
-          if (key === 'key' || key === 'value' || key === 'children') {
+          if (key === "key" || key === "value" || key === "children") {
             return;
           }
-          
+
           const value = customFieldValues[key];
           // Only include primitive values and arrays of primitives
           if (value !== null && value !== undefined) {
-            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+            if (
+              typeof value === "string" ||
+              typeof value === "number" ||
+              typeof value === "boolean"
+            ) {
               cleanCustomFields[key] = value;
             } else if (Array.isArray(value)) {
-              cleanCustomFields[key] = value.filter(v => 
-                typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean'
+              cleanCustomFields[key] = value.filter(
+                (v) =>
+                  typeof v === "string" ||
+                  typeof v === "number" ||
+                  typeof v === "boolean"
               );
             }
           }
@@ -1366,30 +1443,43 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
       // Prepare input data for project creation with status='requested'
       const projectInput = {
         clientId: values.clientId || selectedClientId,
-        workTypeId: values.workTypeId,
+        workTypeId: values.workTypeIds?.[0], // Use first selected worktype for backward compatibility
+        name: values.name, // PROJECT NAME - was missing!
         description: values.description || "",
-        deadlineDate: values.deadlineDate ? dayjs(values.deadlineDate).toISOString() : null,
+        deadlineDate: values.deadlineDate
+          ? dayjs(values.deadlineDate).toISOString()
+          : null,
         status: "requested", // Important: Set status to requested
         intendedStatus: values.status || "active", // Store the intended status after approval
-        requestNotes: `Project cost exceeds credit limit. Total cost: ₹${totalEstCost.toLocaleString()}, Available credit: ₹${projectCreditValidation?.availableCredit?.toLocaleString() || 0}`,
+        requestNotes: `Project cost exceeds credit limit. Total cost: ₹${totalEstCost.toLocaleString()}, Available credit: ₹${
+          projectCreditValidation?.availableCredit?.toLocaleString() || 0
+        }`,
         priority: values.priority || "B",
         notes: values.notes || "",
         clientNotes: values.clientNotes || "",
         projectGradings: projectGradingsInput,
         customFields: cleanCustomFields,
+        // Include calculated totals
+        imageQuantity: totalImageQty,
+        estimatedCost: totalEstCost,
       };
 
       console.log("Creating project with input:", projectInput);
 
       // Create project with status='requested' - backend will auto-create credit request
       const { data } = await createProject({
-        variables: { input: projectInput }
+        variables: { input: projectInput },
       });
 
       if (data?.createProject) {
-        console.log("Project created successfully with credit request:", data.createProject.id);
+        console.log(
+          "Project created successfully with credit request:",
+          data.createProject.id
+        );
         message.success("Credit approval request submitted successfully!");
-        message.info("Your request has been sent to admin and client leader for approval.");
+        message.info(
+          "Your request has been sent to admin and client leader for approval."
+        );
         setLoading(false);
         onSuccess?.();
         onClose();
@@ -1425,7 +1515,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
 
       // Final credit validation before submission (for new projects)
       // Skip validation for edit mode if project has approved credit request
-      const hasApprovedCredit = project?.creditRequest?.status === 'approved';
+      const hasApprovedCredit = project?.creditRequest?.status === "approved";
       if (mode !== "edit" && selectedClientId && projectCreditValidation) {
         if (!projectCreditValidation.canCreateProject) {
           message.error(
@@ -1434,7 +1524,12 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
           setLoading(false);
           return;
         }
-      } else if (mode === "edit" && !hasApprovedCredit && selectedClientId && projectCreditValidation) {
+      } else if (
+        mode === "edit" &&
+        !hasApprovedCredit &&
+        selectedClientId &&
+        projectCreditValidation
+      ) {
         // For edit mode without approved credit, still validate
         if (!projectCreditValidation.canCreateProject) {
           message.error(
@@ -1457,7 +1552,11 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
 
       const projectData = {
         clientId: values.clientId,
-        workTypeId: values.workTypeId,
+        // Use first work type for backward compatibility or null if none selected
+        workTypeId:
+          values.workTypeIds && values.workTypeIds.length > 0
+            ? values.workTypeIds[0]
+            : null,
         // Send multiple gradings or fallback to single grading for backward compatibility
         projectGradings:
           selectedGradings.length > 0
@@ -1621,9 +1720,9 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
         />
       )}
 
-      {/* Project Status - Block Radio Buttons */}
+      {/* Project Status and Project Name Row */}
       <Row gutter={16}>
-        <Col span={24}>
+        <Col span={6}>
           <Form.Item
             name="status"
             label="Project Status"
@@ -1783,10 +1882,52 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
             </Radio.Group>
           </Form.Item>
         </Col>
+        <Col span={6}>
+          <Form.Item
+            name="name"
+            label="Project Name"
+            rules={[{ required: false, message: "Please enter project name" }]}
+          >
+            <Input
+              placeholder="Enter project name (optional)"
+              style={{ width: "100%" }}
+              autoComplete="off"
+            />
+          </Form.Item>
+        </Col>
+
+        <Col span={6}>
+          <Form.Item
+            name="deadlineDate"
+            label="Deadline"
+            rules={[{ required: true, message: "Please select deadline" }]}
+          >
+            <DatePicker
+              placeholder="Select deadline"
+              style={{ width: "100%" }}
+              disabledDate={(current) =>
+                current && current < dayjs().startOf("day")
+              }
+            />
+          </Form.Item>
+        </Col>
+        <Col span={6}>
+          <Form.Item
+            name="priority"
+            label="Priority"
+            rules={[{ required: true, message: "Please select priority" }]}
+          >
+            <Select placeholder="Select priority">
+              <Option value="A">A - High</Option>
+              <Option value="B">B - Medium</Option>
+              <Option value="C">C - Low</Option>
+            </Select>
+          </Form.Item>
+        </Col>
       </Row>
 
       <Row gutter={16}>
-        <Col span={10}>
+        <Col span={8}>
           <Form.Item
             name="clientId"
             label="Client"
@@ -1828,60 +1969,79 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
           </Form.Item>
         </Col>
 
-        <Col span={7}>
+        <Col span={8}>
           <Form.Item
-            name="workTypeId"
-            label="Work Type"
-            rules={[{ required: true, message: "Please select work type" }]}
+            name="workTypeIds"
+            label="Work Types"
+            rules={[
+              {
+                required: true,
+                message: "Please select at least one work type",
+              },
+            ]}
           >
             <Select
-              placeholder="Select work type"
+              mode="multiple"
+              placeholder="Select work types"
               loading={!workTypesData}
-              onChange={handleWorkTypeSelect}
+              onChange={(workTypeIds) => handleWorkTypeSelect(workTypeIds)}
               disabled={isActiveProject}
             >
               {(() => {
-                console.log("Filtering work types:");
-                console.log("Available work types:", workTypesData?.workTypes);
-                console.log(
-                  "Client preferences workTypes:",
-                  clientPreferences?.workTypes
+                const workTypes = workTypesData?.workTypes || [];
+                const hasPreferences = clientPreferences?.workTypes?.length > 0;
+
+                if (!hasPreferences) {
+                  // No preferences - show all work types in single group
+                  return workTypes.map((workType) => (
+                    <Option key={workType.id} value={workType.id}>
+                      {workType.name}
+                    </Option>
+                  ));
+                }
+
+                // Group work types: preferred and others
+                const preferredWorkTypes = workTypes.filter((wt) =>
+                  clientPreferences.workTypes.some((pref) => pref.id === wt.id)
+                );
+                const otherWorkTypes = workTypes.filter(
+                  (wt) =>
+                    !clientPreferences.workTypes.some(
+                      (pref) => pref.id === wt.id
+                    )
                 );
 
-                // Ensure workTypesData.workTypes exists before filtering
-                const workTypes = workTypesData?.workTypes || [];
-
-                return workTypes.filter((workType) => {
-                  if (clientPreferences?.workTypes?.length > 0) {
-                    const isPreferred = clientPreferences.workTypes.some(
-                      (pref) => pref.id === workType.id
-                    );
-                    console.log(
-                      `Work type ${workType.name} (${workType.id}) is preferred:`,
-                      isPreferred
-                    );
-                    return isPreferred;
-                  }
-                  console.log(`No client preferences, showing all work types`);
-                  return true;
-                });
-              })().map((workType) => (
-                <Option key={workType.id} value={workType.id}>
-                  {workType.name}
-                  {clientPreferences?.workTypes?.some(
-                    (pref) => pref.id === workType.id
-                  ) && (
-                    <span style={{ color: "#52c41a", marginLeft: 8 }}>
-                      ★ Preferred
-                    </span>
-                  )}
-                </Option>
-              ))}
+                return (
+                  <>
+                    {preferredWorkTypes.length > 0 && (
+                      <Select.OptGroup label="Preferred Work Types">
+                        {preferredWorkTypes.map((workType) => (
+                          <Option key={workType.id} value={workType.id}>
+                            {workType.name}
+                            <span style={{ color: "#52c41a", marginLeft: 8 }}>
+                              ★
+                            </span>
+                          </Option>
+                        ))}
+                      </Select.OptGroup>
+                    )}
+                    {otherWorkTypes.length > 0 && (
+                      <Select.OptGroup label="Other Work Types">
+                        {otherWorkTypes.map((workType) => (
+                          <Option key={workType.id} value={workType.id}>
+                            {workType.name}
+                          </Option>
+                        ))}
+                      </Select.OptGroup>
+                    )}
+                  </>
+                );
+              })()}
             </Select>
           </Form.Item>
         </Col>
 
-        <Col span={7}>
+        <Col span={8}>
           <Form.Item
             label="Grading Selection"
             rules={[
@@ -1891,80 +2051,177 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
             <Select
               mode="multiple"
               placeholder={
-                selectedWorkType
+                selectedWorkTypes && selectedWorkTypes.length > 0
                   ? "Select gradings"
-                  : "Please select work type first"
+                  : "Please select work types first"
               }
-              disabled={!selectedWorkType || isActiveProject}
+              disabled={
+                !selectedWorkTypes ||
+                selectedWorkTypes.length === 0 ||
+                isActiveProject
+              }
               value={selectedGradings.map((sg) => sg.gradingId)}
               onChange={handleMultipleGradingSelect}
               style={{ width: "100%" }}
               optionLabelProp="label"
             >
-              {(workTypeGradings || [])
-                .filter((grading) => {
-                  if (clientPreferences?.gradings?.length > 0) {
+              {(() => {
+                const gradings = workTypeGradings || [];
+
+                if (gradings.length === 0) {
+                  return (
+                    <Option disabled value="">
+                      {selectedWorkTypes && selectedWorkTypes.length > 0
+                        ? "No gradings available for selected work types"
+                        : "Please select work types first"}
+                    </Option>
+                  );
+                }
+
+                // Filter by client preferences if available, but only for preferred work types
+                const filteredGradings = gradings.filter((grading) => {
+                  // Check if this grading's work type is a preferred work type
+                  const isPreferredWorkType = clientPreferences?.workTypes?.some(
+                    (pref) => pref.id === grading.workType?.id
+                  );
+                  
+                  // If it's a preferred work type, only show preferred gradings
+                  if (isPreferredWorkType && clientPreferences?.gradings?.length > 0) {
                     return clientPreferences.gradings.some(
                       (pref) => pref.grading.id === grading.id
                     );
                   }
+                  
+                  // For non-preferred work types, show all gradings
                   return true;
-                })
-                .map((grading) => {
-                  const clientPref = clientPreferences?.gradings?.find(
-                    (pref) => pref.grading?.id === grading.id
-                  );
-                  const displayRate =
-                    clientPref &&
-                    clientPref.customRate !== undefined &&
-                    clientPref.customRate !== null
-                      ? clientPref.customRate
-                      : grading.defaultRate;
-                  const shortCodeDisplay = grading.shortCode
-                    ? `[${grading.shortCode}] `
-                    : "";
-                  const label = `${shortCodeDisplay}${grading.name} - ₹${Number(
-                    displayRate || 0
-                  ).toLocaleString()}`;
-                  return (
-                    <Option key={grading.id} value={grading.id} label={label}>
-                      <div
-                        style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span>
-                          {grading.shortCode && (
-                            <span
-                              style={{
-                                color: "#1890ff",
-                                fontWeight: "bold",
-                                marginRight: 4,
-                              }}
-                            >
-                              [{grading.shortCode}]
+                });
+
+                // Group gradings by work type
+                const groupedByWorkType = filteredGradings.reduce(
+                  (acc, grading) => {
+                    const workTypeName = grading.workType?.name || "Other";
+                    if (!acc[workTypeName]) {
+                      acc[workTypeName] = [];
+                    }
+                    acc[workTypeName].push(grading);
+                    return acc;
+                  },
+                  {}
+                );
+
+                // If only one work type, don't group
+                const workTypeNames = Object.keys(groupedByWorkType);
+                if (workTypeNames.length === 1) {
+                  return filteredGradings.map((grading) => {
+                    const clientPref = clientPreferences?.gradings?.find(
+                      (pref) => pref.grading?.id === grading.id
+                    );
+                    const displayRate =
+                      clientPref &&
+                      clientPref.customRate !== undefined &&
+                      clientPref.customRate !== null
+                        ? clientPref.customRate
+                        : grading.defaultRate;
+                    const shortCodeDisplay = grading.shortCode
+                      ? `[${grading.shortCode}] `
+                      : "";
+                    const label = `${shortCodeDisplay}${
+                      grading.name
+                    } - ₹${Number(displayRate || 0).toLocaleString()}`;
+                    return (
+                      <Option key={grading.id} value={grading.id} label={label}>
+                        <div
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          }}
+                        >
+                          <span>
+                            {grading.shortCode && (
+                              <span
+                                style={{
+                                  color: "#1890ff",
+                                  fontWeight: "bold",
+                                  marginRight: 4,
+                                }}
+                              >
+                                [{grading.shortCode}]
+                              </span>
+                            )}
+                            {grading.name} - ₹
+                            {Number(displayRate || 0).toLocaleString()}
+                          </span>
+                          {clientPref && (
+                            <span style={{ color: "#52c41a", marginLeft: 8 }}>
+                              ★ Preferred
                             </span>
                           )}
-                          {grading.name} - ₹
-                          {Number(displayRate || 0).toLocaleString()}
-                        </span>
-                        {clientPref && (
-                          <span style={{ color: "#52c41a", marginLeft: 8 }}>
-                            ★ Preferred
-                          </span>
-                        )}
-                      </div>
-                    </Option>
-                  );
-                })}
+                        </div>
+                      </Option>
+                    );
+                  });
+                }
 
-              {workTypeGradings?.length === 0 && selectedWorkType && (
-                <Option disabled value="">
-                  No gradings available for this work type
-                </Option>
-              )}
+                // Multiple work types - group them
+                return workTypeNames.map((workTypeName) => (
+                  <Select.OptGroup key={workTypeName} label={workTypeName}>
+                    {groupedByWorkType[workTypeName].map((grading) => {
+                      const clientPref = clientPreferences?.gradings?.find(
+                        (pref) => pref.grading?.id === grading.id
+                      );
+                      const displayRate =
+                        clientPref &&
+                        clientPref.customRate !== undefined &&
+                        clientPref.customRate !== null
+                          ? clientPref.customRate
+                          : grading.defaultRate;
+                      const shortCodeDisplay = grading.shortCode
+                        ? `[${grading.shortCode}] `
+                        : "";
+                      const label = `${shortCodeDisplay}${
+                        grading.name
+                      } - ₹${Number(displayRate || 0).toLocaleString()}`;
+                      return (
+                        <Option
+                          key={grading.id}
+                          value={grading.id}
+                          label={label}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                            }}
+                          >
+                            <span>
+                              {grading.shortCode && (
+                                <span
+                                  style={{
+                                    color: "#1890ff",
+                                    fontWeight: "bold",
+                                    marginRight: 4,
+                                  }}
+                                >
+                                  [{grading.shortCode}]
+                                </span>
+                              )}
+                              {grading.name} - ₹
+                              {Number(displayRate || 0).toLocaleString()}
+                            </span>
+                            {clientPref && (
+                              <span style={{ color: "#52c41a", marginLeft: 8 }}>
+                                ★ Preferred
+                              </span>
+                            )}
+                          </div>
+                        </Option>
+                      );
+                    })}
+                  </Select.OptGroup>
+                ));
+              })()}
             </Select>
           </Form.Item>
         </Col>
@@ -1972,264 +2229,199 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
 
       {/* Individual Grading Quantities */}
       {selectedGradings.length > 0 && (
-        <Row gutter={16} style={{ marginTop: 16 }}>
-          <Col span={24}>
-            <div style={{ marginBottom: 16 }}>
-              <h4 style={{ marginBottom: 12, color: "#1890ff" }}>
-                Image Quantities per Grading
-              </h4>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-                {selectedGradings.map((selectedGrading, index) => {
-                  const grading = workTypeGradings?.find(
-                    (g) => g.id === selectedGrading.gradingId
-                  );
-                  const clientPref = clientPreferences?.gradings?.find(
-                    (pref) => pref.grading?.id === selectedGrading.gradingId
-                  );
+        <div style={{ marginBottom: 16 }}>
+          <h4 style={{ marginBottom: 12, color: "#1890ff" }}>
+            Image Quantities per Grading
+          </h4>
+          <Row gutter={16}>
+            {selectedGradings.map((selectedGrading, index) => {
+              const grading = workTypeGradings?.find(
+                (g) => g.id === selectedGrading.gradingId
+              );
+              const clientPref = clientPreferences?.gradings?.find(
+                (pref) => pref.grading?.id === selectedGrading.gradingId
+              );
 
-                  // Priority: customRate > clientPref.customRate > grading.defaultRate
-                  const effectiveRate =
-                    selectedGrading.customRate !== undefined &&
-                    selectedGrading.customRate !== null
-                      ? selectedGrading.customRate
-                      : clientPref &&
-                        clientPref.customRate !== undefined &&
-                        clientPref.customRate !== null
-                      ? clientPref.customRate
-                      : grading?.defaultRate || 0;
-
-                  const defaultRate = grading?.defaultRate || 0;
-                  const clientCustomRate =
-                    clientPref &&
+              // Priority: customRate > clientPref.customRate > grading.defaultRate
+              const effectiveRate =
+                selectedGrading.customRate !== undefined &&
+                selectedGrading.customRate !== null
+                  ? selectedGrading.customRate
+                  : clientPref &&
                     clientPref.customRate !== undefined &&
                     clientPref.customRate !== null
-                      ? clientPref.customRate
-                      : null;
-                  const hasCustomRate =
-                    selectedGrading.customRate !== undefined &&
-                    selectedGrading.customRate !== null;
-                  const isUsingClientRate =
-                    !hasCustomRate && clientCustomRate !== null;
+                  ? clientPref.customRate
+                  : grading?.defaultRate || 0;
 
-                  return (
+              const defaultRate = grading?.defaultRate || 0;
+              const clientCustomRate =
+                clientPref &&
+                clientPref.customRate !== undefined &&
+                clientPref.customRate !== null
+                  ? clientPref.customRate
+                  : null;
+              const hasCustomRate =
+                selectedGrading.customRate !== undefined &&
+                selectedGrading.customRate !== null;
+              const isUsingClientRate =
+                !hasCustomRate && clientCustomRate !== null;
+
+              return (
+                <Col span={8} key={`${selectedGrading.gradingId}-${index}`}>
+                  <div
+                    style={{
+                      padding: 16,
+                      border: "1px solid #d9d9d9",
+                      borderRadius: 8,
+                      backgroundColor: "#fafafa",
+                      marginBottom: 16,
+                    }}
+                  >
                     <div
-                      key={`${selectedGrading.gradingId}-${index}`}
                       style={{
-                        flex: "1 1 350px",
-                        minWidth: 300,
-                        padding: 16,
-                        border: "1px solid #d9d9d9",
-                        borderRadius: 8,
-                        backgroundColor: "#fafafa",
+                        marginBottom: 12,
+                        fontWeight: 500,
+                        color: "#262626",
                       }}
                     >
-                      <div
-                        style={{
-                          marginBottom: 12,
-                          fontWeight: 500,
-                          color: "#262626",
-                        }}
-                      >
-                        {grading?.shortCode && (
-                          <span
-                            style={{
-                              color: "#1890ff",
-                              fontWeight: "bold",
-                              marginRight: 4,
-                            }}
-                          >
-                            [{grading.shortCode}]
-                          </span>
-                        )}
-                        {grading?.name || "Unknown Grading"}
-                        <div
-                          style={{
-                            fontSize: 12,
-                            color: "#8c8c8c",
-                            fontWeight: "normal",
-                            marginTop: 2,
-                          }}
-                        >
-                          Default: ₹{Number(defaultRate).toLocaleString()}/image
-                        </div>
-                      </div>
-
-                      <Row gutter={8}>
-                        <Col span={12}>
-                          <div
-                            style={{
-                              marginBottom: 4,
-                              fontSize: 12,
-                              fontWeight: 500,
-                            }}
-                          >
-                            Image Quantity
-                          </div>
-                          <InputNumber
-                            placeholder="Quantity"
-                            value={selectedGrading.imageQuantity}
-                            min={1}
-                            onChange={(value) =>
-                              updateGradingQuantity(index, value || 0)
-                            }
-                            disabled={isActiveProject}
-                            style={{ width: "100%" }}
-                            size="small"
-                          />
-                        </Col>
-                        <Col span={12}>
-                          <div
-                            style={{
-                              marginBottom: 4,
-                              fontSize: 12,
-                              fontWeight: 500,
-                            }}
-                          >
-                            Custom Rate
-                            <span
-                              style={{ color: "#8c8c8c", fontWeight: "normal" }}
-                            >
-                              {" "}
-                              (₹/image)
-                            </span>
-                            {isUsingClientRate && (
-                              <span
-                                style={{
-                                  color: "#52c41a",
-                                  fontSize: 10,
-                                  marginLeft: 4,
-                                }}
-                              >
-                                ★ Client Rate
-                              </span>
-                            )}
-                          </div>
-                          <InputNumber
-                            placeholder={
-                              clientCustomRate
-                                ? `Client: ${clientCustomRate}`
-                                : `Default: ${defaultRate}`
-                            }
-                            value={selectedGrading.customRate}
-                            min={0}
-                            precision={2}
-                            onChange={(value) =>
-                              updateGradingCustomRate(index, value)
-                            }
-                            disabled={isActiveProject}
-                            style={{
-                              width: "100%",
-                              backgroundColor: hasCustomRate
-                                ? "#e6f7ff"
-                                : isUsingClientRate
-                                ? "#f6ffed"
-                                : undefined,
-                            }}
-                            size="small"
-                          />
-                        </Col>
-                      </Row>
-
-                      <div
-                        style={{
-                          marginTop: 12,
-                          padding: "8px 12px",
-                          backgroundColor: "#f0f0f0",
-                          borderRadius: 4,
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                        }}
-                      >
-                        <span style={{ fontSize: 12, color: "#595959" }}>
-                          Estimated Cost:
-                        </span>
+                      {grading?.shortCode && (
                         <span
                           style={{
-                            fontSize: 14,
-                            fontWeight: 600,
                             color: "#1890ff",
+                            fontWeight: "bold",
+                            marginRight: 4,
                           }}
                         >
-                          ₹
-                          {(
-                            (selectedGrading.imageQuantity || 0) * effectiveRate
-                          ).toLocaleString()}
+                          [{grading.shortCode}]
                         </span>
+                      )}
+                      {grading?.name || "Unknown Grading"}
+                      <div
+                        style={{
+                          fontSize: 12,
+                          color: "#8c8c8c",
+                          fontWeight: "normal",
+                          marginTop: 2,
+                        }}
+                      >
+                        Default: ₹{Number(defaultRate).toLocaleString()}/image
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-            </div>
-          </Col>
-        </Row>
+
+                    <Row gutter={8}>
+                      <Col span={12}>
+                        <div
+                          style={{
+                            marginBottom: 4,
+                            fontSize: 12,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Image Quantity
+                        </div>
+                        <InputNumber
+                          placeholder="Quantity"
+                          value={selectedGrading.imageQuantity}
+                          min={1}
+                          onChange={(value) =>
+                            updateGradingQuantity(index, value || 0)
+                          }
+                          disabled={isActiveProject}
+                          style={{ width: "100%" }}
+                          size="small"
+                        />
+                      </Col>
+                      <Col span={12}>
+                        <div
+                          style={{
+                            marginBottom: 4,
+                            fontSize: 12,
+                            fontWeight: 500,
+                          }}
+                        >
+                          Custom Rate
+                          <span
+                            style={{ color: "#8c8c8c", fontWeight: "normal" }}
+                          >
+                            {" "}
+                            (₹/image)
+                          </span>
+                          {isUsingClientRate && (
+                            <span
+                              style={{
+                                color: "#52c41a",
+                                fontSize: 10,
+                                marginLeft: 4,
+                              }}
+                            >
+                              ★ Client Rate
+                            </span>
+                          )}
+                        </div>
+                        <InputNumber
+                          placeholder={
+                            clientCustomRate
+                              ? `Client: ${clientCustomRate}`
+                              : `Default: ${defaultRate}`
+                          }
+                          value={selectedGrading.customRate}
+                          min={0}
+                          precision={2}
+                          onChange={(value) =>
+                            updateGradingCustomRate(index, value)
+                          }
+                          disabled={isActiveProject}
+                          style={{
+                            width: "100%",
+                            backgroundColor: hasCustomRate
+                              ? "#e6f7ff"
+                              : isUsingClientRate
+                              ? "#f6ffed"
+                              : undefined,
+                          }}
+                          size="small"
+                        />
+                      </Col>
+                    </Row>
+
+                    <div
+                      style={{
+                        marginTop: 12,
+                        padding: "8px 12px",
+                        backgroundColor: "#f0f0f0",
+                        borderRadius: 4,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <span style={{ fontSize: 12, color: "#595959" }}>
+                        Estimated Cost:
+                      </span>
+                      <span
+                        style={{
+                          fontSize: 14,
+                          fontWeight: 600,
+                          color: "#1890ff",
+                        }}
+                      >
+                        ₹
+                        {(
+                          (selectedGrading.imageQuantity || 0) * effectiveRate
+                        ).toLocaleString()}
+                      </span>
+                    </div>
+                  </div>
+                </Col>
+              );
+            })}
+          </Row>
+        </div>
       )}
 
-      {/* Project Name - Moved to top */}
+      {/* Description and Internal Notes - Side by Side */}
       <Row gutter={16}>
-        <Col span={24}>
-          <Form.Item
-            name="name"
-            label="Project Name"
-            rules={[{ required: false, message: "Please enter project name" }]}
-          >
-            <Input
-              placeholder="Enter project name (optional)"
-              style={{ width: "100%" }}
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-
-      {/* Quantity, Rate override and Deadline row */}
-      <Row gutter={16} style={{ marginTop: 8 }}>
-        <Col span={8}>
-          <Form.Item label="Total Image Quantity">
-            <div
-              style={{
-                padding: "8px 12px",
-                border: "1px solid #d9d9d9",
-                borderRadius: "6px",
-                backgroundColor: "#f5f5f5",
-                minHeight: "40px",
-                display: "flex",
-                alignItems: "center",
-                fontSize: "16px",
-                fontWeight: "500",
-              }}
-            >
-              {totalImageQuantity > 0 ? (
-                <span>{totalImageQuantity.toLocaleString()} images</span>
-              ) : (
-                <span style={{ color: "#999" }}>
-                  Select gradings to see total
-                </span>
-              )}
-            </div>
-          </Form.Item>
-        </Col>
-
-        <Col span={8}>
-          <Form.Item
-            name="deadlineDate"
-            label="Project Deadline"
-            rules={[{ required: true, message: "Please select deadline" }]}
-          >
-            <DatePicker
-              placeholder="Select deadline"
-              style={{ width: "100%" }}
-              disabledDate={(current) =>
-                current && current < dayjs().startOf("day")
-              }
-            />
-          </Form.Item>
-        </Col>
-      </Row>
-
-      {/* Description row */}
-      <Row gutter={16}>
-        <Col span={24}>
+        <Col span={12}>
           <Form.Item
             name="description"
             label="Project Description"
@@ -2239,65 +2431,17 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
           >
             <Input.TextArea
               placeholder="Enter project description"
-              rows={3}
+              rows={2}
               style={{ width: "100%" }}
             />
           </Form.Item>
         </Col>
-      </Row>
-
-      {/* Additional Project Fields */}
-      <Row gutter={16}>
-        <Col span={8}>
-          <Form.Item
-            name="priority"
-            label="Priority"
-            rules={[{ required: true, message: "Please select priority" }]}
-          >
-            <Select placeholder="Select priority">
-              <Option value="A">A - High</Option>
-              <Option value="B">B - Medium</Option>
-              <Option value="C">C - Low</Option>
-            </Select>
-          </Form.Item>
-        </Col>
-        <Col span={8}>
-          <Form.Item label="Estimated Cost (₹)">
-            <div
-              style={{
-                padding: "4px 11px",
-                backgroundColor: "#f5f5f5",
-                border: "1px solid #d9d9d9",
-                borderRadius: "6px",
-                minHeight: "32px",
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
-              <span style={{ color: "#595959", fontWeight: "bold" }}>
-                ₹{totalCalculatedBudget?.toLocaleString() || "0"}
-              </span>
-              <span
-                style={{
-                  color: "#8c8c8c",
-                  marginLeft: "8px",
-                  fontSize: "12px",
-                }}
-              >
-                (Auto-calculated from all gradings)
-              </span>
-            </div>
-          </Form.Item>
-        </Col>
-      </Row>
-
-      {/* Notes Section */}
-      <Row gutter={16}>
-        <Col span={24}>
+        <Col span={12}>
           <Form.Item name="notes" label="Internal Notes">
             <Input.TextArea
               placeholder="Internal notes (not visible to client)"
-              rows={3}
+              rows={2}
+              autoComplete="off"
             />
           </Form.Item>
         </Col>
@@ -2313,11 +2457,11 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
               title={
                 <Text strong>
                   Additional Fields for{" "}
-                  {
-                    workTypesData?.workTypes?.find(
-                      (wt) => wt.id === selectedWorkType
-                    )?.name
-                  }
+                  {selectedWorkTypes && selectedWorkTypes.length > 0
+                    ? workTypesData?.workTypes?.find(
+                        (wt) => wt.id === selectedWorkTypes[0]
+                      )?.name
+                    : "Work Type"}
                 </Text>
               }
               size="small"
@@ -2325,10 +2469,7 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
             >
               <Row gutter={16}>
                 {(customFields || []).map((field) => (
-                  <Col
-                    span={field.fieldType === "textarea" ? 24 : 12}
-                    key={field.id}
-                  >
+                  <Col span={12} key={field.id}>
                     <CustomFieldRenderer
                       field={field}
                       value={customFieldValues[field.fieldKey]}
@@ -2386,9 +2527,13 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
                   tasks={projectTasks}
                   onTaskUpdate={handleTaskUpdate}
                   availableUsers={availableUsers}
-                  workType={workTypesData?.workTypes?.find(
-                    (wt) => wt.id === selectedWorkType
-                  )}
+                  workType={
+                    selectedWorkTypes && selectedWorkTypes.length > 0
+                      ? workTypesData?.workTypes?.find(
+                          (wt) => wt.id === selectedWorkTypes[0]
+                        )
+                      : null
+                  }
                   grading={workTypeGradings?.find(
                     (g) => g.id === selectedGrading
                   )}
@@ -2429,361 +2574,6 @@ const ProjectForm = ({ project, mode, onClose, onSuccess, onCreditExceeded }) =>
         )}
 
       {/* Removed duplicate Deadline and Description fields (already present above as 'deadlineDate' and 'description') */}
-
-      {/* --- Project Summary Section --- */}
-      <Divider orientation="left">Project Summary & Credit Validation</Divider>
-      <Row gutter={16}>
-        <Col span={24}>
-          {/* Invoice-Style Summary Card */}
-          <Card
-            title={
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>Project Invoice Summary</span>
-                {projectCreditValidation?.creditLimitEnabled && (
-                  <div style={{ fontSize: "12px", fontWeight: "normal" }}>
-                    {projectCreditValidation.canCreateProject ? (
-                      <span style={{ color: "#52c41a" }}>
-                        ✓ Credit Approved
-                      </span>
-                    ) : (
-                      <span style={{ color: "#ff4d4f" }}>
-                        ⚠ Credit Exceeded
-                      </span>
-                    )}
-                  </div>
-                )}
-              </div>
-            }
-            style={{
-              backgroundColor:
-                projectCreditValidation?.canCreateProject === false
-                  ? "#fff2f0"
-                  : "#f6ffed",
-              borderColor:
-                projectCreditValidation?.canCreateProject === false
-                  ? "#ffccc7"
-                  : "#b7eb8f",
-              marginBottom: 16,
-            }}
-          >
-            <Row gutter={[16, 8]}>
-              {/* Main Project Details */}
-              <Col span={12}>
-                <div
-                  style={{
-                    borderRight: "1px solid #f0f0f0",
-                    paddingRight: "16px",
-                  }}
-                >
-                  <Text
-                    strong
-                    style={{
-                      fontSize: "16px",
-                      display: "block",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    Project Details
-                  </Text>
-                  <div style={{ marginBottom: "4px" }}>
-                    <Text type="secondary">Client: </Text>
-                    <Text>
-                      {selectedClientId
-                        ? clientsData?.clients?.find(
-                            (c) => c.id === selectedClientId
-                          )?.displayName || "Selected Client"
-                        : "Not Selected"}
-                    </Text>
-                  </div>
-                  <div style={{ marginBottom: "4px" }}>
-                    <Text type="secondary">Work Type: </Text>
-                    <Text>
-                      {selectedWorkType
-                        ? workTypesData?.workTypes?.find(
-                            (wt) => wt.id === selectedWorkType
-                          )?.name || "Selected Work Type"
-                        : "Not Selected"}
-                    </Text>
-                  </div>
-                  <div style={{ marginBottom: "4px" }}>
-                    <Text type="secondary">Grading: </Text>
-                    <Text>
-                      {selectedGrading
-                        ? workTypeGradings?.find(
-                            (g) => g.id === selectedGrading
-                          )?.name || "Selected Grading"
-                        : "Not Selected"}
-                    </Text>
-                  </div>
-                  <div style={{ marginBottom: "4px" }}>
-                    <Text type="secondary">Quantity: </Text>
-                    <Text strong>{imageQuantity || 0} images</Text>
-                  </div>
-                  <div>
-                    <Text type="secondary">Rate per image: </Text>
-                    {(() => {
-                      const gradingObj = workTypeGradings?.find(
-                        (g) => g.id === selectedGrading
-                      );
-                      const clientCustom = clientPreferences?.gradings?.find(
-                        (g) => g.grading?.id === selectedGrading
-                      )?.customRate;
-                      const rateToShow =
-                        perImageRate !== null && perImageRate !== undefined
-                          ? perImageRate
-                          : clientCustom !== undefined && clientCustom !== null
-                          ? clientCustom
-                          : gradingObj?.defaultRate || 0;
-                      return (
-                        <Text>₹{Number(rateToShow).toLocaleString()}</Text>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </Col>
-
-              {/* Credit Information */}
-              <Col span={12}>
-                <Text
-                  strong
-                  style={{
-                    fontSize: "16px",
-                    display: "block",
-                    marginBottom: "8px",
-                  }}
-                >
-                  💳 Credit Information
-                </Text>
-                {projectCreditValidation ? (
-                  <>
-                    {projectCreditValidation.creditLimitEnabled ? (
-                      <>
-                        <div
-                          style={{
-                            backgroundColor:
-                              projectCreditValidation.canCreateProject
-                                ? "#f6ffed"
-                                : "#fff2f0",
-                            padding: "8px",
-                            borderRadius: "4px",
-                            marginBottom: "8px",
-                            border: `1px solid ${
-                              projectCreditValidation.canCreateProject
-                                ? "#b7eb8f"
-                                : "#ffccc7"
-                            }`,
-                          }}
-                        >
-                          <div style={{ marginBottom: "4px" }}>
-                            <Text type="secondary">Credit Limit: </Text>
-                            <Text strong>
-                              ₹
-                              {projectCreditValidation.creditLimit?.toLocaleString()}
-                            </Text>
-                          </div>
-                          <div style={{ marginBottom: "4px" }}>
-                            <Text type="secondary">Used Credit: </Text>
-                            <Text>
-                              ₹
-                              {projectCreditValidation.usedCredit?.toLocaleString()}
-                            </Text>
-                          </div>
-                          <div style={{ marginBottom: "4px" }}>
-                            <Text type="secondary">Available Credit: </Text>
-                            <Text
-                              strong
-                              style={{
-                                color:
-                                  projectCreditValidation.availableCredit < 0
-                                    ? "#ff4d4f"
-                                    : "#52c41a",
-                              }}
-                            >
-                              ₹
-                              {projectCreditValidation.availableCredit?.toLocaleString()}
-                            </Text>
-                          </div>
-                          <div style={{ marginBottom: "4px" }}>
-                            <Text type="secondary">Required for Project: </Text>
-                            <Text strong>
-                              ₹
-                              {projectCreditValidation.requiredCredit?.toLocaleString()}
-                            </Text>
-                          </div>
-                          <div
-                            style={{
-                              padding: "4px 8px",
-                              borderRadius: "4px",
-                              backgroundColor:
-                                projectCreditValidation.canCreateProject
-                                  ? "#52c41a"
-                                  : "#ff4d4f",
-                              color: "white",
-                              textAlign: "center",
-                              marginTop: "8px",
-                            }}
-                          >
-                            <Text strong style={{ color: "white" }}>
-                              {projectCreditValidation.canCreateProject
-                                ? "✓ Credit Approved"
-                                : "⚠ Credit Exceeded"}
-                            </Text>
-                          </div>
-                        </div>
-                        {!projectCreditValidation.canCreateProject && (
-                          <div
-                            style={{
-                              fontSize: "11px",
-                              color: "#ff4d4f",
-                              textAlign: "center",
-                            }}
-                          >
-                            Remaining after project: ₹
-                            {(
-                              projectCreditValidation.availableCredit -
-                              projectCreditValidation.requiredCredit
-                            ).toLocaleString()}
-                          </div>
-                        )}
-                      </>
-                    ) : (
-                      <div
-                        style={{
-                          textAlign: "center",
-                          padding: "20px",
-                          backgroundColor: "#f6ffed",
-                          borderRadius: "6px",
-                          border: "1px solid #b7eb8f",
-                        }}
-                      >
-                        <Text style={{ color: "#52c41a", fontSize: "16px" }}>
-                          ✓ Unlimited Credit - No Restrictions
-                        </Text>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div
-                    style={{
-                      textAlign: "center",
-                      padding: "20px",
-                      backgroundColor: "#fafafa",
-                      borderRadius: "6px",
-                      border: "1px dashed #d9d9d9",
-                    }}
-                  >
-                    <Text type="secondary">
-                      Select client and grading to view credit information
-                    </Text>
-                  </div>
-                )}
-              </Col>
-
-              {/* Total Amount Section */}
-              <Col span={24}>
-                <div
-                  style={{
-                    borderTop: "2px solid #f0f0f0",
-                    marginTop: "16px",
-                    paddingTop: "16px",
-                    textAlign: "center",
-                    backgroundColor:
-                      projectCreditValidation?.canCreateProject === false
-                        ? "#fff1f0"
-                        : "#f9f9f9",
-                    padding: "16px",
-                    borderRadius: "6px",
-                  }}
-                >
-                  <Text
-                    strong
-                    style={{
-                      fontSize: "18px",
-                      display: "block",
-                      marginBottom: "8px",
-                    }}
-                  >
-                    Total Project Amount
-                  </Text>
-                  <div
-                    style={{
-                      fontSize: "28px",
-                      fontWeight: "bold",
-                      color:
-                        projectCreditValidation?.canCreateProject === false
-                          ? "#ff4d4f"
-                          : "#1890ff",
-                    }}
-                  >
-                    ₹{calculatedBudget.toLocaleString()}
-                  </div>
-                  {projectCreditValidation &&
-                    !projectCreditValidation.canCreateProject && (
-                      <div style={{ marginTop: "8px" }}>
-                        <Text type="danger" style={{ fontSize: "12px" }}>
-                          {projectCreditValidation.message}
-                        </Text>
-                      </div>
-                    )}
-                </div>
-              </Col>
-
-              {/* Task Breakdown (if tasks are available) */}
-              {projectTasks && projectTasks.length > 0 && (
-                <Col span={24}>
-                  <div style={{ marginTop: "16px" }}>
-                    <Text
-                      strong
-                      style={{
-                        fontSize: "14px",
-                        display: "block",
-                        marginBottom: "8px",
-                      }}
-                    >
-                      Task Breakdown
-                    </Text>
-                    <div
-                      style={{
-                        maxHeight: "200px",
-                        overflowY: "auto",
-                        border: "1px solid #f0f0f0",
-                        borderRadius: "4px",
-                        padding: "8px",
-                      }}
-                    >
-                      {projectTasks.map((task, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            padding: "4px 0",
-                            borderBottom:
-                              index < projectTasks.length - 1
-                                ? "1px solid #f5f5f5"
-                                : "none",
-                          }}
-                        >
-                          <span>{task.name || `Task ${index + 1}`}</span>
-                          <span>
-                            ₹{task.estimatedCost?.toLocaleString() || "0"}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </Col>
-              )}
-            </Row>
-          </Card>
-        </Col>
-      </Row>
     </Form>
   );
 };

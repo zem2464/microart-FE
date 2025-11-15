@@ -182,3 +182,25 @@ body {
 .priority-urgent {
   @apply bg-red-100 text-red-800;
 }
+/* Compact table rows for better density */
+.compact-row .ant-table-cell {
+  padding: 2px 8px !important;
+  line-height: 1.4 !important;
+}
+
+.compact-row .ant-table-cell > div {
+  line-height: 1.4 !important;
+}
+
+.compact-row .ant-tag {
+  margin: 0 !important;
+  padding: 0 4px !important;
+  line-height: 18px !important;
+  font-size: 11px !important;
+}
+
+.compact-row .ant-btn {
+  padding: 0 4px !important;
+  height: 22px !important;
+  font-size: 12px !important;
+}

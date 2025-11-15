@@ -29,7 +29,7 @@ import ViewSwitcher from "../components/ViewSwitcher";
 import { useAppDrawer } from "../contexts/DrawerContext";
 
 // Import pages
-import TaskBoard from "../pages/FrontOffice/TaskBoard";
+import TaskTable from "../pages/FrontOffice/TaskTable";
 import ProjectManagement from "../pages/FrontOffice/ProjectManagement";
 import ClientDashboard from "../pages/FrontOffice/ClientDashboard";
 import ClientList from "../pages/FrontOffice/ClientList";
@@ -210,7 +210,7 @@ const FrontOfficeLayout = () => {
       <Content className="p-2 bg-gray-50 min-h-[calc(100vh-64px)]">
         <div className="w-full max-w-none mx-auto px-4">
           <Routes>
-            <Route path="/" element={<TaskBoard />} />
+            <Route path="/" element={<TaskTable />} />
             <Route path="/projects" element={<ProjectManagement />} />
             <Route path="/clients/dashboard" element={<ClientDashboard />} />
             <Route path="/clients" element={<ClientList />} />

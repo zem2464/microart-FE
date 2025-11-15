@@ -158,7 +158,14 @@ const ProjectView = () => {
             dataSource={projects}
             rowKey="id"
             loading={projectsLoading}
-            pagination={{ pageSize: 10 }}
+            pagination={{
+              pageSize: 10,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) =>
+                `${range[0]}-${range[1]} of ${total} projects`,
+              pageSizeOptions: [10, 25, 50, 100],
+            }}
           />
         )}
       </Card>

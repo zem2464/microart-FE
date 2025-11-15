@@ -380,7 +380,14 @@ const Gradings = () => {
         showAdd={canCreate}
         rowKey="id"
         scroll={{ x: 1200 }}
-        pagination={false}
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          showTotal: (total, range) =>
+            `${range[0]}-${range[1]} of ${total} gradings`,
+          pageSizeOptions: [10, 25, 50, 100],
+        }}
         summary={(data) => {
           if (!data || data.length === 0) return null;
           

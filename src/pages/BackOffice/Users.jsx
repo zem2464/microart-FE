@@ -261,7 +261,14 @@ const Users = () => {
         columns={columns}
         dataSource={filteredUsers.map((user) => ({ ...user, key: user.id }))}
         loading={loading || queryLoading}
-        pagination={false}
+        pagination={{
+          pageSize: 10,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          showTotal: (total, range) =>
+            `${range[0]}-${range[1]} of ${total} users`,
+          pageSizeOptions: [10, 25, 50, 100],
+        }}
         scroll={{ x: 1000 }}
       />
     </Card>

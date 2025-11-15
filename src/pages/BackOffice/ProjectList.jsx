@@ -55,6 +55,12 @@ const ProjectList = () => {
   const [modalType, setModalType] = useState("view"); // 'view', 'create', 'edit'
   const [form] = Form.useForm();
 
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+  });
+
   // GraphQL Queries
   const {
     data: projectsData,
@@ -549,8 +555,23 @@ const ProjectList = () => {
           dataSource={projects}
           rowKey="id"
           loading={projectsLoading}
-          pagination={false}
-          onChange={handleTableChange}
+          pagination={{
+            current: pagination.current,
+            pageSize: pagination.pageSize,
+            total: projects.length,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) =>
+              `${range[0]}-${range[1]} of ${total} projects`,
+            pageSizeOptions: [10, 25, 50, 100],
+          }}
+          onChange={(paginationConfig, filters, sorter) => {
+            setPagination({
+              current: paginationConfig.current,
+              pageSize: paginationConfig.pageSize,
+            });
+            setFilters(filters);
+          }}
           scroll={{ x: 1500 }}
           size="small"
         />

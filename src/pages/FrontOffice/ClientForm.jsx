@@ -842,6 +842,33 @@ const ClientForm = ({
     form.setFieldsValue({ cityId: undefined });
   };
 
+  // Disable autofill on Select components for country, state, city
+  useEffect(() => {
+    const disableAutofill = () => {
+      // Find all Select search inputs and disable autofill
+      const selects = document.querySelectorAll('#client-form-prevent-autofill .ant-select-selection-search-input');
+      selects.forEach(input => {
+        input.setAttribute('autocomplete', 'chrome-off');
+        input.setAttribute('autocomplete', 'disabled');
+        input.setAttribute('autocomplete', 'nope');
+        input.setAttribute('data-lpignore', 'true');
+        input.setAttribute('data-form-type', 'other');
+        // Disable autofill on input
+        input.autocomplete = 'off';
+      });
+    };
+
+    // Run on mount and after DOM updates
+    disableAutofill();
+    const timer = setTimeout(disableAutofill, 100);
+    const timer2 = setTimeout(disableAutofill, 500);
+
+    return () => {
+      clearTimeout(timer);
+      clearTimeout(timer2);
+    };
+  }, [currentStep]); // Re-run when step changes
+
   console.log("workTypes", selectedWorkTypes);
   // Step configurations - dynamic based on client type
   const steps = useMemo(
@@ -915,12 +942,22 @@ const ClientForm = ({
                     { required: true, message: "Please enter first name!" },
                   ]}
                 >
-                  <Input placeholder="Enter first name" size="middle" />
+                  <Input 
+                    placeholder="Enter first name" 
+                    size="middle" 
+                    autoComplete="new-password"
+                    data-form-type="other"
+                  />
                 </Form.Item>
               </Col>
               <Col span={8}>
                 <Form.Item name="lastName" label="Last Name">
-                  <Input placeholder="Enter last name" size="middle" />
+                  <Input 
+                    placeholder="Enter last name" 
+                    size="middle" 
+                    autoComplete="new-password"
+                    data-form-type="other"
+                  />
                 </Form.Item>
               </Col>
               <Col span={8}>
@@ -936,6 +973,8 @@ const ClientForm = ({
                   <Input
                     placeholder="Enter display name"
                     size="middle"
+                    autoComplete="new-password"
+                    data-form-type="other"
                     rules={[
                       {
                         required: true,
@@ -951,8 +990,10 @@ const ClientForm = ({
               <Col span={12}>
                 <Form.Item name="companyName" label="Company Name">
                   <Input
-                    placeholder="Enter company name (optional)"
+                    placeholder="Enter company name"
                     size="middle"
+                    autoComplete="new-password"
+                    data-form-type="other"
                   />
                 </Form.Item>
               </Col>
@@ -999,6 +1040,8 @@ const ClientForm = ({
                     size="middle"
                     disabled={!!client}
                     readOnly={!!client}
+                    autoComplete="new-password"
+                    data-form-type="other"
                   />
                 </Form.Item>
               </Col>
@@ -1014,7 +1057,12 @@ const ClientForm = ({
                     { required: true, message: "Please enter phone number!" },
                   ]}
                 >
-                  <Input placeholder="Enter phone number" size="middle" />
+                  <Input 
+                    placeholder="Enter phone number" 
+                    size="middle" 
+                    autoComplete="new-password"
+                    data-form-type="other"
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -1023,7 +1071,12 @@ const ClientForm = ({
 
             {clientType !== "walkIn" && (
               <Form.Item name="address" label={<span>Street Address</span>}>
-                <TextArea rows={2} placeholder="Enter full address" />
+                <TextArea 
+                  rows={2} 
+                  placeholder="Enter full address" 
+                  autoComplete="new-password"
+                  data-form-type="other"
+                />
               </Form.Item>
             )}
 
@@ -1039,13 +1092,16 @@ const ClientForm = ({
                   rules={[
                     { required: true, message: "Please select country!" },
                   ]}
+                  autoComplete="new-password"
                 >
                   <Select
                     placeholder="Select country"
                     size="middle"
                     onChange={handleCountryChange}
-                    showSearch
-                    optionFilterProp="children"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-form-type="other"
+                    dropdownStyle={{ zIndex: 9999 }}
                   >
                     {countriesData?.countries?.map((country) => (
                       <Option key={country.id} value={country.id}>
@@ -1064,15 +1120,18 @@ const ClientForm = ({
                     </span>
                   }
                   rules={[{ required: true, message: "Please select state!" }]}
+                  autoComplete="new-password"
                 >
                   <Select
                     placeholder="Select state"
                     size="middle"
                     onChange={handleStateChange}
                     disabled={!selectedCountry}
-                    showSearch
-                    optionFilterProp="children"
                     value={form.getFieldValue("stateId")}
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-form-type="other"
+                    dropdownStyle={{ zIndex: 9999 }}
                   >
                     {statesData?.statesByCountry?.map((state) => (
                       <Option key={state.id} value={state.id}>
@@ -1091,13 +1150,16 @@ const ClientForm = ({
                     </span>
                   }
                   rules={[{ required: true, message: "Please select city!" }]}
+                  autoComplete="new-password"
                 >
                   <Select
                     placeholder="Select city"
                     size="middle"
                     disabled={!selectedState}
-                    showSearch
-                    optionFilterProp="children"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    data-form-type="other"
+                    dropdownStyle={{ zIndex: 9999 }}
                   >
                     {citiesData?.citiesByState?.map((city) => (
                       <Option key={city.id} value={city.id}>
@@ -1152,23 +1214,65 @@ const ClientForm = ({
                         : "No gradings found"
                     }
                   >
-                    {gradingsData?.gradingsByWorkType?.map((grading) => (
-                      <Option key={grading.id} value={grading.id}>
-                        {grading.shortCode && (
-                          <span
-                            style={{
-                              color: "#1890ff",
-                              fontWeight: "bold",
-                              marginRight: 4,
-                            }}
-                          >
-                            [{grading.shortCode}]
-                          </span>
-                        )}
-                        {grading.name} - Default Rate: ₹{grading.defaultRate}/
-                        {grading.unit}
-                      </Option>
-                    ))}
+                    {(() => {
+                      const gradings = gradingsData?.gradingsByWorkType || [];
+                      
+                      // Group gradings by work type
+                      const groupedByWorkType = gradings.reduce((acc, grading) => {
+                        const workTypeName = grading.workType?.name || "Other";
+                        if (!acc[workTypeName]) {
+                          acc[workTypeName] = [];
+                        }
+                        acc[workTypeName].push(grading);
+                        return acc;
+                      }, {});
+
+                      const workTypeNames = Object.keys(groupedByWorkType);
+
+                      // If only one work type, don't group
+                      if (workTypeNames.length === 1) {
+                        return gradings.map((grading) => (
+                          <Option key={grading.id} value={grading.id}>
+                            {grading.shortCode && (
+                              <span
+                                style={{
+                                  color: "#1890ff",
+                                  fontWeight: "bold",
+                                  marginRight: 4,
+                                }}
+                              >
+                                [{grading.shortCode}]
+                              </span>
+                            )}
+                            {grading.name} - Default Rate: ₹{grading.defaultRate}/
+                            {grading.unit}
+                          </Option>
+                        ));
+                      }
+
+                      // Multiple work types - group them
+                      return workTypeNames.map((workTypeName) => (
+                        <Select.OptGroup key={workTypeName} label={workTypeName}>
+                          {groupedByWorkType[workTypeName].map((grading) => (
+                            <Option key={grading.id} value={grading.id}>
+                              {grading.shortCode && (
+                                <span
+                                  style={{
+                                    color: "#1890ff",
+                                    fontWeight: "bold",
+                                    marginRight: 4,
+                                  }}
+                                >
+                                  [{grading.shortCode}]
+                                </span>
+                              )}
+                              {grading.name} - Default Rate: ₹{grading.defaultRate}/
+                              {grading.unit}
+                            </Option>
+                          ))}
+                        </Select.OptGroup>
+                      ));
+                    })()}
                   </Select>
                 </Form.Item>
               </Col>
@@ -1382,6 +1486,8 @@ const ClientForm = ({
                   <Input
                     placeholder="Enter color correction style (optional)"
                     size="middle"
+                    autoComplete="new-password"
+                    data-form-type="other"
                   />
                 </Form.Item>
               </Col>
@@ -1422,20 +1528,21 @@ const ClientForm = ({
                 <Form.Item name="transferMode" label="Transfer Mode">
                   <Select placeholder="Select transfer mode" size="middle">
                     <Option value="email">Email</Option>
-                    <Option value="physical">Physical Media</Option>
-                    <Option value="gdrive">G-Drive</Option>
-                    <Option value="gmail">Gmail</Option>
-                    <Option value="fileMail">File Mail</Option>
-                    <Option value="dropbox">Drop Box</Option>
-                    <Option value="wetransfer">We Transfer</Option>
+                    <Option value="ftp">FTP</Option>
+                    <Option value="cloud_storage">Cloud Storage (Drive/Dropbox/WeTransfer)</Option>
+                    <Option value="physical_drive">Physical Drive</Option>
+                    <Option value="download_link">Download Link</Option>
                   </Select>
                 </Form.Item>
               </Col>
               <Col span={8}>
-                <Form.Item name="notes" label="Client Notes">
+                                <Form.Item name="notes" label="Client Notes">
                   <TextArea
-                    rows={2}
-                    placeholder="Special requests or notes from client"
+                    rows={3}
+                    placeholder="Enter any notes or special instructions about this client"
+                    size="middle"
+                    autoComplete="new-password"
+                    data-form-type="other"
                   />
                 </Form.Item>
               </Col>
@@ -1448,15 +1555,15 @@ const ClientForm = ({
               <Col span={24}>
                 <Form.Item
                   name="leader"
-                  label="Client Leader (for transactions)"
+                  label="Leader"
+                  tooltip="Person in charge of this client"
                 >
-                  <Select placeholder="Select leader" size="middle">
-                    {usersData?.users?.map((user) => (
-                      <Option key={user.id} value={user.id}>
-                        {user.firstName} {user.lastName}
-                      </Option>
-                    ))}
-                  </Select>
+                  <Input 
+                    placeholder="Enter leader name" 
+                    size="middle" 
+                    autoComplete="new-password"
+                    data-form-type="other"
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -1512,7 +1619,12 @@ const ClientForm = ({
                         },
                       ]}
                     >
-                      <Input placeholder="Enter GST number" size="middle" />
+                      <Input 
+                        placeholder="Enter GST number" 
+                        size="middle" 
+                        autoComplete="new-password"
+                        data-form-type="other"
+                      />
                     </Form.Item>
                   </Col>
                   <Col span={8}>
@@ -1545,7 +1657,12 @@ const ClientForm = ({
               )}
               <Col span={isGSTEnabled ? 8 : 16}>
                 <Form.Item name="panCard" label="PAN Card">
-                  <Input placeholder="Enter PAN card number" size="middle" />
+                  <Input 
+                    placeholder="Enter PAN card number" 
+                    size="middle" 
+                    autoComplete="new-password"
+                    data-form-type="other"
+                  />
                 </Form.Item>
               </Col>
             </Row>
@@ -1694,11 +1811,42 @@ const ClientForm = ({
 
   return (
     <>
+      <style>
+        {`
+          #client-form-prevent-autofill input:-webkit-autofill,
+          #client-form-prevent-autofill input:-webkit-autofill:hover,
+          #client-form-prevent-autofill input:-webkit-autofill:focus,
+          #client-form-prevent-autofill input:-webkit-autofill:active,
+          #client-form-prevent-autofill textarea:-webkit-autofill,
+          #client-form-prevent-autofill textarea:-webkit-autofill:hover,
+          #client-form-prevent-autofill textarea:-webkit-autofill:focus,
+          #client-form-prevent-autofill textarea:-webkit-autofill:active {
+            -webkit-box-shadow: 0 0 0 30px white inset !important;
+            -webkit-text-fill-color: #000 !important;
+            transition: background-color 5000s ease-in-out 0s;
+          }
+          
+          /* Prevent autofill dropdown on Select components */
+          #client-form-prevent-autofill .ant-select-selection-search-input {
+            -webkit-autofill: none !important;
+            autocomplete: off !important;
+          }
+          
+          #client-form-prevent-autofill .ant-select-selection-search-input::-webkit-credentials-auto-fill-button {
+            visibility: hidden;
+            pointer-events: none;
+            position: absolute;
+            right: 0;
+          }
+        `}
+      </style>
       <Form
         form={form}
         layout="vertical"
         requiredMark="optional"
         autoComplete="off"
+        name="client-form-prevent-autofill"
+        id="client-form-prevent-autofill"
         initialValues={{
           clientType: "permanent",
           isActive: true,

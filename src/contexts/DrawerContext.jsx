@@ -13,6 +13,7 @@ import WorkTypeDetail from '../components/WorkTypeDetail';
 import GradingForm from '../components/GradingForm';
 import GradingDetail from '../components/GradingDetail';
 import ProjectForm from '../components/ProjectForm';
+import ProjectFormFooter from '../components/ProjectFormFooter';
 import ClientForm from '../pages/FrontOffice/ClientForm';
 import ClientDetail from '../components/ClientDetail';
 import ProjectDetail from '../components/ProjectDetail';
@@ -45,6 +46,7 @@ export const AppDrawerProvider = ({ children }) => {
 	// Project Drawers
 	const [projectFormDrawer, setProjectFormDrawer] = useState({ open: false, project: null, mode: 'create', onSuccess: null });
 	const [projectCreditExceeded, setProjectCreditExceeded] = useState(false);
+	const [projectFooterData, setProjectFooterData] = useState({ totalImageQuantity: 0, totalCalculatedBudget: 0 });
 	const [projectDetailDrawer, setProjectDetailDrawer] = useState({ open: false, project: null });
 	const showProjectFormDrawer = (project = null, mode = 'create', onSuccess = null) => {
 		setProjectFormDrawer({ open: true, project, mode, onSuccess });
@@ -53,6 +55,7 @@ export const AppDrawerProvider = ({ children }) => {
 	const closeProjectFormDrawer = () => {
 		setProjectFormDrawer({ open: false, project: null, mode: 'create', onSuccess: null });
 		setProjectCreditExceeded(false);
+		setProjectFooterData({ totalImageQuantity: 0, totalCalculatedBudget: 0 });
 	};
 	const showProjectDetailDrawer = (project) => setProjectDetailDrawer({ open: true, project });
 	const closeProjectDetailDrawer = () => setProjectDetailDrawer({ open: false, project: null });
@@ -250,39 +253,48 @@ export const AppDrawerProvider = ({ children }) => {
 					destroyOnClose
 					maskClosable={false}
 					footer={
-						<Space style={{ display: 'flex', justifyContent: 'flex-end', width: '100%' }}>
-							<Button onClick={closeProjectFormDrawer} size="middle">Cancel</Button>
-							{projectCreditExceeded && projectFormDrawer.mode !== 'edit' ? (
-								<Button 
-									type="primary" 
-									size="middle" 
-									danger
-									onClick={() => {
-										// Trigger the credit request submission
-										const event = new CustomEvent('request-credit-approval');
-										window.dispatchEvent(event);
-									}}
-								>
-									Request Fly-on-Credit Approval
-								</Button>
-							) : (
-								<Button type="primary" size="middle" onClick={() => {
-									const form = document.querySelector('form');
-									if (form) form.requestSubmit();
-								}}>
-									{projectFormDrawer.mode === 'edit' ? 'Update Project' : 'Save Project'}
-								</Button>
-							)}
-						</Space>
+						<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
+							<Space size="large">
+								<ProjectFormFooter 
+									totalImageQuantity={projectFooterData.totalImageQuantity}
+									totalCalculatedBudget={projectFooterData.totalCalculatedBudget}
+								/>
+							</Space>
+							<Space>
+								<Button onClick={closeProjectFormDrawer} size="middle">Cancel</Button>
+								{projectCreditExceeded && projectFormDrawer.mode !== 'edit' ? (
+									<Button 
+										type="primary" 
+										size="middle" 
+										danger
+										onClick={() => {
+											// Trigger the credit request submission
+											const event = new CustomEvent('request-credit-approval');
+											window.dispatchEvent(event);
+										}}
+									>
+										Request Fly-on-Credit Approval
+									</Button>
+								) : (
+									<Button type="primary" size="middle" onClick={() => {
+										const form = document.querySelector('form');
+										if (form) form.requestSubmit();
+									}}>
+										{projectFormDrawer.mode === 'edit' ? 'Update Project' : 'Save Project'}
+									</Button>
+								)}
+							</Space>
+						</div>
 					}
 				>
-					<ProjectForm
-						project={projectFormDrawer.project}
-						mode={projectFormDrawer.mode}
-						onClose={closeProjectFormDrawer}
-						onSuccess={projectFormDrawer.onSuccess}
-						onCreditExceeded={(exceeded) => setProjectCreditExceeded(exceeded)}
-					/>
+				<ProjectForm
+					project={projectFormDrawer.project}
+					mode={projectFormDrawer.mode}
+					onClose={closeProjectFormDrawer}
+					onSuccess={projectFormDrawer.onSuccess}
+					onCreditExceeded={(exceeded) => setProjectCreditExceeded(exceeded)}
+					onFooterDataChange={(data) => setProjectFooterData(data)}
+				/>
 				</ModuleDrawer>
 			)}
 			{/* Project Detail Drawer */}

@@ -14,6 +14,8 @@ import {
   InputNumber,
   Switch,
   Tooltip,
+  Input,
+  Select,
 } from "antd";
 import {
   PlusOutlined,
@@ -27,6 +29,7 @@ import {
   ExclamationCircleOutlined,
   CheckOutlined,
   CloseOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation } from "@apollo/client";
 import { GET_CLIENTS, DELETE_CLIENT, UPDATE_CLIENT } from "../../gql/clients";
@@ -34,11 +37,14 @@ import CommonTable from "../../components/common/CommonTable";
 import { useAppDrawer } from "../../contexts/DrawerContext";
 
 const { Title, Text } = Typography;
+const { Option } = Select;
 
 const ClientList = () => {
   const [filters, setFilters] = useState({});
   const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
   const [sorter, setSorter] = useState({ field: "createdAt", order: "DESC" });
+  const [searchText, setSearchText] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [editingCredit, setEditingCredit] = useState({}); // Track which credit limits are being edited
   const [editingStatus, setEditingStatus] = useState({}); // Track which statuses are being edited
   const [tempValues, setTempValues] = useState({}); // Store temporary edit values
@@ -83,6 +89,44 @@ const ClientList = () => {
 
   const clients = data?.clients || [];
   const totalCount = data?.clientsCount || 0;
+
+  // Filter clients based on search and status
+  const filteredClients = useMemo(() => {
+    return clients.filter((client) => {
+      // Search filter
+      if (searchText) {
+        const search = searchText.toLowerCase();
+        const companyName = (client.companyName || "").toLowerCase();
+        const displayName = (client.displayName || "").toLowerCase();
+        const firstName = (client.firstName || "").toLowerCase();
+        const lastName = (client.lastName || "").toLowerCase();
+        const email = (client.email || "").toLowerCase();
+        const phone = (client.phone || "").toLowerCase();
+        const clientCode = (client.clientCode || "").toLowerCase();
+        
+        if (
+          !companyName.includes(search) &&
+          !displayName.includes(search) &&
+          !firstName.includes(search) &&
+          !lastName.includes(search) &&
+          !email.includes(search) &&
+          !phone.includes(search) &&
+          !clientCode.includes(search)
+        ) {
+          return false;
+        }
+      }
+
+      // Status filter
+      if (statusFilter && statusFilter !== "all") {
+        if (client.status !== statusFilter) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [clients, searchText, statusFilter]);
 
   // Client type colors - memoized
   const getClientTypeColor = useCallback((type) => {
@@ -731,43 +775,43 @@ const ClientList = () => {
 
   // Summary statistics
   const summaryStats = useMemo(() => {
-    const activeClients = clients.filter((c) => c.isActive === true).length;
+    const activeClients = filteredClients.filter((c) => c.isActive === true).length;
 
     // Calculate current balances
-    const totalCreditBalance = clients.reduce((sum, client) => {
+    const totalCreditBalance = filteredClients.reduce((sum, client) => {
       const balance = parseFloat(client.totalBalance || 0);
       return sum + (balance > 0 ? balance : 0);
     }, 0);
 
-    const totalAmountDue = clients.reduce((sum, client) => {
+    const totalAmountDue = filteredClients.reduce((sum, client) => {
       const balance = parseFloat(client.totalBalance || 0);
       return sum + (balance < 0 ? Math.abs(balance) : 0);
     }, 0);
 
     // Calculate credit limits
-    const totalCreditLimits = clients.reduce((sum, client) => {
+    const totalCreditLimits = filteredClients.reduce((sum, client) => {
       const limit = parseFloat(client.creditAmountLimit || 0);
       return sum + limit;
     }, 0);
 
-    const clientsWithCreditLimit = clients.filter(
+    const clientsWithCreditLimit = filteredClients.filter(
       (c) => parseFloat(c.creditAmountLimit || 0) > 0
     ).length;
-    const clientsOverLimit = clients.filter((c) => {
+    const clientsOverLimit = filteredClients.filter((c) => {
       const limit = parseFloat(c.creditAmountLimit || 0);
       const balance = parseFloat(c.totalBalance || 0);
       return limit > 0 && limit + balance < 0;
     }).length;
 
-    const clientsWithCredit = clients.filter(
+    const clientsWithCredit = filteredClients.filter(
       (c) => parseFloat(c.totalBalance || 0) > 0
     ).length;
-    const clientsWithDue = clients.filter(
+    const clientsWithDue = filteredClients.filter(
       (c) => parseFloat(c.totalBalance || 0) < 0
     ).length;
 
     return {
-      total: totalCount,
+      total: filteredClients.length,
       active: activeClients,
       totalCreditBalance,
       totalAmountDue,
@@ -777,20 +821,20 @@ const ClientList = () => {
       clientsWithCredit,
       clientsWithDue,
     };
-  }, [clients, totalCount]);
+  }, [filteredClients]);
 
   // Memoize pagination config to prevent re-renders
   const paginationConfig = useMemo(
     () => ({
       current: pagination.current,
       pageSize: pagination.pageSize,
-      total: totalCount,
+      total: filteredClients.length,
       showSizeChanger: true,
       showQuickJumper: true,
       showTotal: (total, range) =>
         `${range[0]}-${range[1]} of ${total} clients`,
     }),
-    [pagination.current, pagination.pageSize, totalCount]
+    [pagination.current, pagination.pageSize, filteredClients.length]
   );
 
   // Memoize scroll config
@@ -837,118 +881,97 @@ const ClientList = () => {
   );
 
   return (
-    <div className="">
-      {/* Header */}
-      <div className="mb-6">
-        <div className="flex justify-between items-center mb-4">
-          <div>
-            <Title level={2} className="mb-2">
-              Client Management
-            </Title>
-            <Text type="secondary">
-              Manage your clients, track their information and financial status
-            </Text>
-          </div>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={handleAddClient}
-            size="large"
-          >
-            Add New Client
-          </Button>
-        </div>
-
-        {/* Summary Cards */}
-        <Row gutter={16} className="mb-6">
-          <Col xs={24} sm={6} lg={4}>
-            <Card>
-              <Statistic
-                title="Total Clients"
-                value={summaryStats.total}
-                valueStyle={{ color: "#1890ff" }}
+    <div className="client-management">
+      <div>
+        {/* Filters and Actions with Inline Stats */}
+        <Card style={{ marginBottom: 16 }}>
+          <Row gutter={16} align="middle" style={{ marginBottom: 12 }}>
+            {/* Inline Statistics - Compact Badges */}
+            <Col flex="auto">
+              <Space size={16}>
+                <Space size={4}>
+                  <UserOutlined style={{ fontSize: 16, color: '#1890ff' }} />
+                  <Text strong style={{ fontSize: 14 }}>Total:</Text>
+                  <Tag color="blue" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{summaryStats.total}</Tag>
+                </Space>
+                <Space size={4}>
+                  <CheckOutlined style={{ fontSize: 16, color: '#52c41a' }} />
+                  <Text strong style={{ fontSize: 14 }}>Active:</Text>
+                  <Tag color="green" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{summaryStats.active}</Tag>
+                </Space>
+                <Space size={4}>
+                  <Text strong style={{ fontSize: 14 }}>Credit Limits:</Text>
+                  <Tag color="blue" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>₹{summaryStats.totalCreditLimits}</Tag>
+                  <Text type="secondary" style={{ fontSize: 12 }}>({summaryStats.clientsWithCreditLimit} clients)</Text>
+                </Space>
+                <Space size={4}>
+                  <Text strong style={{ fontSize: 14 }}>Available:</Text>
+                  <Tag color="green" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>₹{summaryStats.totalCreditBalance.toFixed(2)}</Tag>
+                  <Text type="secondary" style={{ fontSize: 12 }}>({summaryStats.clientsWithCredit} clients)</Text>
+                </Space>
+                <Space size={4}>
+                  <ExclamationCircleOutlined style={{ fontSize: 16, color: '#ff4d4f' }} />
+                  <Text strong style={{ fontSize: 14 }}>Due:</Text>
+                  <Tag color="red" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>₹{summaryStats.totalAmountDue.toFixed(2)}</Tag>
+                  <Text type="secondary" style={{ fontSize: 12 }}>({summaryStats.clientsWithDue} clients)</Text>
+                </Space>
+                <Space size={4}>
+                  <CloseOutlined style={{ fontSize: 16, color: '#ff4d4f' }} />
+                  <Text strong style={{ fontSize: 14 }}>Over Limit:</Text>
+                  <Tag color="red" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{summaryStats.clientsOverLimit}</Tag>
+                </Space>
+              </Space>
+            </Col>
+          </Row>
+          <Row gutter={16} align="middle">
+            <Col span={8}>
+              <Input
+                placeholder="Search clients..."
+                prefix={<SearchOutlined />}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                allowClear
               />
-            </Card>
-          </Col>
-          <Col xs={24} sm={6} lg={4}>
-            <Card>
-              <Statistic
-                title="Active Clients"
-                value={summaryStats.active}
-                valueStyle={{ color: "#52c41a" }}
-              />
-            </Card>
-          </Col>
-          <Col xs={24} sm={6} lg={4}>
-            <Card>
-              <Statistic
-                title="Total Credit Limits"
-                value={summaryStats.totalCreditLimits}
-                prefix="₹"
-                precision={0}
-                valueStyle={{ color: "#1890ff" }}
-              />
-              <div className="text-xs text-gray-500 mt-1">
-                {summaryStats.clientsWithCreditLimit} clients with limits
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} sm={6} lg={4}>
-            <Card>
-              <Statistic
-                title="Credit Available"
-                value={summaryStats.totalCreditBalance}
-                prefix="₹"
-                precision={2}
-                valueStyle={{ color: "#52c41a" }}
-              />
-              <div className="text-xs text-gray-500 mt-1">
-                {summaryStats.clientsWithCredit} clients with credit
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} sm={6} lg={4}>
-            <Card>
-              <Statistic
-                title="Amount Due"
-                value={summaryStats.totalAmountDue}
-                prefix="₹"
-                precision={2}
-                valueStyle={{ color: "#ff4d4f" }}
-              />
-              <div className="text-xs text-gray-500 mt-1">
-                {summaryStats.clientsWithDue} clients with dues
-              </div>
-            </Card>
-          </Col>
-          <Col xs={24} sm={6} lg={4}>
-            <Card>
-              <Statistic
-                title="Over Limit"
-                value={summaryStats.clientsOverLimit}
-                valueStyle={{ color: "#ff4d4f" }}
-              />
-              <div className="text-xs text-gray-500 mt-1">
-                Clients exceeding limits
-              </div>
-            </Card>
-          </Col>
-        </Row>
+            </Col>
+            <Col span={4}>
+              <Select
+                placeholder="Status"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                style={{ width: "100%" }}
+              >
+                <Option value="all">All Status</Option>
+                <Option value="ACTIVE">Active</Option>
+                <Option value="INACTIVE">Inactive</Option>
+              </Select>
+            </Col>
+            <Col span={12} style={{ textAlign: "right" }}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={handleAddClient}
+              >
+                Add New Client
+              </Button>
+            </Col>
+          </Row>
+        </Card>
       </div>
 
       {/* Main Table */}
-      <CommonTable
-        className="client-table"
-        columns={columns}
-        dataSource={clients}
-        loading={loading}
-        pagination={paginationConfig}
-        onChange={handleTableChange}
-        onSearch={handleSearch}
-        searchPlaceholder="Search by company name, contact person, email, phone, or client code..."
-        scroll={scrollConfig}
-        size="middle"
-      />
+      <Card>
+        <CommonTable
+          className="client-table"
+          columns={columns}
+          dataSource={filteredClients}
+          loading={loading}
+          pagination={paginationConfig}
+          onChange={handleTableChange}
+          scroll={scrollConfig}
+          size="small"
+          showHeader={false}
+        />
+      </Card>
     </div>
   );
 };

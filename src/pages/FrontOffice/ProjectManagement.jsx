@@ -79,10 +79,15 @@ const getClientDisplayName = (client) => {
 const ProjectManagement = () => {
   const { showProjectFormDrawer, showProjectDetailDrawer } =
     useContext(AppDrawerContext);
-  const [activeTab, setActiveTab] = useState("list");
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("all");
+  
+  // Pagination state
+  const [pagination, setPagination] = useState({
+    current: 1,
+    pageSize: 10,
+  });
 
   // Project completion modal state
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
@@ -385,17 +390,9 @@ const ProjectManagement = () => {
   };
 
   // Handler to copy folder name to clipboard
-  const handleCopyFolderName = (project, onlyFolderName) => {
+  const handleCopyFolderName = (project) => {
     const folderName = generateFolderName(project);
-    console.log("Project data:", {
-      projectGradings: project.projectGradings,
-      grading: project.grading,
-      imageQuantity: project.imageQuantity,
-    });
-    console.log("Generated folder name:", folderName);
-    if (onlyFolderName) {
-      return folderName;
-    }
+    
     // Try modern clipboard API first
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard
@@ -648,7 +645,7 @@ const ProjectManagement = () => {
               />
             </Tooltip>
             <Text strong style={{ whiteSpace: "pre-wrap", maxWidth: 200 }}>
-              {handleCopyFolderName(record, true) /* folder name only */}
+              {generateFolderName(record)}
             </Text>
           </Space>
         </Space>
@@ -957,66 +954,36 @@ const ProjectManagement = () => {
 
   return (
     <div className="project-management">
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={[
-          {
-            key: "list",
-            label: (
-              <span>
-                <ProjectOutlined />
-                Projects List
-                <Badge count={stats.total} showZero style={{ marginLeft: 8 }} />
-              </span>
-            ),
-            children: (
-              <div>
-                {/* Statistics Cards */}
-                <Row gutter={16} style={{ marginBottom: 24 }}>
-                  <Col span={6}>
-                    <Card>
-                      <Statistic
-                        title="Total Projects"
-                        value={stats.total}
-                        prefix={<ProjectOutlined />}
-                      />
-                    </Card>
-                  </Col>
-                  <Col span={6}>
-                    <Card>
-                      <Statistic
-                        title="Active"
-                        value={stats.active}
-                        prefix={<PlayCircleOutlined />}
-                        valueStyle={{ color: "#3f8600" }}
-                      />
-                    </Card>
-                  </Col>
-                  <Col span={6}>
-                    <Card>
-                      <Statistic
-                        title="Draft"
-                        value={stats.draft}
-                        prefix={<EditOutlined />}
-                        valueStyle={{ color: "#cf1322" }}
-                      />
-                    </Card>
-                  </Col>
-                  <Col span={6}>
-                    <Card>
-                      <Statistic
-                        title="Completed"
-                        value={stats.completed}
-                        prefix={<CheckCircleOutlined />}
-                        valueStyle={{ color: "#1890ff" }}
-                      />
-                    </Card>
-                  </Col>
-                </Row>
-
-                {/* Filters and Actions */}
+      <div>
+        {/* Filters and Actions with Inline Stats */}
                 <Card style={{ marginBottom: 16 }}>
+                  <Row gutter={16} align="middle" style={{ marginBottom: 12 }}>
+                    {/* Inline Statistics - Compact Badges */}
+                    <Col flex="auto">
+                      <Space size={16}>
+                        <Space size={4}>
+                          <ProjectOutlined style={{ fontSize: 16, color: '#1890ff' }} />
+                          <Text strong style={{ fontSize: 14 }}>Total:</Text>
+                          <Tag color="blue" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{stats.total}</Tag>
+                        </Space>
+                        <Space size={4}>
+                          <PlayCircleOutlined style={{ fontSize: 16, color: '#52c41a' }} />
+                          <Text strong style={{ fontSize: 14 }}>Active:</Text>
+                          <Tag color="green" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{stats.active}</Tag>
+                        </Space>
+                        <Space size={4}>
+                          <EditOutlined style={{ fontSize: 16, color: '#faad14' }} />
+                          <Text strong style={{ fontSize: 14 }}>Draft:</Text>
+                          <Tag color="orange" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{stats.draft}</Tag>
+                        </Space>
+                        <Space size={4}>
+                          <CheckCircleOutlined style={{ fontSize: 16, color: '#1890ff' }} />
+                          <Text strong style={{ fontSize: 14 }}>Completed:</Text>
+                          <Tag color="cyan" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{stats.completed}</Tag>
+                        </Space>
+                      </Space>
+                    </Col>
+                  </Row>
                   <Row gutter={16} align="middle">
                     <Col span={8}>
                       <Input
@@ -1078,21 +1045,26 @@ const ProjectManagement = () => {
                     rowKey="id"
                     loading={projectsLoading}
                     pagination={{
+                      current: pagination.current,
+                      pageSize: pagination.pageSize,
                       total: filteredProjects.length,
-                      pageSize: 10,
                       showSizeChanger: true,
                       showQuickJumper: true,
                       showTotal: (total, range) =>
                         `${range[0]}-${range[1]} of ${total} projects`,
+                      pageSizeOptions: [10, 25, 50, 100],
+                    }}
+                    onChange={(paginationConfig) => {
+                      setPagination({
+                        current: paginationConfig.current,
+                        pageSize: paginationConfig.pageSize,
+                      });
                     }}
                     scroll={{ x: 1200 }}
+                    size="small"
                   />
                 </Card>
               </div>
-            ),
-          },
-        ]}
-      />
 
       {/* Project Completion Modal */}
       <Modal
