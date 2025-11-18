@@ -305,6 +305,9 @@ const ProjectForm = ({
     const searchText = getClientSearchText(client);
     const searchTerms = inputValue.toLowerCase().split(" ");
 
+    if (typeof parseInt(inputValue) == "number") {
+      return searchTerms.every((term) => client.clientCode.includes(term));
+    }
     return searchTerms.every((term) => searchText.includes(term));
   };
 
@@ -1038,10 +1041,17 @@ const ProjectForm = ({
             // 1. Project is already in fly-on-credit mode (status='requested')
             // 2. Project has an approved credit request
             // 3. Creating new project and credit is already exceeded (fly-on-credit button visible)
-            const isInFlyOnCreditMode = project?.status === 'requested' || project?.creditRequest?.status === 'approved';
-            const isNewProjectWithExceededCredit = mode === 'create' && creditExceeded;
-            
-            if (!data.validateProjectCredit.canCreateProject && !isInFlyOnCreditMode && !isNewProjectWithExceededCredit) {
+            const isInFlyOnCreditMode =
+              project?.status === "requested" ||
+              project?.creditRequest?.status === "approved";
+            const isNewProjectWithExceededCredit =
+              mode === "create" && creditExceeded;
+
+            if (
+              !data.validateProjectCredit.canCreateProject &&
+              !isInFlyOnCreditMode &&
+              !isNewProjectWithExceededCredit
+            ) {
               message.warning(data.validateProjectCredit.message);
             }
           }
@@ -1109,10 +1119,17 @@ const ProjectForm = ({
         // 1. Project is already in fly-on-credit mode (status='requested')
         // 2. Project has an approved credit request
         // 3. Creating new project and credit is already exceeded (fly-on-credit button visible)
-        const isInFlyOnCreditMode = project?.status === 'requested' || project?.creditRequest?.status === 'approved';
-        const isNewProjectWithExceededCredit = mode === 'create' && creditExceeded;
-        
-        if (exceeded && !isInFlyOnCreditMode && !isNewProjectWithExceededCredit) {
+        const isInFlyOnCreditMode =
+          project?.status === "requested" ||
+          project?.creditRequest?.status === "approved";
+        const isNewProjectWithExceededCredit =
+          mode === "create" && creditExceeded;
+
+        if (
+          exceeded &&
+          !isInFlyOnCreditMode &&
+          !isNewProjectWithExceededCredit
+        ) {
           message.warning(data.validateMultipleGradingCredit.message);
         }
       }
@@ -1886,10 +1903,10 @@ const ProjectForm = ({
           <Form.Item
             name="name"
             label="Project Name"
-            rules={[{ required: false, message: "Please enter project name" }]}
+            rules={[{ required: true, message: "Please enter project name" }]}
           >
             <Input
-              placeholder="Enter project name (optional)"
+              placeholder="Enter project name"
               style={{ width: "100%" }}
               autoComplete="off"
             />
@@ -1900,7 +1917,7 @@ const ProjectForm = ({
           <Form.Item
             name="deadlineDate"
             label="Deadline"
-            rules={[{ required: true, message: "Please select deadline" }]}
+            rules={[{ required: false, message: "Please select deadline" }]}
           >
             <DatePicker
               placeholder="Select deadline"
@@ -1915,7 +1932,7 @@ const ProjectForm = ({
           <Form.Item
             name="priority"
             label="Priority"
-            rules={[{ required: true, message: "Please select priority" }]}
+            rules={[{ required: false, message: "Please select priority" }]}
           >
             <Select placeholder="Select priority">
               <Option value="A">A - High</Option>
@@ -2081,17 +2098,21 @@ const ProjectForm = ({
                 // Filter by client preferences if available, but only for preferred work types
                 const filteredGradings = gradings.filter((grading) => {
                   // Check if this grading's work type is a preferred work type
-                  const isPreferredWorkType = clientPreferences?.workTypes?.some(
-                    (pref) => pref.id === grading.workType?.id
-                  );
-                  
+                  const isPreferredWorkType =
+                    clientPreferences?.workTypes?.some(
+                      (pref) => pref.id === grading.workType?.id
+                    );
+
                   // If it's a preferred work type, only show preferred gradings
-                  if (isPreferredWorkType && clientPreferences?.gradings?.length > 0) {
+                  if (
+                    isPreferredWorkType &&
+                    clientPreferences?.gradings?.length > 0
+                  ) {
                     return clientPreferences.gradings.some(
                       (pref) => pref.grading.id === grading.id
                     );
                   }
-                  
+
                   // For non-preferred work types, show all gradings
                   return true;
                 });
