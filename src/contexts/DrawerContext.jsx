@@ -262,7 +262,7 @@ export const AppDrawerProvider = ({ children }) => {
 							</Space>
 							<Space>
 								<Button onClick={closeProjectFormDrawer} size="middle">Cancel</Button>
-								{projectCreditExceeded && projectFormDrawer.mode !== 'edit' ? (
+								{projectCreditExceeded ? (
 									<Button 
 										type="primary" 
 										size="middle" 

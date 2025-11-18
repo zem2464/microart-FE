@@ -103,7 +103,7 @@ const ClientList = () => {
         const email = (client.email || "").toLowerCase();
         const phone = (client.phone || "").toLowerCase();
         const clientCode = (client.clientCode || "").toLowerCase();
-        
+
         if (
           !companyName.includes(search) &&
           !displayName.includes(search) &&
@@ -775,7 +775,9 @@ const ClientList = () => {
 
   // Summary statistics
   const summaryStats = useMemo(() => {
-    const activeClients = filteredClients.filter((c) => c.isActive === true).length;
+    const activeClients = filteredClients.filter(
+      (c) => c.isActive === true
+    ).length;
 
     // Calculate current balances
     const totalCreditBalance = filteredClients.reduce((sum, client) => {
@@ -890,35 +892,85 @@ const ClientList = () => {
             <Col flex="auto">
               <Space size={16}>
                 <Space size={4}>
-                  <UserOutlined style={{ fontSize: 16, color: '#1890ff' }} />
-                  <Text strong style={{ fontSize: 14 }}>Total:</Text>
-                  <Tag color="blue" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{summaryStats.total}</Tag>
+                  <UserOutlined style={{ fontSize: 16, color: "#1890ff" }} />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Total:
+                  </Text>
+                  <Tag
+                    color="blue"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {summaryStats.total}
+                  </Tag>
                 </Space>
                 <Space size={4}>
-                  <CheckOutlined style={{ fontSize: 16, color: '#52c41a' }} />
-                  <Text strong style={{ fontSize: 14 }}>Active:</Text>
-                  <Tag color="green" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{summaryStats.active}</Tag>
+                  <CheckOutlined style={{ fontSize: 16, color: "#52c41a" }} />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Active:
+                  </Text>
+                  <Tag
+                    color="green"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {summaryStats.active}
+                  </Tag>
                 </Space>
                 <Space size={4}>
-                  <Text strong style={{ fontSize: 14 }}>Credit Limits:</Text>
-                  <Tag color="blue" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>₹{summaryStats.totalCreditLimits}</Tag>
-                  <Text type="secondary" style={{ fontSize: 12 }}>({summaryStats.clientsWithCreditLimit} clients)</Text>
+                  <Text strong style={{ fontSize: 14 }}>
+                    Credit Limits:
+                  </Text>
+                  <Tag
+                    color="blue"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    ₹{summaryStats.totalCreditLimits}
+                  </Tag>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    ({summaryStats.clientsWithCreditLimit} clients)
+                  </Text>
                 </Space>
                 <Space size={4}>
-                  <Text strong style={{ fontSize: 14 }}>Available:</Text>
-                  <Tag color="green" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>₹{summaryStats.totalCreditBalance.toFixed(2)}</Tag>
-                  <Text type="secondary" style={{ fontSize: 12 }}>({summaryStats.clientsWithCredit} clients)</Text>
+                  <Text strong style={{ fontSize: 14 }}>
+                    Available:
+                  </Text>
+                  <Tag
+                    color="green"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    ₹{summaryStats.totalCreditBalance.toFixed(2)}
+                  </Tag>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    ({summaryStats.clientsWithCredit} clients)
+                  </Text>
                 </Space>
                 <Space size={4}>
-                  <ExclamationCircleOutlined style={{ fontSize: 16, color: '#ff4d4f' }} />
-                  <Text strong style={{ fontSize: 14 }}>Due:</Text>
-                  <Tag color="red" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>₹{summaryStats.totalAmountDue.toFixed(2)}</Tag>
-                  <Text type="secondary" style={{ fontSize: 12 }}>({summaryStats.clientsWithDue} clients)</Text>
+                  <ExclamationCircleOutlined
+                    style={{ fontSize: 16, color: "#ff4d4f" }}
+                  />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Due:
+                  </Text>
+                  <Tag
+                    color="red"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    ₹{summaryStats.totalAmountDue.toFixed(2)}
+                  </Tag>
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    ({summaryStats.clientsWithDue} clients)
+                  </Text>
                 </Space>
                 <Space size={4}>
-                  <CloseOutlined style={{ fontSize: 16, color: '#ff4d4f' }} />
-                  <Text strong style={{ fontSize: 14 }}>Over Limit:</Text>
-                  <Tag color="red" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{summaryStats.clientsOverLimit}</Tag>
+                  <CloseOutlined style={{ fontSize: 16, color: "#ff4d4f" }} />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Over Limit:
+                  </Text>
+                  <Tag
+                    color="red"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {summaryStats.clientsOverLimit}
+                  </Tag>
                 </Space>
               </Space>
             </Col>

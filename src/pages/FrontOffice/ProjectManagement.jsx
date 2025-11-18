@@ -82,12 +82,11 @@ const ProjectManagement = () => {
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("all");
-  
-  // Pagination state
-  const [pagination, setPagination] = useState({
-    current: 1,
-    pageSize: 10,
-  });
+
+  // Infinite scroll state
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   // Project completion modal state
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
@@ -95,7 +94,8 @@ const ProjectManagement = () => {
   const [actualImageCount, setActualImageCount] = useState(0);
 
   // Credit approval modal state
-  const [creditApprovalModalVisible, setCreditApprovalModalVisible] = useState(false);
+  const [creditApprovalModalVisible, setCreditApprovalModalVisible] =
+    useState(false);
   const [selectedCreditRequest, setSelectedCreditRequest] = useState(null);
   const [approvalNotes, setApprovalNotes] = useState("");
 
@@ -109,15 +109,17 @@ const ProjectManagement = () => {
     loading: projectsLoading,
     error: projectsError,
     refetch: refetchProjects,
+    fetchMore,
   } = useQuery(GET_PROJECTS, {
     variables: {
       filters: {},
       page: 1,
-      limit: 100,
+      limit: 20,
       sortBy: "createdAt",
       sortOrder: "DESC",
     },
     fetchPolicy: "cache-and-network",
+    notifyOnNetworkStatusChange: true,
   });
 
   const { data: clientsData, refetch: refetchClients } = useQuery(GET_CLIENTS, {
@@ -257,7 +259,9 @@ const ProjectManagement = () => {
 
   const [approveCreditRequest] = useMutation(APPROVE_CREDIT_REQUEST, {
     onCompleted: (data) => {
-      message.success(`Credit request approved! Project activated and ${data.approveCreditRequest.tasksCreated} tasks created.`);
+      message.success(
+        `Credit request approved! Project activated and ${data.approveCreditRequest.tasksCreated} tasks created.`
+      );
       setCreditApprovalModalVisible(false);
       setSelectedCreditRequest(null);
       setApprovalNotes("");
@@ -270,7 +274,9 @@ const ProjectManagement = () => {
 
   const [rejectCreditRequest] = useMutation(REJECT_CREDIT_REQUEST, {
     onCompleted: () => {
-      message.success("Credit request rejected. Project reverted to draft status.");
+      message.success(
+        "Credit request rejected. Project reverted to draft status."
+      );
       setCreditApprovalModalVisible(false);
       setSelectedCreditRequest(null);
       setApprovalNotes("");
@@ -284,6 +290,62 @@ const ProjectManagement = () => {
   // Normalize projects array from GraphQL response (supports projects.projects or legacy projects.data)
   const allProjects =
     projectsData?.projects?.projects || projectsData?.projects?.data || [];
+
+  // Check if there are more items to load
+  useEffect(() => {
+    if (projectsData?.projects?.pagination) {
+      const { page, totalPages } = projectsData.projects.pagination;
+      setHasMore(page < totalPages);
+    }
+  }, [projectsData]);
+
+  // Load more data for infinite scroll
+  const loadMore = async () => {
+    if (isLoadingMore || !hasMore || projectsLoading) return;
+
+    setIsLoadingMore(true);
+    try {
+      await fetchMore({
+        variables: {
+          page: page + 1,
+        },
+        updateQuery: (prev, { fetchMoreResult }) => {
+          if (!fetchMoreResult) return prev;
+
+          const prevProjects =
+            prev?.projects?.projects || prev?.projects?.data || [];
+          const newProjects =
+            fetchMoreResult?.projects?.projects ||
+            fetchMoreResult?.projects?.data ||
+            [];
+
+          return {
+            ...fetchMoreResult,
+            projects: {
+              ...fetchMoreResult.projects,
+              projects: [...prevProjects, ...newProjects],
+              data: [...prevProjects, ...newProjects],
+            },
+          };
+        },
+      });
+      setPage(page + 1);
+    } catch (error) {
+      console.error("Error loading more projects:", error);
+      message.error("Failed to load more projects");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Handle scroll event for infinite scroll
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    // Trigger load more when scrolled to 80% of the content
+    if (scrollHeight - scrollTop <= clientHeight * 1.2) {
+      loadMore();
+    }
+  };
 
   // Populate invoicedProjectIds from server-provided project.invoiceId / project.invoice
   useEffect(() => {
@@ -392,7 +454,7 @@ const ProjectManagement = () => {
   // Handler to copy folder name to clipboard
   const handleCopyFolderName = (project) => {
     const folderName = generateFolderName(project);
-    
+
     // Try modern clipboard API first
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard
@@ -449,6 +511,7 @@ const ProjectManagement = () => {
     completed: filteredProjects.filter(
       (p) => (p.status || "").toString().toUpperCase() === "COMPLETED"
     ).length,
+    flyOnCredit: filteredProjects.filter((p) => p.creditRequest).length,
   };
 
   // Handle project actions
@@ -542,7 +605,7 @@ const ProjectManagement = () => {
         message.error("No credit request found for this project");
         return;
       }
-      
+
       setSelectedCreditRequest({
         id: project.creditRequest.id, // Use the actual credit request ID
         project: project,
@@ -562,16 +625,16 @@ const ProjectManagement = () => {
 
   const handleApproveCreditRequest = () => {
     if (!selectedCreditRequest) return;
-    
+
     // We need to query the actual credit request ID for this project
     // For now, we'll use the project ID (this should be improved)
     approveCreditRequest({
       variables: {
         requestId: selectedCreditRequest.id,
         input: {
-          approvalNotes: approvalNotes || "Approved"
-        }
-      }
+          approvalNotes: approvalNotes || "Approved",
+        },
+      },
     });
   };
 
@@ -580,14 +643,14 @@ const ProjectManagement = () => {
       message.error("Please provide a reason for rejection");
       return;
     }
-    
+
     rejectCreditRequest({
       variables: {
         requestId: selectedCreditRequest.id,
         input: {
-          approvalNotes: approvalNotes
-        }
-      }
+          approvalNotes: approvalNotes,
+        },
+      },
     });
   };
 
@@ -614,9 +677,9 @@ const ProjectManagement = () => {
         variables: {
           id: projectId,
           input: {
-            status: newStatus
-          }
-        }
+            status: newStatus,
+          },
+        },
       });
       setEditingStatus((prev) => ({ ...prev, [projectId]: false }));
       const newValues = { ...tempValues };
@@ -672,8 +735,8 @@ const ProjectManagement = () => {
         const tempValue = tempValues[`status_${record.id}`];
 
         const statusOptions = [
-          { value: 'draft', label: 'Draft', color: 'default' },
-          { value: 'active', label: 'Active', color: 'blue' },
+          { value: "draft", label: "Draft", color: "default" },
+          { value: "active", label: "Active", color: "blue" },
         ];
 
         if (isEditing) {
@@ -690,7 +753,7 @@ const ProjectManagement = () => {
                 size="small"
                 style={{ width: 120 }}
               >
-                {statusOptions.map(option => (
+                {statusOptions.map((option) => (
                   <Select.Option key={option.value} value={option.value}>
                     {option.label}
                   </Select.Option>
@@ -720,8 +783,10 @@ const ProjectManagement = () => {
           );
         }
 
-        const currentStatus = statusOptions.find(s => s.value === status?.toLowerCase());
-        
+        const currentStatus = statusOptions.find(
+          (s) => s.value === status?.toLowerCase()
+        );
+
         return (
           <div className="group">
             <div
@@ -729,7 +794,7 @@ const ProjectManagement = () => {
               onClick={() => handleEditStatus(record.id, status?.toLowerCase())}
               title="Click to edit status"
             >
-              <Tag color={currentStatus?.color || 'default'}>
+              <Tag color={currentStatus?.color || "default"}>
                 {currentStatus?.label || status?.toUpperCase()}
               </Tag>
               <EditOutlined className="opacity-0 group-hover:opacity-100 text-xs ml-1" />
@@ -956,115 +1021,221 @@ const ProjectManagement = () => {
     <div className="project-management">
       <div>
         {/* Filters and Actions with Inline Stats */}
-                <Card style={{ marginBottom: 16 }}>
-                  <Row gutter={16} align="middle" style={{ marginBottom: 12 }}>
-                    {/* Inline Statistics - Compact Badges */}
-                    <Col flex="auto">
-                      <Space size={16}>
-                        <Space size={4}>
-                          <ProjectOutlined style={{ fontSize: 16, color: '#1890ff' }} />
-                          <Text strong style={{ fontSize: 14 }}>Total:</Text>
-                          <Tag color="blue" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{stats.total}</Tag>
-                        </Space>
-                        <Space size={4}>
-                          <PlayCircleOutlined style={{ fontSize: 16, color: '#52c41a' }} />
-                          <Text strong style={{ fontSize: 14 }}>Active:</Text>
-                          <Tag color="green" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{stats.active}</Tag>
-                        </Space>
-                        <Space size={4}>
-                          <EditOutlined style={{ fontSize: 16, color: '#faad14' }} />
-                          <Text strong style={{ fontSize: 14 }}>Draft:</Text>
-                          <Tag color="orange" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{stats.draft}</Tag>
-                        </Space>
-                        <Space size={4}>
-                          <CheckCircleOutlined style={{ fontSize: 16, color: '#1890ff' }} />
-                          <Text strong style={{ fontSize: 14 }}>Completed:</Text>
-                          <Tag color="cyan" style={{ margin: 0, fontSize: 14, padding: '2px 8px' }}>{stats.completed}</Tag>
-                        </Space>
-                      </Space>
-                    </Col>
-                  </Row>
-                  <Row gutter={16} align="middle">
-                    <Col span={8}>
-                      <Input
-                        placeholder="Search projects..."
-                        prefix={<SearchOutlined />}
-                        value={searchText}
-                        onChange={(e) => setSearchText(e.target.value)}
-                        allowClear
-                      />
-                    </Col>
-                    <Col span={4}>
-                      <Select
-                        placeholder="Status"
-                        value={statusFilter}
-                        onChange={setStatusFilter}
-                        style={{ width: "100%" }}
-                      >
-                        <Option value="all">All Status</Option>
-                        <Option value="DRAFT">Draft</Option>
-                        <Option value="ACTIVE">Active</Option>
-                        <Option value="COMPLETED">Completed</Option>
-                        <Option value="CANCELLED">Cancelled</Option>
-                      </Select>
-                    </Col>
-                    <Col span={4}>
-                      <Select
-                        placeholder="Client"
-                        value={clientFilter}
-                        onChange={setClientFilter}
-                        style={{ width: "100%" }}
-                      >
-                        <Option value="all">All Clients</Option>
-                        {clientsData?.clients?.data?.map((client) => (
-                          <Option key={client.id} value={client.id}>
-                            {getClientDisplayName(client)}
-                          </Option>
-                        ))}
-                      </Select>
-                    </Col>
-                    <Col span={8} style={{ textAlign: "right" }}>
-                      <Button
-                        type="primary"
-                        icon={<PlusOutlined />}
-                        onClick={() =>
-                          showProjectFormDrawer(null, "create", refetchProjects)
-                        }
-                      >
-                        Create Project
-                      </Button>
-                    </Col>
-                  </Row>
-                </Card>
-
-                {/* Projects Table */}
-                <Card>
-                  <Table
-                    columns={columns}
-                    dataSource={filteredProjects}
-                    rowKey="id"
-                    loading={projectsLoading}
-                    pagination={{
-                      current: pagination.current,
-                      pageSize: pagination.pageSize,
-                      total: filteredProjects.length,
-                      showSizeChanger: true,
-                      showQuickJumper: true,
-                      showTotal: (total, range) =>
-                        `${range[0]}-${range[1]} of ${total} projects`,
-                      pageSizeOptions: [10, 25, 50, 100],
-                    }}
-                    onChange={(paginationConfig) => {
-                      setPagination({
-                        current: paginationConfig.current,
-                        pageSize: paginationConfig.pageSize,
-                      });
-                    }}
-                    scroll={{ x: 1200 }}
-                    size="small"
+        <Card style={{ marginBottom: 16 }}>
+          <Row gutter={16} align="middle" style={{ marginBottom: 12 }}>
+            {/* Inline Statistics - Compact Badges */}
+            <Col flex="auto">
+              <Space size={16}>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
+                  }}
+                  className="hover:bg-gray-100"
+                  onClick={() => setStatusFilter("all")}
+                >
+                  <ProjectOutlined style={{ fontSize: 16, color: "#1890ff" }} />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Total:
+                  </Text>
+                  <Tag
+                    color="blue"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.total}
+                  </Tag>
+                </Space>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
+                  }}
+                  className="hover:bg-gray-100"
+                  onClick={() => setStatusFilter("ACTIVE")}
+                >
+                  <PlayCircleOutlined
+                    style={{ fontSize: 16, color: "#52c41a" }}
                   />
-                </Card>
+                  <Text strong style={{ fontSize: 14 }}>
+                    Active:
+                  </Text>
+                  <Tag
+                    color="green"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.active}
+                  </Tag>
+                </Space>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
+                  }}
+                  className="hover:bg-gray-100"
+                  onClick={() => setStatusFilter("DRAFT")}
+                >
+                  <EditOutlined style={{ fontSize: 16, color: "#faad14" }} />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Draft:
+                  </Text>
+                  <Tag
+                    color="orange"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.draft}
+                  </Tag>
+                </Space>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
+                  }}
+                  className="hover:bg-gray-100"
+                  onClick={() => setStatusFilter("COMPLETED")}
+                >
+                  <CheckCircleOutlined
+                    style={{ fontSize: 16, color: "#1890ff" }}
+                  />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Completed:
+                  </Text>
+                  <Tag
+                    color="cyan"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.completed}
+                  </Tag>
+                </Space>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
+                  }}
+                  className="hover:bg-gray-100"
+                  onClick={() => setStatusFilter("REQUESTED")}
+                >
+                  <CheckCircleOutlined
+                    style={{ fontSize: 16, color: "#722ed1" }}
+                  />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Fly-on-Credit:
+                  </Text>
+                  <Tag
+                    color="purple"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.flyOnCredit}
+                  </Tag>
+                </Space>
+              </Space>
+            </Col>
+          </Row>
+          <Row gutter={16} align="middle">
+            <Col span={8}>
+              <Input
+                placeholder="Search projects..."
+                prefix={<SearchOutlined />}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                allowClear
+              />
+            </Col>
+            <Col span={4}>
+              <Select
+                placeholder="Status"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                style={{ width: "100%" }}
+              >
+                <Option value="all">All Status</Option>
+                <Option value="DRAFT">Draft</Option>
+                <Option value="ACTIVE">Active</Option>
+                <Option value="COMPLETED">Completed</Option>
+                <Option value="REQUESTED">Fly-on-Credit</Option>
+                <Option value="CANCELLED">Cancelled</Option>
+              </Select>
+            </Col>
+            <Col span={4}>
+              <Select
+                placeholder="Client"
+                value={clientFilter}
+                onChange={setClientFilter}
+                style={{ width: "100%" }}
+              >
+                <Option value="all">All Clients</Option>
+                {clientsData?.clients?.data?.map((client) => (
+                  <Option key={client.id} value={client.id}>
+                    {getClientDisplayName(client)}
+                  </Option>
+                ))}
+              </Select>
+            </Col>
+            <Col span={8} style={{ textAlign: "right" }}>
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() =>
+                  showProjectFormDrawer(null, "create", refetchProjects)
+                }
+              >
+                Create Project
+              </Button>
+            </Col>
+          </Row>
+        </Card>
+
+        {/* Projects Table */}
+        <Card>
+          <div
+            style={{
+              maxHeight: "calc(100vh - 350px)",
+              overflowY: "auto",
+            }}
+            onScroll={handleScroll}
+          >
+            <Table
+              columns={columns}
+              dataSource={filteredProjects}
+              rowKey="id"
+              loading={projectsLoading && !isLoadingMore}
+              rowClassName={(record) =>
+                record.creditRequest &&
+                record.creditRequest.status === "approved"
+                  ? "bg-yellow-50"
+                  : ""
+              }
+              pagination={false}
+              scroll={{ x: 1200 }}
+              size="small"
+            />
+            {isLoadingMore && (
+              <div style={{ textAlign: "center", padding: "16px" }}>
+                <Text type="secondary">Loading more projects...</Text>
               </div>
+            )}
+            {!hasMore && filteredProjects.length > 0 && (
+              <div style={{ textAlign: "center", padding: "16px" }}>
+                <Text type="secondary">No more projects to load</Text>
+              </div>
+            )}
+          </div>
+        </Card>
+      </div>
 
       {/* Project Completion Modal */}
       <Modal
@@ -1189,11 +1360,7 @@ const ProjectManagement = () => {
           setApprovalNotes("");
         }}
         footer={[
-          <Button 
-            key="reject" 
-            danger
-            onClick={handleRejectCreditRequest}
-          >
+          <Button key="reject" danger onClick={handleRejectCreditRequest}>
             Reject
           </Button>,
           <Button
@@ -1227,43 +1394,47 @@ const ProjectManagement = () => {
                 {selectedCreditRequest.project?.projectCode}
               </Descriptions.Item>
               <Descriptions.Item label="Client">
-                {selectedCreditRequest.project?.client?.displayName || selectedCreditRequest.project?.client?.clientCode}
+                {selectedCreditRequest.project?.client?.displayName ||
+                  selectedCreditRequest.project?.client?.clientCode}
               </Descriptions.Item>
               <Descriptions.Item label="Work Type">
                 {selectedCreditRequest.project?.workType?.name}
               </Descriptions.Item>
               <Descriptions.Item label="Total Cost" span={2}>
                 <Text strong style={{ color: "#ff4d4f", fontSize: "16px" }}>
-                  ₹{(selectedCreditRequest.requestedAmount || 0).toLocaleString()}
+                  ₹
+                  {(
+                    selectedCreditRequest.requestedAmount || 0
+                  ).toLocaleString()}
                 </Text>
               </Descriptions.Item>
             </Descriptions>
 
-            <Card 
-              title="Credit Information" 
+            <Card
+              title="Credit Information"
               size="small"
               style={{ marginBottom: 20 }}
             >
               <Row gutter={[16, 16]}>
                 <Col span={8}>
-                  <Statistic 
-                    title="Available Credit" 
+                  <Statistic
+                    title="Available Credit"
                     value={selectedCreditRequest.availableCredit || 0}
                     prefix="₹"
                     valueStyle={{ color: "#52c41a" }}
                   />
                 </Col>
                 <Col span={8}>
-                  <Statistic 
-                    title="Requested Amount" 
+                  <Statistic
+                    title="Requested Amount"
                     value={selectedCreditRequest.requestedAmount || 0}
                     prefix="₹"
                     valueStyle={{ color: "#ff4d4f" }}
                   />
                 </Col>
                 <Col span={8}>
-                  <Statistic 
-                    title="Excess Amount" 
+                  <Statistic
+                    title="Excess Amount"
                     value={selectedCreditRequest.excessAmount || 0}
                     prefix="₹"
                     valueStyle={{ color: "#faad14" }}
@@ -1312,8 +1483,14 @@ const ProjectDetails = ({ project, tasks, tasksLoading, onBack }) => {
                 <Text code>{project.projectNumber}</Text>
               </Descriptions.Item>
               <Descriptions.Item label="Status">
-                <Tag color={(STATUS_MAP[project.status.toLowerCase()] || {}).color || "default"}>
-                  {(STATUS_MAP[project.status.toLowerCase()] || {}).label || project.status}
+                <Tag
+                  color={
+                    (STATUS_MAP[project.status.toLowerCase()] || {}).color ||
+                    "default"
+                  }
+                >
+                  {(STATUS_MAP[project.status.toLowerCase()] || {}).label ||
+                    project.status}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="Client">

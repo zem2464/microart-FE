@@ -205,7 +205,7 @@ const ProjectForm = ({
   // GraphQL Queries
   const { data: clientsData } = useQuery(GET_CLIENTS, {
     variables: {
-      filters: {},
+      filters: { isActive: true },
       page: 1,
       limit: 100,
       sortBy: "name",
@@ -306,7 +306,9 @@ const ProjectForm = ({
     const searchTerms = inputValue.toLowerCase().split(" ");
 
     if (typeof parseInt(inputValue) == "number") {
-      return searchTerms.every((term) => client.clientCode.includes(term));
+      return searchTerms.every(
+        (term) => client.clientCode.split("-")[1] == parseInt(term)
+      );
     }
     return searchTerms.every((term) => searchText.includes(term));
   };
@@ -1107,10 +1109,18 @@ const ProjectForm = ({
         setProjectCreditValidation(data.validateMultipleGradingCredit);
 
         const exceeded = !data.validateMultipleGradingCredit.canCreateProject;
+        console.log('💰 Credit validation result:', {
+          canCreateProject: data.validateMultipleGradingCredit.canCreateProject,
+          exceeded,
+          message: data.validateMultipleGradingCredit.message,
+          availableCredit: data.validateMultipleGradingCredit.availableCredit,
+          requiredCredit: data.validateMultipleGradingCredit.requiredCredit
+        });
         setCreditExceeded(exceeded);
 
         // Notify parent component about credit exceeded status
         if (onCreditExceeded) {
+          console.log('📢 Notifying parent about credit exceeded:', exceeded);
           onCreditExceeded(exceeded, data.validateMultipleGradingCredit);
         }
 
@@ -1232,10 +1242,18 @@ const ProjectForm = ({
     setCalculatedBudget(newTotalCost);
 
     // Trigger credit validation if we have selected client and gradings
+    // Also check if status is active or being changed to active to show fly-on-credit button
     if (selectedClientId && selectedGradings.length > 0) {
       setTimeout(() => {
+        console.log('🔍 Triggering credit validation from selectedGradings change');
         validateMultipleGradingsCredit(selectedGradings);
       }, 100);
+    } else if (selectedClientId && selectedGradings.length === 0) {
+      // No gradings selected, reset credit exceeded state
+      setCreditExceeded(false);
+      if (onCreditExceeded) {
+        onCreditExceeded(false, null);
+      }
     }
   }, [selectedGradings, clientPreferences, selectedClientId]);
 
@@ -1375,6 +1393,8 @@ const ProjectForm = ({
       console.log("Form values:", values);
       console.log("Selected client ID:", selectedClientId);
       console.log("Selected gradings:", selectedGradings);
+      console.log("Mode:", mode);
+      console.log("Existing project:", project);
 
       // Validate required fields
       if (!values.clientId && !selectedClientId) {
@@ -1457,11 +1477,11 @@ const ProjectForm = ({
       console.log("Original customFieldValues:", customFieldValues);
       console.log("Cleaned customFields:", cleanCustomFields);
 
-      // Prepare input data for project creation with status='requested'
-      const projectInput = {
+      // Prepare project data
+      const projectData = {
         clientId: values.clientId || selectedClientId,
         workTypeId: values.workTypeIds?.[0], // Use first selected worktype for backward compatibility
-        name: values.name, // PROJECT NAME - was missing!
+        name: values.name,
         description: values.description || "",
         deadlineDate: values.deadlineDate
           ? dayjs(values.deadlineDate).toISOString()
@@ -1481,18 +1501,19 @@ const ProjectForm = ({
         estimatedCost: totalEstCost,
       };
 
-      console.log("Creating project with input:", projectInput);
+      // Check if we're in edit mode - update existing project instead of creating new one
+      if (mode === "edit" && project?.id) {
+        console.log("Updating existing project with credit request:", project.id);
+        
+        // Update the existing project with status='requested'
+        await updateProject({
+          variables: {
+            id: project.id,
+            input: projectData,
+          },
+        });
 
-      // Create project with status='requested' - backend will auto-create credit request
-      const { data } = await createProject({
-        variables: { input: projectInput },
-      });
-
-      if (data?.createProject) {
-        console.log(
-          "Project created successfully with credit request:",
-          data.createProject.id
-        );
+        console.log("Project updated successfully with credit request");
         message.success("Credit approval request submitted successfully!");
         message.info(
           "Your request has been sent to admin and client leader for approval."
@@ -1500,6 +1521,27 @@ const ProjectForm = ({
         setLoading(false);
         onSuccess?.();
         onClose();
+      } else {
+        console.log("Creating new project with credit request");
+
+        // Create new project with status='requested' - backend will auto-create credit request
+        const { data } = await createProject({
+          variables: { input: projectData },
+        });
+
+        if (data?.createProject) {
+          console.log(
+            "Project created successfully with credit request:",
+            data.createProject.id
+          );
+          message.success("Credit approval request submitted successfully!");
+          message.info(
+            "Your request has been sent to admin and client leader for approval."
+          );
+          setLoading(false);
+          onSuccess?.();
+          onClose();
+        }
       }
     } catch (error) {
       console.error("Error requesting credit approval:", error);
@@ -1511,23 +1553,26 @@ const ProjectForm = ({
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
-      // Validate grading selection
-      if (selectedGradings.length === 0 && !values.gradingId) {
-        message.error("Please select at least one grading");
+      // Validate grading selection only for active status
+      const submittedStatus = values.status || currentStatus || "draft";
+      if (submittedStatus === 'active' && selectedGradings.length === 0 && !values.gradingId) {
+        message.error("Please select at least one grading for active projects");
         setLoading(false);
         return;
       }
 
-      // Validate that all selected gradings have image quantities
-      const invalidGradings = selectedGradings.filter(
-        (sg) => !sg.gradingId || (sg.imageQuantity || 0) <= 0
-      );
-      if (invalidGradings.length > 0) {
-        message.error(
-          "Please ensure all selected gradings have valid image quantities"
+      // Validate that all selected gradings have image quantities (only for active status)
+      if (submittedStatus === 'active') {
+        const invalidGradings = selectedGradings.filter(
+          (sg) => !sg.gradingId || (sg.imageQuantity || 0) <= 0
         );
-        setLoading(false);
-        return;
+        if (invalidGradings.length > 0) {
+          message.error(
+            "Please ensure all selected gradings have valid image quantities"
+          );
+          setLoading(false);
+          return;
+        }
       }
 
       // Final credit validation before submission (for new projects)
@@ -1746,16 +1791,46 @@ const ProjectForm = ({
             rules={[
               { required: true, message: "Please select project status" },
             ]}
+            initialValue="active"
           >
-            <Radio.Group
-              onChange={(e) => {
-                const value = e.target.value;
+            <Select
+              placeholder="Select status"
+              onChange={async (value) => {
                 // Update form state and current status
                 setCurrentStatus(value);
                 form.setFieldsValue({ status: value });
 
-                // If changing to active and we have grading selected, load/regenerate tasks
+                // If changing to active, validate credit
                 if (value === "active") {
+                  // Check if we have necessary data for credit validation
+                  if (selectedClientId && selectedGradings.length > 0) {
+                    // Trigger credit validation
+                    await validateMultipleGradingsCredit(selectedGradings);
+                  } else if (selectedClientId && selectedGrading && imageQuantity > 0) {
+                    // Legacy single grading validation
+                    try {
+                      const creditResp = await refetchProjectCreditValidation({
+                        variables: {
+                          clientId: selectedClientId,
+                          gradingId: selectedGrading,
+                          imageQuantity: imageQuantity,
+                          estimatedCost: calculatedBudget,
+                        },
+                      });
+                      if (creditResp?.data?.validateProjectCredit) {
+                        setProjectCreditValidation(creditResp.data.validateProjectCredit);
+                        const exceeded = !creditResp.data.validateProjectCredit.canCreateProject;
+                        setCreditExceeded(exceeded);
+                        if (onCreditExceeded) {
+                          onCreditExceeded(exceeded, creditResp.data.validateProjectCredit);
+                        }
+                      }
+                    } catch (err) {
+                      console.warn("Failed to fetch client credit validation", err);
+                    }
+                  }
+                  
+                  // If changing to active and we have grading selected, load/regenerate tasks
                   if (selectedGradings.length > 0 && gradingTasks.length > 0) {
                     // Regenerate tasks from existing grading tasks for multiple gradings
                     const initialTasks = gradingTasks
@@ -1826,28 +1901,21 @@ const ProjectForm = ({
                 }
               }}
               style={{ width: "100%" }}
-              buttonStyle="solid"
             >
               {/* Draft Option - Only show if project is currently draft or in create mode */}
               {(mode === "create" ||
                 (mode === "edit" && project?.status === "draft")) && (
-                <Radio.Button
-                  value="draft"
-                  style={{ marginRight: 8, marginBottom: 8 }}
-                >
+                <Option value="draft">
                   <FileTextOutlined style={{ marginRight: 6 }} />
                   Draft
-                </Radio.Button>
+                </Option>
               )}
 
               {/* Active Option */}
-              <Radio.Button
-                value="active"
-                style={{ marginRight: 8, marginBottom: 8 }}
-              >
+              <Option value="active">
                 <PlayCircleOutlined style={{ marginRight: 6 }} />
                 Active
-              </Radio.Button>
+              </Option>
 
               {/* Other status options for active projects in edit mode */}
               {mode === "edit" &&
@@ -1855,48 +1923,33 @@ const ProjectForm = ({
                   project?.status === "in_progress" ||
                   project?.status === "completed") && (
                   <>
-                    <Radio.Button
-                      value="in_progress"
-                      style={{ marginRight: 8, marginBottom: 8 }}
-                    >
+                    <Option value="in_progress">
                       <SyncOutlined style={{ marginRight: 6 }} />
                       In Progress
-                    </Radio.Button>
+                    </Option>
 
-                    <Radio.Button
-                      value="review"
-                      style={{ marginRight: 8, marginBottom: 8 }}
-                    >
+                    <Option value="review">
                       <EyeOutlined style={{ marginRight: 6 }} />
                       Review
-                    </Radio.Button>
+                    </Option>
 
-                    <Radio.Button
-                      value="completed"
-                      style={{ marginRight: 8, marginBottom: 8 }}
-                    >
+                    <Option value="completed">
                       <CheckCircleOutlined style={{ marginRight: 6 }} />
                       Completed
-                    </Radio.Button>
+                    </Option>
 
-                    <Radio.Button
-                      value="cancelled"
-                      style={{ marginRight: 8, marginBottom: 8 }}
-                    >
+                    <Option value="cancelled">
                       <StopOutlined style={{ marginRight: 6 }} />
                       Cancelled
-                    </Radio.Button>
+                    </Option>
 
-                    <Radio.Button
-                      value="on_hold"
-                      style={{ marginRight: 8, marginBottom: 8 }}
-                    >
+                    <Option value="on_hold">
                       <PauseCircleOutlined style={{ marginRight: 6 }} />
                       On Hold
-                    </Radio.Button>
+                    </Option>
                   </>
                 )}
-            </Radio.Group>
+            </Select>
           </Form.Item>
         </Col>
         <Col span={6}>
@@ -1975,9 +2028,9 @@ const ProjectForm = ({
               {clientsData?.clients?.map((client) => (
                 <Option key={client.id} value={client.id}>
                   <div>
-                    <div>
+                    <div title={client.companyName}>
                       <strong>{client.clientCode}</strong> ({client.displayName}
-                      )
+                      ) - ({client.companyName})
                     </div>
                   </div>
                 </Option>
@@ -1992,7 +2045,7 @@ const ProjectForm = ({
             label="Work Types"
             rules={[
               {
-                required: true,
+                required: currentStatus === 'active',
                 message: "Please select at least one work type",
               },
             ]}
@@ -2062,7 +2115,10 @@ const ProjectForm = ({
           <Form.Item
             label="Grading Selection"
             rules={[
-              { required: true, message: "Please select at least one grading" },
+              { 
+                required: currentStatus === 'active', 
+                message: "Please select at least one grading" 
+              },
             ]}
           >
             <Select

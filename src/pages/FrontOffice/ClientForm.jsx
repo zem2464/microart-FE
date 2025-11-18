@@ -1146,10 +1146,10 @@ const ClientForm = ({
                   name="cityId"
                   label={
                     <span>
-                      City <span style={{ color: "red" }}>*</span>
+                      City
                     </span>
                   }
-                  rules={[{ required: true, message: "Please select city!" }]}
+                  rules={[{ required: false, message: "Please select city!" }]}
                   autoComplete="new-password"
                 >
                   <Select
