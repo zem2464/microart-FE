@@ -828,7 +828,7 @@ const ClientList = () => {
     () => ({
       current: pagination.current,
       pageSize: pagination.pageSize,
-      total: filteredClients.length,
+      total: totalCount,
       showSizeChanger: true,
       showQuickJumper: true,
       showTotal: (total, range) =>
