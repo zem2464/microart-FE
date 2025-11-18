@@ -41,7 +41,10 @@ const { Option } = Select;
 
 const ClientList = () => {
   const [filters, setFilters] = useState({});
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 10 });
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [sorter, setSorter] = useState({ field: "createdAt", order: "DESC" });
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -56,15 +59,16 @@ const ClientList = () => {
   });
   const { showClientFormDrawer, showClientDetailDrawer } = useAppDrawer();
 
-  const { data, loading, error, refetch } = useQuery(GET_CLIENTS, {
+  const { data, loading, error, refetch, fetchMore } = useQuery(GET_CLIENTS, {
     variables: {
       filters,
-      page: pagination.current,
-      limit: pagination.pageSize,
+      page: 1,
+      limit: pageSize,
       sortBy: sorter.field,
       sortOrder: sorter.order,
     },
     fetchPolicy: "cache-and-network",
+    notifyOnNetworkStatusChange: true,
   });
 
   const [deleteClient] = useMutation(DELETE_CLIENT, {
@@ -89,6 +93,53 @@ const ClientList = () => {
 
   const clients = data?.clients || [];
   const totalCount = data?.clientsCount || 0;
+
+  // Check if there are more items to load
+  React.useEffect(() => {
+    const totalPages = Math.ceil(totalCount / pageSize);
+    setHasMore(page < totalPages);
+  }, [totalCount, pageSize, page]);
+
+  // Load more data for infinite scroll
+  const loadMore = async () => {
+    if (isLoadingMore || !hasMore || loading) return;
+
+    setIsLoadingMore(true);
+    try {
+      await fetchMore({
+        variables: {
+          page: page + 1,
+        },
+        updateQuery: (prev, { fetchMoreResult }) => {
+          if (!fetchMoreResult) return prev;
+          
+          const prevClients = prev?.clients || [];
+          const newClients = fetchMoreResult?.clients || [];
+          
+          return {
+            ...fetchMoreResult,
+            clients: [...prevClients, ...newClients],
+            clientsCount: fetchMoreResult.clientsCount,
+          };
+        },
+      });
+      setPage(page + 1);
+    } catch (error) {
+      console.error("Error loading more clients:", error);
+      message.error("Failed to load more clients");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Handle scroll event for infinite scroll
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    // Trigger load more when scrolled to 80% of the content
+    if (scrollHeight - scrollTop <= clientHeight * 1.2) {
+      loadMore();
+    }
+  };
 
   // Filter clients based on search and status
   const filteredClients = useMemo(() => {
@@ -770,7 +821,7 @@ const ClientList = () => {
   // Search handler - memoized
   const handleSearch = useCallback((value) => {
     setFilters((prev) => ({ ...prev, search: value }));
-    setPagination((prev) => ({ ...prev, current: 1 }));
+    setPage(1);
   }, []);
 
   // Summary statistics
@@ -825,20 +876,6 @@ const ClientList = () => {
     };
   }, [filteredClients]);
 
-  // Memoize pagination config to prevent re-renders
-  const paginationConfig = useMemo(
-    () => ({
-      current: pagination.current,
-      pageSize: pagination.pageSize,
-      total: totalCount,
-      showSizeChanger: true,
-      showQuickJumper: true,
-      showTotal: (total, range) =>
-        `${range[0]}-${range[1]} of ${total} clients`,
-    }),
-    [pagination.current, pagination.pageSize, filteredClients.length]
-  );
-
   // Memoize scroll config
   const scrollConfig = useMemo(() => ({ x: 1200 }), []);
 
@@ -849,12 +886,6 @@ const ClientList = () => {
         paginationConfig,
         filtersConfig,
         sorterConfig,
-      });
-
-      // Update pagination
-      setPagination({
-        current: paginationConfig.current,
-        pageSize: paginationConfig.pageSize,
       });
 
       // Update filters
@@ -1012,17 +1043,35 @@ const ClientList = () => {
 
       {/* Main Table */}
       <Card>
-        <CommonTable
-          className="client-table"
-          columns={columns}
-          dataSource={filteredClients}
-          loading={loading}
-          pagination={paginationConfig}
-          onChange={handleTableChange}
-          scroll={scrollConfig}
-          size="small"
-          showHeader={false}
-        />
+        <div 
+          style={{ 
+            maxHeight: 'calc(100vh - 350px)', 
+            overflowY: 'auto' 
+          }}
+          onScroll={handleScroll}
+        >
+          <CommonTable
+            className="client-table"
+            columns={columns}
+            dataSource={filteredClients}
+            loading={loading && !isLoadingMore}
+            pagination={false}
+            onChange={handleTableChange}
+            scroll={scrollConfig}
+            size="small"
+            showHeader={false}
+          />
+          {isLoadingMore && (
+            <div style={{ textAlign: 'center', padding: '16px' }}>
+              <Text type="secondary">Loading more clients...</Text>
+            </div>
+          )}
+          {!hasMore && filteredClients.length > 0 && (
+            <div style={{ textAlign: 'center', padding: '16px' }}>
+              <Text type="secondary">No more clients to load</Text>
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   );

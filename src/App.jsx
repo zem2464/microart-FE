@@ -30,7 +30,7 @@ function AppContent() {
   // Determine layout based on view mode preference
   const getLayoutComponent = () => {
     if (!user) return null;
-    
+    console.log('Effective Layout:', effectiveLayout);
     // Use the effective layout from ViewModeContext
     if (effectiveLayout === 'backoffice') {
       return BackOfficeLayout;
@@ -39,7 +39,7 @@ function AppContent() {
       return FrontOfficeLayout;
     }
     
-    return null;
+    return FrontOfficeLayout;
   };
 
   const LayoutComponent = getLayoutComponent();

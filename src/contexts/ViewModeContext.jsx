@@ -33,14 +33,14 @@ export const ViewModeProvider = ({ children }) => {
   const getEffectiveLayout = () => {
     if (!user) return null;
     
-    const role = user.role?.name?.toLowerCase();
+    const role = user.role?.roleType?.toLowerCase();
     
     // Non-admin users are restricted to their designated layouts
     if (role === 'employee') {
       return 'frontoffice';
     }
     if (role === 'manager') {
-      return 'backoffice';
+      return 'frontoffice';
     }
     
     // Admin users can choose their view
@@ -51,7 +51,7 @@ export const ViewModeProvider = ({ children }) => {
       return viewMode;
     }
     
-    return null;
+    return 'frontoffice';
   };
 
   // Check if current user can switch views (only admin)

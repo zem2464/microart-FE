@@ -63,8 +63,8 @@ const FrontOfficeLayout = () => {
   }, [showClientFormDrawer, showProjectFormDrawer]);
 
   // Allow employees and admin users (when they choose employee view)
-  const role = user?.role?.name?.toLowerCase();
-  if (role !== "employee" && role !== "admin") {
+  const role = user?.role?.roleType?.toLowerCase();
+  if (role !== "employee" && role !== "admin" && role !== "manager") {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">

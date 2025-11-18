@@ -11,6 +11,7 @@ export const ME_QUERY = gql`
         id
         name
         permissions
+        roleType
       }
       roleId
     }
