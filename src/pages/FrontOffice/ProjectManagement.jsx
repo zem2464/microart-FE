@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from "react";
+import React, { useState, useContext, useEffect, useCallback } from "react";
 import {
   Card,
   Table,
@@ -38,6 +38,8 @@ import {
   CopyOutlined,
   CheckOutlined,
   CloseOutlined,
+  ClockCircleOutlined,
+  DollarOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation } from "@apollo/client";
 import {
@@ -48,6 +50,7 @@ import {
   GET_PENDING_CREDIT_REQUESTS,
   APPROVE_CREDIT_REQUEST,
   REJECT_CREDIT_REQUEST,
+  GET_PROJECT_STATS,
 } from "../../graphql/projectQueries";
 import { GET_CLIENTS } from "../../graphql/clientQueries";
 import { GENERATE_PROJECT_INVOICE } from "../../gql/clientLedger";
@@ -130,6 +133,11 @@ const ProjectManagement = () => {
       sortBy: "name",
       sortOrder: "ASC",
     },
+    fetchPolicy: "cache-and-network",
+  });
+
+  // New stats query for accurate project counts
+  const { data: statsData, loading: statsLoading } = useQuery(GET_PROJECT_STATS, {
     fetchPolicy: "cache-and-network",
   });
 
@@ -300,14 +308,18 @@ const ProjectManagement = () => {
   }, [projectsData]);
 
   // Load more data for infinite scroll
-  const loadMore = async () => {
+  const loadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore || projectsLoading) return;
 
     setIsLoadingMore(true);
     try {
       await fetchMore({
         variables: {
+          filters: {},
           page: page + 1,
+          limit: 20,
+          sortBy: "createdAt",
+          sortOrder: "DESC",
         },
         updateQuery: (prev, { fetchMoreResult }) => {
           if (!fetchMoreResult) return prev;
@@ -336,16 +348,24 @@ const ProjectManagement = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  };
+  }, [isLoadingMore, hasMore, projectsLoading, fetchMore, page]);
 
-  // Handle scroll event for infinite scroll
-  const handleScroll = (e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
+  // Handle scroll event for infinite scroll (window-level)
+  const handleScroll = useCallback(() => {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight;
+    const clientHeight = window.innerHeight;
     // Trigger load more when scrolled to 80% of the content
     if (scrollHeight - scrollTop <= clientHeight * 1.2) {
       loadMore();
     }
-  };
+  }, [loadMore]);
+
+  // Attach window scroll listener
+  useEffect(() => {
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [handleScroll]);
 
   // Populate invoicedProjectIds from server-provided project.invoiceId / project.invoice
   useEffect(() => {
@@ -381,7 +401,9 @@ const ProjectManagement = () => {
       const projStatus = (project.status || "").toString().toUpperCase();
       const matchesStatus =
         statusFilter === "all" ||
-        projStatus === (statusFilter || "").toString().toUpperCase();
+        (statusFilter === "REQUESTED" 
+          ? project.creditRequest?.status === "approved" // Fly-on-Credit filter
+          : projStatus === (statusFilter || "").toString().toUpperCase());
 
       const projClientId = project.clientId || project.client?.id;
       const matchesClient =
@@ -499,20 +521,42 @@ const ProjectManagement = () => {
     }
   };
 
-  // Calculate statistics
+  // Calculate statistics using stats query for accurate total counts
+  const projectStatsResponse = statsData?.projectStats || {};
+  const projectStats = projectStatsResponse.stats || [];
+  
+  // Debug: Log the raw stats data
+  console.log('📊 Raw projectStats from backend:', projectStatsResponse);
+  
+  // Build stats object from backend stats
+  const statsMap = projectStats.reduce((acc, stat) => {
+    acc[stat.status.toLowerCase()] = {
+      count: stat.count,
+      estimatedCost: stat.totalEstimatedCost,
+      actualCost: stat.totalActualCost
+    };
+    return acc;
+  }, {});
+
+  console.log('📊 statsMap after processing:', statsMap);
+  console.log('📊 Fly-on-Credit count from response:', projectStatsResponse.flyOnCreditCount);
+
   const stats = {
-    total: filteredProjects.length,
-    active: filteredProjects.filter(
-      (p) => (p.status || "").toString().toUpperCase() === "ACTIVE"
-    ).length,
-    draft: filteredProjects.filter(
-      (p) => (p.status || "").toString().toUpperCase() === "DRAFT"
-    ).length,
-    completed: filteredProjects.filter(
-      (p) => (p.status || "").toString().toUpperCase() === "COMPLETED"
-    ).length,
-    flyOnCredit: filteredProjects.filter((p) => p.creditRequest).length,
+    total: projectStats.reduce((sum, s) => sum + s.count, 0),
+    active: statsMap.active?.count || 0,
+    draft: statsMap.draft?.count || 0,
+    completed: statsMap.completed?.count || 0,
+    inProgress: statsMap.in_progress?.count || 0,
+    requested: statsMap.requested?.count || 0,
+    cancelled: statsMap.cancelled?.count || 0,
+    onHold: statsMap.on_hold?.count || 0,
+    flyOnCredit: projectStatsResponse.flyOnCreditCount || 0, // Use dedicated fly-on-credit count from response
+    totalEstimatedCost: projectStats.reduce((sum, s) => sum + (s.totalEstimatedCost || 0), 0),
+    totalActualCost: projectStats.reduce((sum, s) => sum + (s.totalActualCost || 0), 0),
   };
+
+  console.log('📊 Final stats object:', stats);
+  console.log('📊 Fly-on-Credit count:', stats.flyOnCredit);
 
   // Handle project actions
   const handleViewProject = (project) => {
@@ -806,20 +850,57 @@ const ProjectManagement = () => {
     {
       title: "Work Type / Grading",
       key: "workTypeGrading",
-      width: 200,
-      render: (_, record) => (
-        <div>
+      width: 250,
+      render: (_, record) => {
+        // Display multiple work types
+        const workTypes = record.workTypes || [];
+        const gradings = record.projectGradings || [];
+        
+        return (
           <div>
-            <Text strong>{record.workType?.name || "N/A"}</Text>
+            {/* Work Types */}
+            <div style={{ marginBottom: 4 }}>
+              {workTypes.length > 0 ? (
+                workTypes.map((wt, idx) => (
+                  <Tag key={wt.id} color="blue" style={{ marginBottom: 2 }}>
+                    {wt.name}
+                  </Tag>
+                ))
+              ) : (
+                <Text type="secondary">No work type</Text>
+              )}
+            </div>
+            
+            {/* Gradings */}
+            <div>
+              {gradings.length > 0 ? (
+                gradings.slice(0, 2).map((pg, idx) => (
+                  <Tag key={pg.id} color="gold" style={{ marginBottom: 2, fontSize: '11px' }}>
+                    {pg.grading?.name || pg.grading?.shortCode || "N/A"} - ₹
+                    {pg.customRate || pg.grading?.defaultRate || 0}
+                  </Tag>
+                ))
+              ) : (
+                <Text type="secondary" style={{ fontSize: '11px' }}>No grading</Text>
+              )}
+              {gradings.length > 2 && (
+                <Tag color="default" style={{ fontSize: '10px' }}>
+                  +{gradings.length - 2} more
+                </Tag>
+              )}
+            </div>
           </div>
-          <div>
-            <Tag color="gold" style={{ marginTop: 4 }}>
-              {record.grading?.name || "N/A"} - ₹
-              {record.grading?.defaultRate || 0}
-            </Tag>
-          </div>
-        </div>
-      ),
+        );
+      },
+    },
+    {
+      title: "Order Date",
+      dataIndex: "createdAt",
+      key: "orderDate",
+      width: 120,
+      sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
+      render: (date) =>
+        date ? dayjs(date).format("MMM DD, YYYY") : "N/A",
     },
     {
       title: "Tasks",
@@ -871,10 +952,12 @@ const ProjectManagement = () => {
     },
     {
       title: "Budget",
-      dataIndex: "estimatedCost",
       key: "estimatedCost",
-      width: 100,
-      render: (budget) => (budget ? `₹${budget.toLocaleString()}` : "N/A"),
+      width: 110,
+      render: (_, record) => {
+        const budget = record.totalEstimatedCost || record.estimatedCost || 0;
+        return budget > 0 ? `₹${budget.toLocaleString()}` : "N/A";
+      },
     },
     {
       title: "Actions",
@@ -1127,6 +1210,30 @@ const ProjectManagement = () => {
                     transition: "background-color 0.3s",
                   }}
                   className="hover:bg-gray-100"
+                  onClick={() => setStatusFilter("IN_PROGRESS")}
+                >
+                  <ClockCircleOutlined
+                    style={{ fontSize: 16, color: "#1890ff" }}
+                  />
+                  <Text strong style={{ fontSize: 14 }}>
+                    In Progress:
+                  </Text>
+                  <Tag
+                    color="blue"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.inProgress}
+                  </Tag>
+                </Space>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
+                  }}
+                  className="hover:bg-gray-100"
                   onClick={() => setStatusFilter("REQUESTED")}
                 >
                   <CheckCircleOutlined
@@ -1141,6 +1248,30 @@ const ProjectManagement = () => {
                   >
                     {stats.flyOnCredit}
                   </Tag>
+                </Space>
+              </Space>
+            </Col>
+          </Row>
+          <Row gutter={16} align="middle" style={{ marginTop: 12 }}>
+            <Col flex="auto">
+              <Space size={16}>
+                <Space size={4}>
+                  <DollarOutlined style={{ fontSize: 16, color: "#52c41a" }} />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Total Estimated:
+                  </Text>
+                  <Text type="success" style={{ fontSize: 14 }}>
+                    ₹{stats.totalEstimatedCost?.toLocaleString() || 0}
+                  </Text>
+                </Space>
+                <Space size={4}>
+                  <DollarOutlined style={{ fontSize: 16, color: "#1890ff" }} />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Total Actual:
+                  </Text>
+                  <Text style={{ fontSize: 14, color: "#1890ff" }}>
+                    ₹{stats.totalActualCost?.toLocaleString() || 0}
+                  </Text>
                 </Space>
               </Space>
             </Col>
@@ -1201,39 +1332,31 @@ const ProjectManagement = () => {
 
         {/* Projects Table */}
         <Card>
-          <div
-            style={{
-              maxHeight: "calc(100vh - 350px)",
-              overflowY: "auto",
-            }}
-            onScroll={handleScroll}
-          >
-            <Table
-              columns={columns}
-              dataSource={filteredProjects}
-              rowKey="id"
-              loading={projectsLoading && !isLoadingMore}
-              rowClassName={(record) =>
-                record.creditRequest &&
-                record.creditRequest.status === "approved"
-                  ? "bg-yellow-50"
-                  : ""
-              }
-              pagination={false}
-              scroll={{ x: 1200 }}
-              size="small"
-            />
+          <Table
+            columns={columns}
+            dataSource={filteredProjects}
+            rowKey="id"
+            loading={(projectsLoading || statsLoading) && !isLoadingMore}
+            rowClassName={(record) =>
+              record.creditRequest &&
+              record.creditRequest.status === "approved"
+                ? "bg-yellow-50"
+                : ""
+            }
+            pagination={false}
+            scroll={{ x: 1200 }}
+            size="small"
+          />
             {isLoadingMore && (
               <div style={{ textAlign: "center", padding: "16px" }}>
                 <Text type="secondary">Loading more projects...</Text>
               </div>
             )}
-            {!hasMore && filteredProjects.length > 0 && (
-              <div style={{ textAlign: "center", padding: "16px" }}>
-                <Text type="secondary">No more projects to load</Text>
-              </div>
-            )}
-          </div>
+          {!hasMore && filteredProjects.length > 0 && (
+            <div style={{ textAlign: "center", padding: "16px" }}>
+              <Text type="secondary">No more projects to load</Text>
+            </div>
+          )}
         </Card>
       </div>
 

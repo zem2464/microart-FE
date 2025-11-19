@@ -46,7 +46,7 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
-import { GET_CLIENTS, GET_TRANSACTIONS_SUMMARY } from '../../gql/clients';
+import { GET_CLIENTS, GET_TRANSACTIONS_SUMMARY, GET_CLIENT_STATS } from '../../gql/clients';
 import { GET_PENDING_PAYMENTS, GET_OVERDUE_PAYMENTS } from '../../gql/clientTransactions';
 import { useAppDrawer } from '../../contexts/DrawerContext';
 
@@ -63,7 +63,18 @@ const ClientDashboard = () => {
   const { data: clientsData, loading: clientsLoading, refetch } = useQuery(GET_CLIENTS, {
     variables: {
       filters: { isActive: true },
-      pagination: { page: 1, limit: 100 }
+      page: 1,
+      limit: 100,
+      sortBy: 'clientCode',
+      sortOrder: 'ASC'
+    },
+    fetchPolicy: 'cache-and-network'
+  });
+
+  // New stats query for accurate counts
+  const { data: statsData, loading: statsLoading } = useQuery(GET_CLIENT_STATS, {
+    variables: {
+      filters: {}
     },
     fetchPolicy: 'cache-and-network'
   });
@@ -93,10 +104,17 @@ const ClientDashboard = () => {
     showClientFormDrawer(null, 'create', refetch);
   };
 
-  // Calculate dashboard statistics
+  // Calculate dashboard statistics using stats query for accurate counts
   const dashboardStats = useMemo(() => {
-    const totalClients = clients.length;
-    const activeClients = clients.filter(c => c.isActive === true).length;
+    // Use stats query for accurate total counts
+    const stats = statsData?.clientsSummary || {};
+    const totalClients = stats.totalClients || 0;
+    const activeClients = stats.activeClients || 0;
+    const inactiveClients = stats.inactiveClients || 0;
+    const permanentClients = stats.permanentClients || 0;
+    const walkinClients = stats.walkinClients || 0;
+    const clientsWithBalance = stats.clientsWithBalance || 0;
+    const totalOutstandingAmount = stats.totalOutstandingAmount || 0;
 
     const pendingAmount = pendingPayments.reduce((sum, p) => sum + p.amount, 0);
     const overdueAmount = overduePayments.reduce((sum, p) => sum + p.amount, 0);
@@ -104,12 +122,17 @@ const ClientDashboard = () => {
     return {
       totalClients,
       activeClients,
+      inactiveClients,
+      permanentClients,
+      walkinClients,
+      clientsWithBalance,
+      totalOutstandingAmount,
       pendingAmount,
       overdueAmount,
       pendingCount: pendingPayments.length,
       overdueCount: overduePayments.length
     };
-  }, [clients, pendingPayments, overduePayments]);
+  }, [statsData, pendingPayments, overduePayments]);
 
   // Helper function for colors - must be defined before useMemo hooks that use it
   const getClientTypeColor = (type) => {
@@ -153,11 +176,6 @@ const ClientDashboard = () => {
 
   // Payment methods from summary
   const paymentMethodsData = summaryData?.transactionsSummary?.paymentMethods || [];
-
-  // Recent activities (top clients - removed balance sorting)
-  const topClientsByBalance = useMemo(() => {
-    return [];
-  }, [clients]);
 
   // Recent clients (by creation date)
   const recentClients = useMemo(() => {
@@ -217,7 +235,7 @@ const ClientDashboard = () => {
     },
   ];
 
-  const loading = clientsLoading || summaryLoading;
+  const loading = clientsLoading || summaryLoading || statsLoading;
 
   return (
     <div className="p-6">
@@ -293,24 +311,57 @@ const ClientDashboard = () => {
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="Total Balance"
-                  value={dashboardStats.totalBalance}
-                  precision={2}
-                  prefix="₹"
-                  valueStyle={{ 
-                    color: dashboardStats.totalBalance >= 0 ? '#52c41a' : '#f5222d' 
-                  }}
+                  title="Permanent Clients"
+                  value={dashboardStats.permanentClients}
+                  prefix={<TeamOutlined />}
+                  valueStyle={{ color: '#722ed1' }}
                 />
               </Card>
             </Col>
             <Col xs={24} sm={12} lg={6}>
               <Card>
                 <Statistic
-                  title="Average Balance"
-                  value={dashboardStats.avgBalance}
+                  title="Walk-in Clients"
+                  value={dashboardStats.walkinClients}
+                  prefix={<UserOutlined />}
+                  valueStyle={{ color: '#fa8c16' }}
+                />
+              </Card>
+            </Col>
+          </Row>
+          
+          {/* Additional Statistics Row */}
+          <Row gutter={16} className="mb-6">
+            <Col xs={24} sm={12} lg={8}>
+              <Card>
+                <Statistic
+                  title="Inactive Clients"
+                  value={dashboardStats.inactiveClients}
+                  prefix={<UserOutlined />}
+                  valueStyle={{ color: '#8c8c8c' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Card>
+                <Statistic
+                  title="Clients with Balance"
+                  value={dashboardStats.clientsWithBalance}
+                  prefix={<DollarOutlined />}
+                  valueStyle={{ color: '#13c2c2' }}
+                />
+              </Card>
+            </Col>
+            <Col xs={24} sm={12} lg={8}>
+              <Card>
+                <Statistic
+                  title="Outstanding Amount"
+                  value={dashboardStats.totalOutstandingAmount}
                   precision={2}
                   prefix="₹"
-                  valueStyle={{ color: '#722ed1' }}
+                  valueStyle={{ 
+                    color: dashboardStats.totalOutstandingAmount > 0 ? '#f5222d' : '#52c41a' 
+                  }}
                 />
               </Card>
             </Col>
@@ -410,34 +461,7 @@ const ClientDashboard = () => {
 
           {/* Data Tables Row */}
           <Row gutter={16} className="mb-6">
-            <Col xs={24} lg={12}>
-              <Card 
-                title="Top Clients by Balance" 
-                extra={<Button type="link">View All</Button>}
-              >
-                <div className="space-y-3">
-                  {topClientsByBalance.slice(0, 5).map((client, index) => (
-                    <div key={client.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex items-center space-x-3">
-                        <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center text-sm font-medium text-blue-600">
-                          {index + 1}
-                        </div>
-                        <Avatar size="small" icon={<UserOutlined />} />
-                        <div>
-                          <div className="font-medium">
-                            {client.companyName || client.contactPersonName}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {client.clientCode}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-            </Col>
-            <Col xs={24} lg={12}>
+            <Col xs={24}>
               <Card 
                 title="Recent Clients" 
                 extra={<Button type="link">View All</Button>}
@@ -449,7 +473,7 @@ const ClientDashboard = () => {
                         <Avatar size="small" icon={<UserOutlined />} />
                         <div>
                           <div className="font-medium">
-                            {client.companyName || client.contactPersonName}
+                            {client.companyName || client.displayName}
                           </div>
                           <div className="text-xs text-gray-500">
                             {client.clientCode} • {new Date(client.createdAt).toLocaleDateString()}

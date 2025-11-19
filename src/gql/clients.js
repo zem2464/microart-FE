@@ -448,6 +448,21 @@ export const GET_CITIES = gql`
   }
 `;
 
+// Stats Queries
+export const GET_CLIENT_STATS = gql`
+  query GetClientStats($filters: ClientFilters) {
+    clientsSummary(filters: $filters) {
+      totalClients
+      activeClients
+      inactiveClients
+      permanentClients
+      walkinClients
+      clientsWithBalance
+      totalOutstandingAmount
+    }
+  }
+`;
+
 // Transaction Queries
 export const GET_TRANSACTIONS_BY_CLIENT = gql`
   query GetTransactionsByClient($clientId: ID!, $filters: ClientTransactionFilters) {
