@@ -1,4 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+// Infinite Scroll Tasks Table:
+// Replaces static tasks rendering with page-wise loading via Apollo fetchMore.
+// Uses IntersectionObserver sentinel (rootMargin 300px) to prefetch next page.
+// Hidden for DRAFT/REQUESTED statuses to preserve business rules.
 import { useQuery } from '@apollo/client';
 import { Card, Row, Col, Descriptions, Divider, Timeline, Empty, Typography, Progress } from 'antd';
 import dayjs from 'dayjs';
@@ -12,21 +16,25 @@ import TaskCard from './TaskCard';
 const { Text } = Typography;
 
 const ProjectDetail = ({ project, onClose }) => {
+  // Infinite scroll task aggregation state (tasks table replacement)
   const [tasks, setTasks] = useState(project?.tasks || []);
+  const [page, setPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+  const sentinelRef = useRef(null);
   const [availableUsers, setAvailableUsers] = useState([]);
 
   // Fetch tasks if not present in project
-  const { data: tasksData, loading: tasksLoading } = useQuery(GET_TASKS, {
+  const { data: tasksData, loading: initialLoading, fetchMore } = useQuery(GET_TASKS, {
     variables: {
       filters: project ? { projectId: project.id } : {},
       page: 1,
-      limit: 200,
+      limit: 25,
       sortBy: 'createdAt',
       sortOrder: 'DESC'
     },
-    // Skip fetching tasks if project is not provided, if tasks are already included,
-    // or if the project is in Draft or Requested status (tasks should remain hidden until approved/started)
-    skip: !project || (project.tasks && project.tasks.length > 0) || ['DRAFT', 'REQUESTED'].includes((project.status || '').toString().toUpperCase()),
+    // Skip for draft/requested to maintain hidden tasks state
+    skip: !project || ['DRAFT', 'REQUESTED'].includes((project.status || '').toString().toUpperCase()),
     fetchPolicy: 'cache-and-network'
   });
 
@@ -35,12 +43,61 @@ const ProjectDetail = ({ project, onClose }) => {
     fetchPolicy: 'cache-first'
   });
 
+  // Merge first page & subsequent pages
   useEffect(() => {
     if (tasksData?.tasks?.tasks) {
-      console.log('ProjectDetail received tasks data:', tasksData.tasks.tasks);
-      setTasks(tasksData.tasks.tasks);
+      const newTasks = tasksData.tasks.tasks;
+      setTasks(prev => {
+        const existingIds = new Set(prev.map(t => t.id));
+        const merged = [...prev];
+        newTasks.forEach(t => { if (!existingIds.has(t.id)) merged.push(t); });
+        return merged;
+      });
+      const pg = tasksData.tasks.pagination;
+      if (pg) {
+        setHasNextPage(!!pg.hasNextPage);
+      }
     }
   }, [tasksData]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasNextPage || isFetchingMore || ['DRAFT','REQUESTED'].includes((project.status||'').toUpperCase())) return;
+    setIsFetchingMore(true);
+    try {
+      const nextPage = page + 1;
+      const { data } = await fetchMore({ variables: { page: nextPage, limit: 25 } });
+      const fetchedTasks = data?.tasks?.tasks || [];
+      setTasks(prev => {
+        const existingIds = new Set(prev.map(t => t.id));
+        const merged = [...prev];
+        fetchedTasks.forEach(t => { if (!existingIds.has(t.id)) merged.push(t); });
+        return merged;
+      });
+      const pg = data?.tasks?.pagination;
+      if (pg) {
+        setHasNextPage(!!pg.hasNextPage);
+        setPage(pg.page);
+      }
+    } catch (e) {
+      // Optional: add message.error
+    } finally {
+      setIsFetchingMore(false);
+    }
+  }, [fetchMore, hasNextPage, isFetchingMore, page, project.status]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          loadMore();
+        }
+      });
+    }, { root: null, rootMargin: '300px', threshold: 0 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMore]);
 
   useEffect(() => {
     if (usersData?.availableUsers) {
@@ -86,28 +143,43 @@ const ProjectDetail = ({ project, onClose }) => {
             )}
           </Card>
 
-          <Card title={`Tasks (${totalTasks})`} loading={tasksLoading}>
+          <Card
+            title={`Tasks (${totalTasks})`}
+            loading={initialLoading && tasks.length === 0}
+            extra={hasNextPage ? <Text type="secondary">Scrolling loads more…</Text> : null}
+          >
             {/* If project is a draft or pending approval, do not show tasks and explain why */}
             {['DRAFT', 'REQUESTED'].includes((project.status || '').toString().toUpperCase()) ? (
               <Empty description={<span>Project is in {project.status === 'REQUESTED' ? 'Pending Approval' : 'Draft'} — tasks are hidden until the project is {project.status === 'REQUESTED' ? 'approved' : 'started'}.</span>} />
             ) : (
               totalTasks > 0 ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {tasks.map((task) => (
-                    <TaskCard
-                      key={task.id}
-                      task={task}
-                      availableUsers={availableUsers}
-                      workType={project.workType}
-                      grading={project.grading}
-                      readOnly={false}
-                      layout="list"
-                      onTaskUpdate={(updatedTask) => {
-                        console.log('Task updated in ProjectDetail:', updatedTask);
-                        handleTaskUpdate(updatedTask);
-                      }}
-                    />
-                  ))}
+                <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: 8 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {tasks.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        availableUsers={availableUsers}
+                        workType={project.workType}
+                        grading={project.grading}
+                        readOnly={false}
+                        layout="list"
+                        onTaskUpdate={(updatedTask) => {
+                          handleTaskUpdate(updatedTask);
+                        }}
+                      />
+                    ))}
+                  </div>
+                  {hasNextPage && (
+                    <div ref={sentinelRef} style={{ padding: '16px 0', textAlign: 'center' }}>
+                      <Text type="secondary">{isFetchingMore ? 'Loading…' : 'Scroll for more tasks'}</Text>
+                    </div>
+                  )}
+                  {!hasNextPage && tasks.length > 0 && (
+                    <div style={{ padding: '8px 0', textAlign: 'center', fontSize: 12, color: '#888' }}>
+                      End of task list
+                    </div>
+                  )}
                 </div>
               ) : (
                 <Empty description="No tasks for this project" />

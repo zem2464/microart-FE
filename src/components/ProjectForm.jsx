@@ -96,6 +96,39 @@ const ProjectForm = ({
   const isDraftProject =
     project && mode === "edit" && project.status === "draft";
 
+  // Check if project is fly-on-credit (has approved credit request)
+  const isFlyOnCredit = 
+    project &&
+    mode === "edit" &&
+    project.creditRequest &&
+    project.creditRequest.status === "approved";
+
+  // Allow editing for fly-on-credit projects when status is active or draft
+  // Users can edit all fields, but cannot save if the total cost changes
+  const canEditFlyOnCreditProject =
+    isFlyOnCredit &&
+    (project.status === "active" || project.status === "draft");
+
+  // Check if total cost has changed for fly-on-credit projects
+  const [costChanged, setCostChanged] = useState(false);
+  
+  useEffect(() => {
+    if (isFlyOnCredit && mode === "edit") {
+      const newTotalCost = totalCalculatedBudget || calculatedBudget;
+      const originalApprovedAmount = project?.creditRequest?.requestedAmount || project?.totalEstimatedCost || project?.estimatedCost || 0;
+      const hasChanged = Math.abs(newTotalCost - originalApprovedAmount) > 0.01;
+      setCostChanged(hasChanged);
+      
+      if (hasChanged) {
+        console.log('⚠️ Cost changed for fly-on-credit project:', {
+          original: originalApprovedAmount,
+          new: newTotalCost,
+          difference: newTotalCost - originalApprovedAmount
+        });
+      }
+    }
+  }, [isFlyOnCredit, mode, project, totalCalculatedBudget, calculatedBudget]);
+
   // Update parent with footer data whenever totals change
   useEffect(() => {
     if (onFooterDataChange) {
@@ -302,15 +335,21 @@ const ProjectForm = ({
     const client = clientsData?.clients?.find((c) => c.id === option.value);
     if (!client) return false;
 
-    const searchText = getClientSearchText(client);
-    const searchTerms = inputValue.toLowerCase().split(" ");
-
-    if (typeof parseInt(inputValue) == "number") {
-      return searchTerms.every(
-        (term) => client.clientCode.split("-")[1] == parseInt(term)
-      );
+    const trimmedInput = inputValue.trim();
+    
+    // Check if input contains only digits
+    const isNumericSearch = /^\d+$/.test(trimmedInput);
+    
+    if (isNumericSearch) {
+      // Search only in clientCode number part (e.g., "CL-123" -> "123")
+      const clientCodeNumber = client.clientCode?.split("-")[1] || "";
+      return clientCodeNumber.includes(trimmedInput);
+    } else {
+      // Search in all text fields
+      const searchText = getClientSearchText(client);
+      const searchTerms = trimmedInput.toLowerCase().split(" ");
+      return searchTerms.every((term) => searchText.includes(term));
     }
-    return searchTerms.every((term) => searchText.includes(term));
   };
 
   // Client selection handler
@@ -488,11 +527,20 @@ const ProjectForm = ({
       console.log("existingCustomFieldValues:", existingCustomFieldValues);
 
       setSelectedWorkTypes(workTypeIds || []);
-      // Don't clear grading-related states when just switching work types
+      
+      // Clear all grading-related states when work types change
       setSelectedGrading(null);
       setCalculatedBudget(0);
       setGradingTasks([]);
       setCustomFields([]);
+      
+      // Clear selected gradings (multiple grading support)
+      setSelectedGradings([]);
+      setTotalImageQuantity(0);
+      setTotalCalculatedBudget(0);
+      
+      // Clear project tasks
+      setProjectTasks([]);
 
       // Determine if we're in edit mode with existing values
       const hasExistingValues =
@@ -509,7 +557,6 @@ const ProjectForm = ({
         console.log("Preserving existing custom field values (edit mode)");
       }
       setWorkTypeGradings([]);
-      setProjectTasks([]);
 
       // Only fetch if workTypeIds is provided and has values
       if (!workTypeIds || workTypeIds.length === 0) {
@@ -627,7 +674,9 @@ const ProjectForm = ({
       });
 
       if (data?.gradingTasks) {
-        setGradingTasks(data.gradingTasks);
+        // Filter to only include active grading tasks
+        const activeGradingTasks = data.gradingTasks.filter(gt => gt.isActive === true);
+        setGradingTasks(activeGradingTasks);
 
         // Only initialize project tasks when status is active (create mode) or active projects (edit mode)
         if (
@@ -635,7 +684,7 @@ const ProjectForm = ({
           (mode === "edit" && isActiveProject)
         ) {
           // Initialize project tasks with enhanced structure and preferred users
-          const initialTasks = data.gradingTasks.map((gradingTask) => {
+          const initialTasks = activeGradingTasks.map((gradingTask) => {
             // Find preferred user for this task type from client preferences
             let preferredUserId = null;
             if (clientPreferences?.taskPreferences) {
@@ -770,14 +819,16 @@ const ProjectForm = ({
           });
 
           if (data?.gradingTasks) {
-            setGradingTasks(data.gradingTasks);
+            // Filter to only include active grading tasks
+            const activeGradingTasks = data.gradingTasks.filter(gt => gt.isActive === true);
+            setGradingTasks(activeGradingTasks);
 
             // Initialize project tasks if needed
             if (
               currentStatus === "active" ||
               (mode === "edit" && isActiveProject)
             ) {
-              const initialTasks = data.gradingTasks.map((gradingTask) => {
+              const initialTasks = activeGradingTasks.map((gradingTask) => {
                 let preferredUserId = null;
                 if (
                   clientPreferences?.taskPreferences &&
@@ -835,11 +886,86 @@ const ProjectForm = ({
         }
       }
     } else {
-      // Multiple selections - reset legacy single grading state
+      // Multiple selections - fetch tasks for all gradings and combine them
       setSelectedGrading(null);
       setPerImageRate(null);
-      // For multiple gradings, we'll need to handle task generation differently
-      // This might require updating the task generation logic
+
+      // Fetch tasks for all selected gradings
+      try {
+        const taskPromises = newSelectedGradings.map((sg) =>
+          refetchGradingTasks({
+            variables: {
+              gradingId: sg.gradingId,
+            },
+          })
+        );
+
+        const taskResults = await Promise.all(taskPromises);
+
+        // Combine all tasks from all gradings and filter to only include active ones
+        const allGradingTasks = taskResults.flatMap(
+          (result) => result.data?.gradingTasks || []
+        ).filter(gt => gt.isActive === true);
+
+        setGradingTasks(allGradingTasks);
+
+        // Initialize project tasks if status is active
+        if (
+          currentStatus === "active" ||
+          (mode === "edit" && isActiveProject)
+        ) {
+          const initialTasks = allGradingTasks.map((gradingTask) => {
+            let preferredUserId = null;
+            if (clientPreferences?.taskPreferences && gradingTask?.taskType) {
+              const taskPreference = clientPreferences.taskPreferences.find(
+                (pref) => pref?.taskType?.id === gradingTask.taskType.id
+              );
+              if (
+                taskPreference &&
+                taskPreference.preferredUserIds &&
+                taskPreference.preferredUserIds.length > 0
+              ) {
+                preferredUserId = taskPreference.preferredUserIds[0];
+              }
+            }
+
+            return {
+              id: null,
+              gradingTaskId: gradingTask.id,
+              taskTypeId: gradingTask?.taskType?.id,
+              name:
+                gradingTask?.taskType?.name ||
+                gradingTask.name ||
+                "Unnamed Task",
+              title:
+                gradingTask?.taskType?.name ||
+                gradingTask.name ||
+                "Unnamed Task",
+              description:
+                gradingTask.description ||
+                gradingTask?.taskType?.description ||
+                "",
+              instructions: gradingTask.instructions || "",
+              status: "todo",
+              priority: gradingTask.priority || "B",
+              estimatedHours: gradingTask.estimatedHours || 0,
+              estimatedCost: gradingTask.estimatedCost || 0,
+              dueDate: null,
+              assigneeId: preferredUserId,
+              notes: "",
+              taskType: gradingTask.taskType,
+              gradingTask: gradingTask,
+              customFields: {},
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+          });
+          setProjectTasks(initialTasks);
+        }
+      } catch (error) {
+        console.error("Error fetching tasks for multiple gradings:", error);
+        message.error("Failed to load tasks for selected gradings");
+      }
     }
 
     // Trigger credit validation for the new grading selection
@@ -891,7 +1017,9 @@ const ProjectForm = ({
       });
 
       if (data?.gradingTasks) {
-        setGradingTasks(data.gradingTasks);
+        // Filter to only include active grading tasks
+        const activeGradingTasks = data.gradingTasks.filter(gt => gt.isActive === true);
+        setGradingTasks(activeGradingTasks);
 
         // Only create project tasks when status is active (create mode) or active projects (edit mode)
         if (
@@ -899,7 +1027,7 @@ const ProjectForm = ({
           (mode === "edit" && isActiveProject)
         ) {
           // Create initial project tasks from grading tasks
-          const initialTasks = data.gradingTasks.map((gradingTask) => {
+          const initialTasks = activeGradingTasks.map((gradingTask) => {
             let preferredUserId = null;
             if (clientPreferences?.taskPreferences) {
               const taskPreference = clientPreferences.taskPreferences.find(
@@ -1042,13 +1170,15 @@ const ProjectForm = ({
             // BUT skip if:
             // 1. Project is already in fly-on-credit mode (status='requested')
             // 2. Project has an approved credit request
-            // 3. Creating new project and credit is already exceeded (fly-on-credit button visible)
+            // 3. Creating new project and credit exceeded (fly-on-credit flow active)
             const isInFlyOnCreditMode =
               project?.status === "requested" ||
-              project?.creditRequest?.status === "approved";
+              project?.creditRequest?.status === "approved" ||
+              currentStatus === "requested";
             const isNewProjectWithExceededCredit =
-              mode === "create" && creditExceeded;
+              mode === "create" && !data.validateProjectCredit.canCreateProject;
 
+            // Don't show warning if in fly-on-credit mode or if this is a new exceeded project
             if (
               !data.validateProjectCredit.canCreateProject &&
               !isInFlyOnCreditMode &&
@@ -1128,17 +1258,22 @@ const ProjectForm = ({
         // BUT skip if:
         // 1. Project is already in fly-on-credit mode (status='requested')
         // 2. Project has an approved credit request
-        // 3. Creating new project and credit is already exceeded (fly-on-credit button visible)
+        // 3. Creating new project and credit exceeded (fly-on-credit flow active)
+        // 4. Credit was already exceeded before this validation (user already knows)
         const isInFlyOnCreditMode =
           project?.status === "requested" ||
-          project?.creditRequest?.status === "approved";
+          project?.creditRequest?.status === "approved" ||
+          currentStatus === "requested";
         const isNewProjectWithExceededCredit =
-          mode === "create" && creditExceeded;
+          mode === "create" && exceeded;
+        const wasAlreadyExceeded = creditExceeded; // Credit was already exceeded before adding this grading
 
+        // Don't show warning if in fly-on-credit mode, if this is a new exceeded project, or if credit was already exceeded
         if (
           exceeded &&
           !isInFlyOnCreditMode &&
-          !isNewProjectWithExceededCredit
+          !isNewProjectWithExceededCredit &&
+          !wasAlreadyExceeded
         ) {
           message.warning(data.validateMultipleGradingCredit.message);
         }
@@ -1182,21 +1317,26 @@ const ProjectForm = ({
 
   // Prefetch gradings for edit mode when project data is available
   useEffect(() => {
-    if (project && mode === "edit" && project.workTypeId) {
-      // Prefetch gradings immediately when we have project data with workTypeId
-      getWorkTypeGradings({
-        variables: {
-          workTypeIds: [project.workTypeId || project.workType?.id],
-        },
-      })
-        .then((result) => {
-          if (result.data?.gradingsByWorkType) {
-            setWorkTypeGradings(result.data.gradingsByWorkType);
-          }
+    if (project && mode === "edit" && (project.projectWorkTypes?.length > 0 || project.workTypes?.length > 0)) {
+      // Prefetch gradings immediately when we have project data with workTypes
+      const workTypeIds = project.projectWorkTypes?.map(pwt => pwt.workTypeId) || 
+                          project.workTypes?.map(wt => wt.id) || [];
+      
+      if (workTypeIds.length > 0) {
+        getWorkTypeGradings({
+          variables: {
+            workTypeIds: workTypeIds,
+          },
         })
-        .catch((error) => {
-          console.error("Error prefetching gradings for edit mode:", error);
-        });
+          .then((result) => {
+            if (result.data?.gradingsByWorkType) {
+              setWorkTypeGradings(result.data.gradingsByWorkType);
+            }
+          })
+          .catch((error) => {
+            console.error("Error prefetching gradings for edit mode:", error);
+          });
+      }
     }
   }, [project, mode, getWorkTypeGradings]);
 
@@ -1272,18 +1412,13 @@ const ProjectForm = ({
         console.log("Project customFields:", project.customFields);
         console.log("Project notes:", project.notes);
 
-        // Derive work types from projectGradings
-        const workTypeIds =
-          project.projectGradings && project.projectGradings.length > 0
-            ? [
-                ...new Set(
-                  project.projectGradings
-                    .map((pg) => pg.grading?.workType?.id)
-                    .filter(Boolean)
-                ),
-              ]
-            : project.workTypeId
-            ? [project.workTypeId]
+        // Get work types from projectWorkTypes junction table
+        const workTypeIds = project.projectWorkTypes && project.projectWorkTypes.length > 0
+            ? project.projectWorkTypes
+                .sort((a, b) => a.sequence - b.sequence) // Sort by sequence
+                .map((pwt) => pwt.workTypeId)
+            : project.workTypes && project.workTypes.length > 0
+            ? project.workTypes.map((wt) => wt.id)
             : [];
 
         form.setFieldsValue({
@@ -1480,7 +1615,14 @@ const ProjectForm = ({
       // Prepare project data
       const projectData = {
         clientId: values.clientId || selectedClientId,
-        workTypeId: values.workTypeIds?.[0], // Use first selected worktype for backward compatibility
+        // Send multiple work types as projectWorkTypes array
+        projectWorkTypes:
+          values.workTypeIds && values.workTypeIds.length > 0
+            ? values.workTypeIds.map((wtId, index) => ({
+                workTypeId: wtId,
+                sequence: index + 1,
+              }))
+            : [],
         name: values.name,
         description: values.description || "",
         deadlineDate: values.deadlineDate
@@ -1575,30 +1717,57 @@ const ProjectForm = ({
         }
       }
 
-      // Final credit validation before submission (for new projects)
-      // Skip validation for edit mode if project has approved credit request
+      // Final credit validation before submission
+      // Skip validation for draft projects and edit mode with approved credit request
       const hasApprovedCredit = project?.creditRequest?.status === "approved";
-      if (mode !== "edit" && selectedClientId && projectCreditValidation) {
-        if (!projectCreditValidation.canCreateProject) {
+      
+      // For fly-on-credit projects with approved credit, validate that total cost hasn't changed
+      if (mode === "edit" && hasApprovedCredit) {
+        const newTotalCost = totalCalculatedBudget || calculatedBudget;
+        const originalApprovedAmount = project?.creditRequest?.requestedAmount || project?.totalEstimatedCost || project?.estimatedCost || 0;
+        
+        console.log('💰 Fly-on-credit validation:', {
+          newTotalCost,
+          originalApprovedAmount,
+          difference: Math.abs(newTotalCost - originalApprovedAmount)
+        });
+        
+        // Allow small rounding differences (< 0.01)
+        if (Math.abs(newTotalCost - originalApprovedAmount) > 0.01) {
           message.error(
-            "Cannot create project: " + projectCreditValidation.message
+            `Cannot update project: The approved amount was ₹${originalApprovedAmount.toLocaleString()}. ` +
+            `New amount is ₹${newTotalCost.toLocaleString()}. ` +
+            `You cannot change the total cost for approved fly-on-credit projects.`
           );
           setLoading(false);
           return;
         }
-      } else if (
-        mode === "edit" &&
-        !hasApprovedCredit &&
-        selectedClientId &&
-        projectCreditValidation
-      ) {
-        // For edit mode without approved credit, still validate
-        if (!projectCreditValidation.canCreateProject) {
-          message.error(
-            "Cannot update project: " + projectCreditValidation.message
-          );
-          setLoading(false);
-          return;
+      }
+      
+      // Only validate credit for non-draft projects
+      if (submittedStatus !== 'draft') {
+        if (mode !== "edit" && selectedClientId && projectCreditValidation) {
+          if (!projectCreditValidation.canCreateProject) {
+            message.error(
+              "Cannot create project: " + projectCreditValidation.message
+            );
+            setLoading(false);
+            return;
+          }
+        } else if (
+          mode === "edit" &&
+          !hasApprovedCredit &&
+          selectedClientId &&
+          projectCreditValidation
+        ) {
+          // For edit mode without approved credit, still validate
+          if (!projectCreditValidation.canCreateProject) {
+            message.error(
+              "Cannot update project: " + projectCreditValidation.message
+            );
+            setLoading(false);
+            return;
+          }
         }
       }
       // Always use the form field value for status (both create and edit mode)
@@ -1614,11 +1783,14 @@ const ProjectForm = ({
 
       const projectData = {
         clientId: values.clientId,
-        // Use first work type for backward compatibility or null if none selected
-        workTypeId:
+        // Send multiple work types as projectWorkTypes array
+        projectWorkTypes:
           values.workTypeIds && values.workTypeIds.length > 0
-            ? values.workTypeIds[0]
-            : null,
+            ? values.workTypeIds.map((wtId, index) => ({
+                workTypeId: wtId,
+                sequence: index + 1,
+              }))
+            : [],
         // Send multiple gradings or fallback to single grading for backward compatibility
         projectGradings:
           selectedGradings.length > 0
@@ -1638,11 +1810,7 @@ const ProjectForm = ({
                 },
               ]
             : [],
-        // For backward compatibility, also send single grading fields
-        gradingId:
-          selectedGradings.length > 0
-            ? selectedGradings[0]?.gradingId
-            : values.gradingId,
+        // Backward compatibility fields - no longer send workTypeId/gradingId directly
         imageQuantity: totalImageQuantity || values.imageQuantity,
         estimatedCost: totalCalculatedBudget || calculatedBudget, // Use total budget
         name: values.name,
@@ -1698,29 +1866,41 @@ const ProjectForm = ({
         });
       } else {
         // Create project - include tasks field as ProjectCreateInput supports it
+        const mappedTasks = projectTasks.map((task) => ({
+          taskTypeId: task.taskTypeId,
+          gradingTaskId: task.gradingTaskId,
+          name: task.name || task.title || "Unnamed Task",
+          title: task.title || task.name || "Unnamed Task",
+          description: task.description || "",
+          instructions: task.instructions || "",
+          status: task.status || "todo",
+          priority: task.priority || "B",
+          estimatedHours: task.estimatedHours || 0,
+          estimatedCost: task.estimatedCost || 0,
+          dueDate: task.dueDate,
+          assigneeId: task.assigneeId,
+          notes: task.notes || values.notes || "", // Use project notes as default
+        }));
+        
+        // Filter out tasks without required fields (taskTypeId and gradingTaskId are required by backend)
+        const validTasks = mappedTasks.filter((task) => task.taskTypeId && task.gradingTaskId);
+        
+        console.log("📝 Total tasks in projectTasks:", projectTasks.length);
+        console.log("🔍 Mapped tasks:", mappedTasks.length);
+        console.log("✅ Valid tasks after filtering:", validTasks.length);
+        if (validTasks.length !== projectTasks.length) {
+          console.warn("⚠️ Some tasks were filtered out:", {
+            original: projectTasks.length,
+            valid: validTasks.length,
+            filtered: projectTasks.length - validTasks.length,
+            invalidTasks: mappedTasks.filter(t => !t.taskTypeId || !t.gradingTaskId)
+          });
+        }
+        
         const createProjectData = {
           ...projectData,
           // If saving as draft, do not submit tasks to backend (tasks should be hidden until project is started)
-          tasks:
-            desiredStatus === "draft"
-              ? []
-              : projectTasks
-                  .map((task) => ({
-                    taskTypeId: task.taskTypeId,
-                    gradingTaskId: task.gradingTaskId,
-                    name: task.name || task.title || "Unnamed Task",
-                    title: task.title || task.name || "Unnamed Task",
-                    description: task.description || "",
-                    instructions: task.instructions || "",
-                    status: task.status || "todo",
-                    priority: task.priority || "B",
-                    estimatedHours: task.estimatedHours || 0,
-                    estimatedCost: task.estimatedCost || 0,
-                    dueDate: task.dueDate,
-                    assigneeId: task.assigneeId,
-                    notes: task.notes || values.notes || "", // Use project notes as default
-                  }))
-                  .filter((task) => task.taskTypeId && task.name), // Filter out tasks without required fields
+          tasks: desiredStatus === "draft" ? [] : validTasks,
         };
 
         await createProject({
@@ -1771,8 +1951,40 @@ const ProjectForm = ({
           />
         )}
 
+      {/* Fly-on-Credit Cost Change Warning */}
+      {isFlyOnCredit && costChanged && (
+        <Alert
+          message="Cost Changed - Cannot Save"
+          description={
+            <div>
+              <p>This project has an approved fly-on-credit request for <strong>₹{(project?.creditRequest?.requestedAmount || 0).toLocaleString()}</strong>.</p>
+              <p>Current total: <strong>₹{(totalCalculatedBudget || calculatedBudget).toLocaleString()}</strong></p>
+              <p style={{ marginBottom: 0 }}>You can edit other information, but cannot change the total cost. Please restore the original grading quantities and rates to save changes.</p>
+            </div>
+          }
+          type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
+      {/* Fly-on-Credit Info Notice */}
+      {isFlyOnCredit && !costChanged && (
+        <Alert
+          message="Fly-on-Credit Project"
+          description={
+            <div>
+              <p style={{ marginBottom: 0 }}>This project has an approved credit request for <strong>₹{(project?.creditRequest?.requestedAmount || 0).toLocaleString()}</strong>. You can edit project details, but the total cost must remain unchanged.</p>
+            </div>
+          }
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
       {/* Active Project Field Restriction Notice */}
-      {isActiveProject && (
+      {isActiveProject && !isFlyOnCredit && (
         <Alert
           message="Active Project - Limited Editing"
           description="This project is active. You can only edit basic details like description, notes, deadline, quantity, and priority. Client, work type, grading, and tasks cannot be modified."
@@ -1835,8 +2047,8 @@ const ProjectForm = ({
                     // Regenerate tasks from existing grading tasks for multiple gradings
                     const initialTasks = gradingTasks
                       .filter(
-                        (gradingTask) => gradingTask && gradingTask.taskType
-                      ) // Filter out invalid grading tasks
+                        (gradingTask) => gradingTask && gradingTask.taskType && gradingTask.isActive === true
+                      ) // Filter out invalid grading tasks and inactive tasks
                       .map((gradingTask) => {
                         let preferredUserId = null;
                         if (
@@ -2012,7 +2224,7 @@ const ProjectForm = ({
               filterOption={filterClients}
               notFoundContent={!clientsData ? "Loading..." : "No clients found"}
               onChange={handleClientSelect}
-              disabled={isActiveProject}
+              disabled={isActiveProject && !canEditFlyOnCreditProject}
               labelRender={(props) => {
                 const client = clientsData?.clients?.find(
                   (c) => c.id === props.value
@@ -2055,7 +2267,7 @@ const ProjectForm = ({
               placeholder="Select work types"
               loading={!workTypesData}
               onChange={(workTypeIds) => handleWorkTypeSelect(workTypeIds)}
-              disabled={isActiveProject}
+              disabled={isActiveProject && !canEditFlyOnCreditProject}
             >
               {(() => {
                 const workTypes = workTypesData?.workTypes || [];
@@ -2403,7 +2615,7 @@ const ProjectForm = ({
                           onChange={(value) =>
                             updateGradingQuantity(index, value || 0)
                           }
-                          disabled={isActiveProject}
+                          disabled={isActiveProject && !canEditFlyOnCreditProject}
                           style={{ width: "100%" }}
                           size="small"
                         />
@@ -2447,7 +2659,7 @@ const ProjectForm = ({
                           onChange={(value) =>
                             updateGradingCustomRate(index, value)
                           }
-                          disabled={isActiveProject}
+                          disabled={isActiveProject && !canEditFlyOnCreditProject}
                           style={{
                             width: "100%",
                             backgroundColor: hasCustomRate

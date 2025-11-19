@@ -28,15 +28,18 @@ export const GET_PROJECTS = gql`
           clientCode
           displayName
         }
-        workType {
+        projectWorkTypes {
           id
-          name
+          workTypeId
+          workType {
+            id
+            name
+          }
+          sequence
         }
-        grading {
+        workTypes {
           id
           name
-          shortCode
-          defaultRate
         }
         projectGradings {
           id
@@ -118,16 +121,20 @@ export const GET_PROJECT = gql`
         email
         contactNoWork
       }
-      workType {
+      projectWorkTypes {
+        id
+        workTypeId
+        workType {
+          id
+          name
+          description
+        }
+        sequence
+      }
+      workTypes {
         id
         name
         description
-      }
-      grading {
-        id
-        name
-        shortCode
-        defaultRate
       }
       projectGradings {
         id
@@ -224,18 +231,35 @@ export const UPDATE_PROJECT = gql`
         id
         clientCode
       }
-      workType {
+      projectWorkTypes {
+        id
+        workTypeId
+        workType {
+          id
+          name
+        }
+        sequence
+      }
+      workTypes {
         id
         name
       }
-      grading {
+      projectGradings {
         id
-        name
-        defaultRate
+        gradingId
+        grading {
+          id
+          name
+        }
+        imageQuantity
+        estimatedCost
+        customRate
       }
       imageQuantity
       estimatedCost
       actualCost
+      totalImageQuantity
+      totalEstimatedCost
       deadlineDate
       status
       priority
@@ -570,6 +594,23 @@ export const GET_CREDIT_REQUEST = gql`
         lastName
         email
       }
+    }
+  }
+`;
+
+// Stats Query
+export const GET_PROJECT_STATS = gql`
+  query GetProjectStats {
+    projectStats {
+      stats {
+        status
+        count
+        totalEstimatedCost
+        totalActualCost
+      }
+      flyOnCreditCount
+      flyOnCreditEstimatedCost
+      flyOnCreditActualCost
     }
   }
 `;

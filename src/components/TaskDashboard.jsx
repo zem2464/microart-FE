@@ -1,5 +1,7 @@
 // Example usage of the enhanced TaskCard with real-time functionality
-import React from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+// Infinite scrolling implementation: loads tasks page-by-page using Apollo fetchMore
+// Removes traditional pagination; sentinel at bottom triggers next page load when visible.
 import { useQuery } from '@apollo/client';
 import { Card, Row, Col, Spin, Alert } from 'antd';
 import TaskCard from './TaskCard';
@@ -7,11 +9,16 @@ import { GET_TASKS } from '../gql/tasks';
 import { GET_AVAILABLE_USERS } from '../graphql/projectQueries';
 
 const TaskDashboard = () => {
-  // Fetch tasks
-  const { data: tasksData, loading: tasksLoading, error: tasksError, refetch } = useQuery(GET_TASKS, {
+  // Local aggregated tasks state for infinite scrolling
+  const [allTasks, setAllTasks] = useState([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [hasNextPage, setHasNextPage] = useState(true);
+  const [isFetchingMore, setIsFetchingMore] = useState(false);
+
+  const { data: tasksData, loading: tasksLoading, error: tasksError, fetchMore } = useQuery(GET_TASKS, {
     variables: {
       page: 1,
-      limit: 10,
+      limit: 25,
       sortBy: 'createdAt',
       sortOrder: 'DESC'
     },
@@ -28,7 +35,69 @@ const TaskDashboard = () => {
     // You can perform additional actions here like analytics tracking
   };
 
-  if (tasksLoading || usersLoading) {
+  // Merge first page
+  useEffect(() => {
+    if (tasksData?.tasks?.tasks) {
+      const newTasks = tasksData.tasks.tasks;
+      setAllTasks(prev => {
+        // Avoid duplicate IDs when refetching
+        const existingIds = new Set(prev.map(t => t.id));
+        const merged = [...prev];
+        newTasks.forEach(t => { if (!existingIds.has(t.id)) merged.push(t); });
+        return merged;
+      });
+      const pg = tasksData.tasks.pagination;
+      if (pg) {
+        setHasNextPage(!!pg.hasNextPage);
+      }
+    }
+  }, [tasksData]);
+
+  const loadMore = useCallback(async () => {
+    if (!hasNextPage || isFetchingMore) return;
+    setIsFetchingMore(true);
+    try {
+      const nextPage = currentPage + 1;
+      const { data } = await fetchMore({
+        variables: { page: nextPage, limit: 25 }
+      });
+      const fetchedTasks = data?.tasks?.tasks || [];
+      setAllTasks(prev => {
+        const existingIds = new Set(prev.map(t => t.id));
+        const merged = [...prev];
+        fetchedTasks.forEach(t => { if (!existingIds.has(t.id)) merged.push(t); });
+        return merged;
+      });
+      const pg = data?.tasks?.pagination;
+      if (pg) {
+        setHasNextPage(!!pg.hasNextPage);
+        setCurrentPage(pg.page);
+      }
+    } catch (e) {
+      // Silently fail; user will see alert if initial load failed
+      // Could add toast here if desired
+    } finally {
+      setIsFetchingMore(false);
+    }
+  }, [fetchMore, hasNextPage, currentPage, isFetchingMore]);
+
+  // IntersectionObserver sentinel
+  const sentinelRef = useRef(null);
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          loadMore();
+        }
+      });
+    }, { root: null, rootMargin: '300px', threshold: 0 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [loadMore]);
+
+  if ((tasksLoading && allTasks.length === 0) || usersLoading) {
     return (
       <div style={{ display: 'flex', justifyContent: 'center', padding: '50px' }}>
         <Spin size="large" />
@@ -47,7 +116,7 @@ const TaskDashboard = () => {
     );
   }
 
-  const tasks = tasksData?.tasks?.tasks || [];
+  const tasks = allTasks;
   const users = usersData?.availableUsers || [];
 
   return (
@@ -55,20 +124,31 @@ const TaskDashboard = () => {
       <h1>Task Dashboard</h1>
       <p>Real-time collaborative task management with live comments and updates</p>
       
-      <Row gutter={[16, 16]}>
-        {tasks.map((task) => (
-          <Col xs={24} sm={12} md={8} lg={6} key={task.id}>
-            <TaskCard
-              task={task}
-              availableUsers={users}
-              onTaskUpdate={handleTaskUpdate}
-              layout="grid"
-              // Real-time subscriptions are automatically enabled
-              // The TaskCard will show live updates and comments
-            />
-          </Col>
-        ))}
-      </Row>
+      <div style={{ maxHeight: '70vh', overflowY: 'auto', paddingRight: 8 }}>
+        <Row gutter={[16, 16]}>
+          {tasks.map((task) => (
+            <Col xs={24} sm={12} md={8} lg={6} key={task.id}>
+              <TaskCard
+                task={task}
+                availableUsers={users}
+                onTaskUpdate={handleTaskUpdate}
+                layout="grid"
+              />
+            </Col>
+          ))}
+        </Row>
+        {/* Sentinel for infinite scrolling */}
+        {hasNextPage && (
+          <div ref={sentinelRef} style={{ padding: '24px 0', textAlign: 'center' }}>
+            <Spin spinning={isFetchingMore} />
+          </div>
+        )}
+        {!hasNextPage && tasks.length > 0 && (
+          <div style={{ padding: '12px 0', textAlign: 'center', fontSize: 12, color: '#888' }}>
+            End of task list
+          </div>
+        )}
+      </div>
 
       {tasks.length === 0 && (
         <Card style={{ textAlign: 'center', marginTop: '50px' }}>

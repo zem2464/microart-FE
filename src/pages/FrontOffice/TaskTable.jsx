@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from "react";
+import React, { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import {
   Table,
   Card,
@@ -34,13 +34,14 @@ import {
   DownOutlined,
   CloseOutlined,
 } from "@ant-design/icons";
-import { useQuery, useMutation } from "@apollo/client";
+import { useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import { GET_TASKS, UPDATE_TASK, BULK_UPDATE_TASK_STATUS } from "../../gql/tasks";
 import { GET_AVAILABLE_USERS } from "../../graphql/projectQueries";
 import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import TaskCard from "../../components/TaskCard";
+import { userCacheVar } from "../../cache/userCacheVar";
 
 dayjs.extend(relativeTime);
 
@@ -66,13 +67,18 @@ const PRIORITY_COLORS = {
 };
 
 const TaskTable = () => {
+  const currentUser = useReactiveVar(userCacheVar);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("active"); // Default to 'active' to hide completed
   const [userFilter, setUserFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [worktypeFilter, setWorktypeFilter] = useState("all");
   const [gradingFilter, setGradingFilter] = useState("all");
-  const [pagination, setPagination] = useState({ current: 1, pageSize: 50 });
+  // Infinite scroll state (same pattern as ProjectManagement)
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const scrollContainerRef = useRef(null);
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState("DESC");
   const [editingKey, setEditingKey] = useState("");
@@ -100,7 +106,13 @@ const TaskTable = () => {
     }
     
     if (userFilter && userFilter !== "all") {
-      filters.assigneeId = userFilter;
+      if (userFilter === "assignedToMe") {
+        filters.assigneeId = currentUser?.id;
+      } else if (userFilter === "unassigned") {
+        filters.assigneeId = null;
+      } else {
+        filters.assigneeId = userFilter;
+      }
     }
     
     if (priorityFilter && priorityFilter !== "all") {
@@ -119,16 +131,17 @@ const TaskTable = () => {
   }, [statusFilter, userFilter, priorityFilter, worktypeFilter, gradingFilter]);
 
   // Fetch tasks with server-side filtering, pagination and sorting
-  const { data: tasksData, loading: tasksLoading, refetch: refetchTasks } = useQuery(GET_TASKS, {
+  const { data: tasksData, loading: tasksLoading, refetch: refetchTasks, fetchMore } = useQuery(GET_TASKS, {
     variables: {
       filters: buildFilters(),
-      page: pagination.current,
-      limit: pagination.pageSize,
+      page: 1,
+      limit: 20,
       sortBy: sortBy,
       sortOrder: sortOrder,
       search: searchText || undefined,
     },
     fetchPolicy: "cache-and-network",
+    notifyOnNetworkStatusChange: true,
   });
 
   // Fetch users
@@ -165,22 +178,83 @@ const TaskTable = () => {
     },
   });
 
-  const tasks = tasksData?.tasks?.tasks || [];
-  const totalTasks = tasksData?.tasks?.pagination?.totalItems || 0;
+  // Normalize tasks array from GraphQL response
+  const allTasks = tasksData?.tasks?.tasks || [];
+
+  // Check if there are more items to load (same as ProjectManagement)
+  useEffect(() => {
+    if (tasksData?.tasks?.pagination) {
+      const { page: currentPage, totalPages } = tasksData.tasks.pagination;
+      setHasMore(currentPage < totalPages);
+    }
+  }, [tasksData]);
+
+  // Load more data for infinite scroll (same pattern as ProjectManagement)
+  const loadMore = async () => {
+    if (isLoadingMore || !hasMore || tasksLoading) return;
+
+    setIsLoadingMore(true);
+    try {
+      await fetchMore({
+        variables: {
+          filters: buildFilters(),
+          page: page + 1,
+          limit: 20,
+          sortBy: sortBy,
+          sortOrder: sortOrder,
+          search: searchText || undefined,
+        },
+        updateQuery: (prev, { fetchMoreResult }) => {
+          if (!fetchMoreResult) return prev;
+
+          const prevTasks = prev?.tasks?.tasks || [];
+          const newTasks = fetchMoreResult?.tasks?.tasks || [];
+
+          return {
+            ...fetchMoreResult,
+            tasks: {
+              ...fetchMoreResult.tasks,
+              tasks: [...prevTasks, ...newTasks],
+            },
+          };
+        },
+      });
+      setPage(page + 1);
+    } catch (error) {
+      console.error("Error loading more tasks:", error);
+      message.error("Failed to load more tasks");
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
+
+  // Handle scroll event for infinite scroll (same as ProjectManagement)
+  const handleScroll = (e) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.target;
+    // Trigger load more when scrolled to 80% of the content
+    if (scrollHeight - scrollTop <= clientHeight * 1.2) {
+      loadMore();
+    }
+  };
+
+  const tasks = allTasks;
+  const totalTasks = tasks.length; // aggregated count for stats
   const users = usersData?.availableUsers || [];
   const worktypes = worktypesData?.workTypes || [];
 
-  // Reset to page 1 when filters change
+  // Reset page when filters / search / sorting changes
   useEffect(() => {
-    if (pagination.current !== 1) {
-      setPagination(prev => ({ ...prev, current: 1 }));
-    }
-  }, [statusFilter, userFilter, priorityFilter, worktypeFilter, gradingFilter, searchText]);
-
-  // Refetch tasks when filters, search, pagination or sorting changes
-  useEffect(() => {
-    refetchTasks();
-  }, [searchText, statusFilter, userFilter, priorityFilter, worktypeFilter, gradingFilter, pagination.current, pagination.pageSize, sortBy, sortOrder, refetchTasks]);
+    setPage(1);
+    refetchTasks({
+      filters: buildFilters(),
+      page: 1,
+      limit: 20,
+      sortBy: sortBy,
+      sortOrder: sortOrder,
+      search: searchText || undefined,
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [statusFilter, userFilter, priorityFilter, worktypeFilter, gradingFilter, searchText, sortBy, sortOrder]);
 
   // Group tasks by project and grading
   const groupedTasks = useMemo(() => {
@@ -774,6 +848,8 @@ const TaskTable = () => {
                 }
               >
                 <Option value="all">All Users</Option>
+                <Option value="assignedToMe">Assigned to Me</Option>
+                <Option value="unassigned">Unassigned Tasks</Option>
                 {users.map(user => (
                   <Option key={user.id} value={user.id}>
                     {user.firstName} {user.lastName}
@@ -801,24 +877,20 @@ const TaskTable = () => {
           </Row>
         </Card>
 
-        {/* Tasks Table */}
-        <Card>
+        {/* Tasks Table - Throttled Infinite Scroll */}
+        <Card
+          extra={hasMore ? (
+            <Text type="secondary">Scroll to load more</Text>
+          ) : (
+            <Text type="secondary">End of list</Text>
+          )}
+        >
+        <div ref={scrollContainerRef} onScroll={handleScroll} style={{ maxHeight: 'calc(100vh - 330px)', overflowY: 'auto', paddingRight: 8 }}>
         <Table
           columns={columns}
           dataSource={filteredData}
-          loading={tasksLoading}
-          pagination={{
-            current: pagination.current,
-            pageSize: pagination.pageSize,
-            total: totalTasks,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} tasks (${filteredData.length} gradings on this page)`,
-            onChange: (page, pageSize) => {
-              setPagination({ current: page, pageSize });
-            },
-            pageSizeOptions: ['10', '25', '50', '100', '200'],
-          }}
+          loading={tasksLoading && tasks.length === 0}
+          pagination={false}
           onChange={(pagination, filters, sorter) => {
             // Handle sorting changes
             if (sorter.field && sorter.order) {
@@ -1093,6 +1165,17 @@ const TaskTable = () => {
             rowExpandable: (record) => record.tasks && record.tasks.length > 0,
           }}
         />
+        {isLoadingMore && (
+          <div style={{ padding: '12px 0', textAlign: 'center' }}>
+            <Text type="secondary">Loading more tasks...</Text>
+          </div>
+        )}
+        {!hasMore && tasks.length > 0 && (
+          <div style={{ padding: '8px 0', textAlign: 'center', fontSize: 12, color: '#888' }}>
+            End of task list
+          </div>
+        )}
+        </div>
         </Card>
       </div>
 

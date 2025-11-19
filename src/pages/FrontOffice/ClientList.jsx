@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Card,
   Button,
@@ -32,7 +32,12 @@ import {
   SearchOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation } from "@apollo/client";
-import { GET_CLIENTS, DELETE_CLIENT, UPDATE_CLIENT } from "../../gql/clients";
+import {
+  GET_CLIENTS,
+  GET_CLIENT_STATS,
+  DELETE_CLIENT,
+  UPDATE_CLIENT,
+} from "../../gql/clients";
 import CommonTable from "../../components/common/CommonTable";
 import { useAppDrawer } from "../../contexts/DrawerContext";
 
@@ -71,6 +76,17 @@ const ClientList = () => {
     notifyOnNetworkStatusChange: true,
   });
 
+  // Fetch server-side stats for accurate counts
+  const { data: statsData, loading: statsLoading } = useQuery(
+    GET_CLIENT_STATS,
+    {
+      variables: {
+        filters: filters,
+      },
+      fetchPolicy: "cache-and-network",
+    }
+  );
+
   const [deleteClient] = useMutation(DELETE_CLIENT, {
     onCompleted: () => {
       message.success("Client deleted successfully");
@@ -101,21 +117,25 @@ const ClientList = () => {
   }, [totalCount, pageSize, page]);
 
   // Load more data for infinite scroll
-  const loadMore = async () => {
+  const loadMore = useCallback(async () => {
     if (isLoadingMore || !hasMore || loading) return;
 
     setIsLoadingMore(true);
     try {
       await fetchMore({
         variables: {
+          filters,
           page: page + 1,
+          limit: pageSize,
+          sortBy: sorter.field,
+          sortOrder: sorter.order,
         },
         updateQuery: (prev, { fetchMoreResult }) => {
           if (!fetchMoreResult) return prev;
-          
+
           const prevClients = prev?.clients || [];
           const newClients = fetchMoreResult?.clients || [];
-          
+
           return {
             ...fetchMoreResult,
             clients: [...prevClients, ...newClients],
@@ -130,16 +150,24 @@ const ClientList = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  };
+  }, [isLoadingMore, hasMore, loading, fetchMore, page, filters, pageSize, sorter]);
 
-  // Handle scroll event for infinite scroll
-  const handleScroll = (e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
+  // Handle scroll event for infinite scroll (window-level)
+  const handleScroll = useCallback(() => {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight;
+    const clientHeight = window.innerHeight;
     // Trigger load more when scrolled to 80% of the content
     if (scrollHeight - scrollTop <= clientHeight * 1.2) {
       loadMore();
     }
-  };
+  }, [loadMore]);
+
+  // Attach window scroll listener
+  React.useEffect(() => {
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
 
   // Filter clients based on search and status
   const filteredClients = useMemo(() => {
@@ -592,6 +620,7 @@ const ClientList = () => {
           { text: "No Credit Limit", value: "noLimit" },
           { text: "Over Limit", value: "overLimit" },
         ],
+        filterMultiple: true,
         onFilter: (value, record) => {
           const limit = parseFloat(record.creditAmountLimit || 0);
           const currentBalance = parseFloat(record.totalBalance || 0);
@@ -649,13 +678,11 @@ const ClientList = () => {
           );
         },
         filters: [
-          { text: "A - High Priority", value: "HIGH" },
-          { text: "A - High Priority", value: "A" },
-          { text: "B - Medium Priority", value: "MEDIUM" },
-          { text: "B - Medium Priority", value: "B" },
-          { text: "C - Low Priority", value: "LOW" },
-          { text: "C - Low Priority", value: "C" },
+          { text: "High Priority (A)", value: "A" },
+          { text: "Medium Priority (B)", value: "B" },
+          { text: "Low Priority (C)", value: "C" },
         ],
+        filterMultiple: false,
         onFilter: (value, record) => {
           const recordPriority = record.priority?.toUpperCase();
           const filterValue = value?.toUpperCase();
@@ -824,13 +851,62 @@ const ClientList = () => {
     setPage(1);
   }, []);
 
-  // Summary statistics
+  // Summary statistics from server-side query
   const summaryStats = useMemo(() => {
+    // Use server-side stats if available, otherwise calculate from filtered clients
+    if (statsData?.clientsSummary) {
+      const serverStats = statsData.clientsSummary;
+
+      // Calculate financial stats from filtered clients (these are client-specific)
+      const totalCreditBalance = filteredClients.reduce((sum, client) => {
+        const balance = parseFloat(client.totalBalance || 0);
+        return sum + (balance > 0 ? balance : 0);
+      }, 0);
+
+      const totalAmountDue = filteredClients.reduce((sum, client) => {
+        const balance = parseFloat(client.totalBalance || 0);
+        return sum + (balance < 0 ? Math.abs(balance) : 0);
+      }, 0);
+
+      const totalCreditLimits = filteredClients.reduce((sum, client) => {
+        const limit = parseFloat(client.creditAmountLimit || 0);
+        return sum + limit;
+      }, 0);
+
+      const clientsWithCreditLimit = filteredClients.filter(
+        (c) => parseFloat(c.creditAmountLimit || 0) > 0
+      ).length;
+      const clientsOverLimit = filteredClients.filter((c) => {
+        const limit = parseFloat(c.creditAmountLimit || 0);
+        const balance = parseFloat(c.totalBalance || 0);
+        return limit > 0 && limit + balance < 0;
+      }).length;
+
+      const clientsWithCredit = filteredClients.filter(
+        (c) => parseFloat(c.totalBalance || 0) > 0
+      ).length;
+      const clientsWithDue = filteredClients.filter(
+        (c) => parseFloat(c.totalBalance || 0) < 0
+      ).length;
+
+      return {
+        total: serverStats.totalClients || 0,
+        active: serverStats.activeClients || 0,
+        totalCreditBalance,
+        totalAmountDue,
+        totalCreditLimits,
+        clientsWithCreditLimit,
+        clientsOverLimit,
+        clientsWithCredit,
+        clientsWithDue,
+      };
+    }
+
+    // Fallback: calculate from filtered clients
     const activeClients = filteredClients.filter(
       (c) => c.isActive === true
     ).length;
 
-    // Calculate current balances
     const totalCreditBalance = filteredClients.reduce((sum, client) => {
       const balance = parseFloat(client.totalBalance || 0);
       return sum + (balance > 0 ? balance : 0);
@@ -841,7 +917,6 @@ const ClientList = () => {
       return sum + (balance < 0 ? Math.abs(balance) : 0);
     }, 0);
 
-    // Calculate credit limits
     const totalCreditLimits = filteredClients.reduce((sum, client) => {
       const limit = parseFloat(client.creditAmountLimit || 0);
       return sum + limit;
@@ -874,7 +949,7 @@ const ClientList = () => {
       clientsWithCredit,
       clientsWithDue,
     };
-  }, [filteredClients]);
+  }, [statsData, filteredClients]);
 
   // Memoize scroll config
   const scrollConfig = useMemo(() => ({ x: 1200 }), []);
@@ -888,14 +963,23 @@ const ClientList = () => {
         sorterConfig,
       });
 
-      // Update filters
-      const newFilters = { ...filters };
+      // Update filters - backend expects single values, not arrays
+      const newFilters = {};
 
-      // Handle clientType filter
-      if (filtersConfig.clientType) {
+      // Handle clientType filter (single value)
+      if (filtersConfig.clientType && filtersConfig.clientType.length > 0) {
         newFilters.clientType = filtersConfig.clientType[0];
-      } else {
-        delete newFilters.clientType;
+      }
+
+      // Handle priority filter (single value) - backend expects String not array
+      if (filtersConfig.priority && filtersConfig.priority.length > 0) {
+        newFilters.priority = filtersConfig.priority[0];
+      }
+
+      // Note: creditLimit filter is client-side only (not sent to backend)
+      // Store it for potential future use
+      if (filtersConfig.creditLimit && filtersConfig.creditLimit.length > 0) {
+        // This filter is handled client-side via onFilter in column definition
       }
 
       setFilters(newFilters);
@@ -910,7 +994,7 @@ const ClientList = () => {
         setSorter({ field: "createdAt", order: "DESC" });
       }
     },
-    [filters]
+    []
   );
 
   return (
@@ -1043,35 +1127,27 @@ const ClientList = () => {
 
       {/* Main Table */}
       <Card>
-        <div 
-          style={{ 
-            maxHeight: 'calc(100vh - 350px)', 
-            overflowY: 'auto' 
-          }}
-          onScroll={handleScroll}
-        >
-          <CommonTable
-            className="client-table"
-            columns={columns}
-            dataSource={filteredClients}
-            loading={loading && !isLoadingMore}
-            pagination={false}
-            onChange={handleTableChange}
-            scroll={scrollConfig}
-            size="small"
-            showHeader={false}
-          />
-          {isLoadingMore && (
-            <div style={{ textAlign: 'center', padding: '16px' }}>
-              <Text type="secondary">Loading more clients...</Text>
-            </div>
-          )}
-          {!hasMore && filteredClients.length > 0 && (
-            <div style={{ textAlign: 'center', padding: '16px' }}>
-              <Text type="secondary">No more clients to load</Text>
-            </div>
-          )}
-        </div>
+        <CommonTable
+          className="client-table"
+          columns={columns}
+          dataSource={filteredClients}
+          loading={loading && !isLoadingMore}
+          pagination={false}
+          onChange={handleTableChange}
+          scroll={{ x: 1200 }}
+          size="small"
+          showHeader={false}
+        />
+        {isLoadingMore && (
+          <div style={{ textAlign: "center", padding: "16px" }}>
+            <Text type="secondary">Loading more clients...</Text>
+          </div>
+        )}
+        {!hasMore && filteredClients.length > 0 && (
+          <div style={{ textAlign: "center", padding: "16px" }}>
+            <Text type="secondary">No more clients to load</Text>
+          </div>
+        )}
       </Card>
     </div>
   );
