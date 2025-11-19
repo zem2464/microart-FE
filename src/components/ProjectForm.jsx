@@ -343,7 +343,7 @@ const ProjectForm = ({
     if (isNumericSearch) {
       // Search only in clientCode number part (e.g., "CL-123" -> "123")
       const clientCodeNumber = client.clientCode?.split("-")[1] || "";
-      return clientCodeNumber.includes(trimmedInput);
+      return clientCodeNumber == trimmedInput;
     } else {
       // Search in all text fields
       const searchText = getClientSearchText(client);
@@ -683,6 +683,9 @@ const ProjectForm = ({
           currentStatus === "active" ||
           (mode === "edit" && isActiveProject)
         ) {
+          // Get project deadline from form
+          const projectDeadline = form.getFieldValue('deadlineDate');
+          
           // Initialize project tasks with enhanced structure and preferred users
           const initialTasks = activeGradingTasks.map((gradingTask) => {
             // Find preferred user for this task type from client preferences
@@ -718,7 +721,7 @@ const ProjectForm = ({
               actualHours: 0,
               estimatedCost: gradingTask.employeeRate || 0,
               startDate: null,
-              dueDate: null,
+              dueDate: projectDeadline ? projectDeadline.toISOString() : null,
               dependencies: [],
               blockedBy: [],
               comments: [],
@@ -828,6 +831,9 @@ const ProjectForm = ({
               currentStatus === "active" ||
               (mode === "edit" && isActiveProject)
             ) {
+              // Get project deadline from form
+              const projectDeadline = form.getFieldValue('deadlineDate');
+              
               const initialTasks = activeGradingTasks.map((gradingTask) => {
                 let preferredUserId = null;
                 if (
@@ -867,7 +873,7 @@ const ProjectForm = ({
                   priority: gradingTask.priority || "B",
                   estimatedHours: gradingTask.estimatedHours || 0,
                   estimatedCost: gradingTask.estimatedCost || 0,
-                  dueDate: null,
+                  dueDate: projectDeadline ? projectDeadline.toISOString() : null,
                   assigneeId: preferredUserId,
                   notes: "",
                   taskType: gradingTask.taskType,
@@ -914,6 +920,9 @@ const ProjectForm = ({
           currentStatus === "active" ||
           (mode === "edit" && isActiveProject)
         ) {
+          // Get project deadline from form
+          const projectDeadline = form.getFieldValue('deadlineDate');
+          
           const initialTasks = allGradingTasks.map((gradingTask) => {
             let preferredUserId = null;
             if (clientPreferences?.taskPreferences && gradingTask?.taskType) {
@@ -950,7 +959,7 @@ const ProjectForm = ({
               priority: gradingTask.priority || "B",
               estimatedHours: gradingTask.estimatedHours || 0,
               estimatedCost: gradingTask.estimatedCost || 0,
-              dueDate: null,
+              dueDate: projectDeadline ? projectDeadline.toISOString() : null,
               assigneeId: preferredUserId,
               notes: "",
               taskType: gradingTask.taskType,
@@ -1026,6 +1035,9 @@ const ProjectForm = ({
           currentStatus === "active" ||
           (mode === "edit" && isActiveProject)
         ) {
+          // Get project deadline from form
+          const projectDeadline = form.getFieldValue('deadlineDate');
+          
           // Create initial project tasks from grading tasks
           const initialTasks = activeGradingTasks.map((gradingTask) => {
             let preferredUserId = null;
@@ -1059,7 +1071,7 @@ const ProjectForm = ({
               actualHours: 0,
               estimatedCost: gradingTask.employeeRate || 0,
               startDate: null,
-              dueDate: null,
+              dueDate: projectDeadline ? projectDeadline.toISOString() : null,
               dependencies: [],
               blockedBy: [],
               comments: [],
@@ -1414,7 +1426,7 @@ const ProjectForm = ({
 
         // Get work types from projectWorkTypes junction table
         const workTypeIds = project.projectWorkTypes && project.projectWorkTypes.length > 0
-            ? project.projectWorkTypes
+            ? [...project.projectWorkTypes]
                 .sort((a, b) => a.sequence - b.sequence) // Sort by sequence
                 .map((pwt) => pwt.workTypeId)
             : project.workTypes && project.workTypes.length > 0
