@@ -2443,7 +2443,7 @@ const ProjectForm = ({
                           }
                           value={selectedGrading.customRate}
                           min={0}
-                          precision={2}
+                          // precision={2}
                           onChange={(value) =>
                             updateGradingCustomRate(index, value)
                           }
