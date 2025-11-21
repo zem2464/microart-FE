@@ -1414,9 +1414,9 @@ const ProjectForm = ({
 
         // Get work types from projectWorkTypes junction table
         const workTypeIds = project.projectWorkTypes && project.projectWorkTypes.length > 0
-            ? project.projectWorkTypes
-                .sort((a, b) => a.sequence - b.sequence) // Sort by sequence
-                .map((pwt) => pwt.workTypeId)
+          ? [...project.projectWorkTypes]
+            .sort((a, b) => a.sequence - b.sequence) // Sort by sequence (operate on a copy)
+            .map((pwt) => pwt.workTypeId)
             : project.workTypes && project.workTypes.length > 0
             ? project.workTypes.map((wt) => wt.id)
             : [];
@@ -2615,7 +2615,10 @@ const ProjectForm = ({
                           onChange={(value) =>
                             updateGradingQuantity(index, value || 0)
                           }
-                          disabled={isActiveProject && !canEditFlyOnCreditProject}
+                          // Allow editing quantity when updating a project (edit mode).
+                          // Preserve original restriction for other modes: disable only
+                          // when project is active and not eligible for fly-on-credit edits.
+                          disabled={mode !== 'edit' && isActiveProject && !canEditFlyOnCreditProject}
                           style={{ width: "100%" }}
                           size="small"
                         />
