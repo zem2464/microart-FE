@@ -723,19 +723,6 @@ const TaskTable = () => {
       },
       sorter: true,
     },
-    {
-      title: "Priority",
-      key: "priority",
-      width: 100,
-      render: (_, record) => (
-        <div style={{ pointerEvents: 'none', userSelect: 'none' }}>
-          <Tag color={PRIORITY_COLORS[record.priority] || "default"}>
-            {record.priority === 'A' ? 'High' : record.priority === 'B' ? 'Medium' : record.priority === 'C' ? 'Low' : record.priority}
-          </Tag>
-        </div>
-      ),
-      sorter: true,
-    },
   ];
 
   return (
@@ -953,14 +940,109 @@ const TaskTable = () => {
                   dataIndex: "status",
                   key: "status",
                   width: 130,
-                  render: (status) => {
+                  render: (status, task) => {
+                    const isEditing = editingTaskId === task.id && editingTaskField === 'status';
+                    
+                    if (isEditing) {
+                      return (
+                        <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                          <Select
+                            style={{ width: "100%" }}
+                            placeholder="Select status"
+                            value={taskEditData.status}
+                            onChange={(value) => setTaskEditData({ ...taskEditData, status: value })}
+                            size="small"
+                          >
+                            <Option value="todo">
+                              <Tag color={TASK_STATUS.TODO.color} icon={TASK_STATUS.TODO.icon}>
+                                {TASK_STATUS.TODO.label}
+                              </Tag>
+                            </Option>
+                            <Option value="in_progress">
+                              <Tag color={TASK_STATUS.IN_PROGRESS.color} icon={TASK_STATUS.IN_PROGRESS.icon}>
+                                {TASK_STATUS.IN_PROGRESS.label}
+                              </Tag>
+                            </Option>
+                            <Option value="review">
+                              <Tag color={TASK_STATUS.REVIEW.color} icon={TASK_STATUS.REVIEW.icon}>
+                                {TASK_STATUS.REVIEW.label}
+                              </Tag>
+                            </Option>
+                            <Option value="revision">
+                              <Tag color={TASK_STATUS.REVISION.color} icon={TASK_STATUS.REVISION.icon}>
+                                {TASK_STATUS.REVISION.label}
+                              </Tag>
+                            </Option>
+                            <Option value="completed">
+                              <Tag color={TASK_STATUS.COMPLETED.color} icon={TASK_STATUS.COMPLETED.icon}>
+                                {TASK_STATUS.COMPLETED.label}
+                              </Tag>
+                            </Option>
+                            <Option value="cancelled">
+                              <Tag color={TASK_STATUS.CANCELLED.color} icon={TASK_STATUS.CANCELLED.icon}>
+                                {TASK_STATUS.CANCELLED.label}
+                              </Tag>
+                            </Option>
+                            <Option value="on_hold">
+                              <Tag color={TASK_STATUS.ON_HOLD.color} icon={TASK_STATUS.ON_HOLD.icon}>
+                                {TASK_STATUS.ON_HOLD.label}
+                              </Tag>
+                            </Option>
+                          </Select>
+                          <Space size="small">
+                            <Button 
+                              type="primary" 
+                              size="small" 
+                              onClick={async () => {
+                                try {
+                                  await updateTask({
+                                    variables: {
+                                      id: task.id,
+                                      input: { status: taskEditData.status },
+                                    },
+                                  });
+                                  setEditingTaskId(null);
+                                  setEditingTaskField(null);
+                                  setTaskEditData({});
+                                } catch (error) {
+                                  console.error('Error updating task:', error);
+                                }
+                              }}
+                            >
+                              Save
+                            </Button>
+                            <Button 
+                              size="small" 
+                              onClick={() => {
+                                setEditingTaskId(null);
+                                setEditingTaskField(null);
+                                setTaskEditData({});
+                              }}
+                            >
+                              Cancel
+                            </Button>
+                          </Space>
+                        </Space>
+                      );
+                    }
+                    
                     const statusKey = (status || "TODO").toUpperCase();
                     const config = TASK_STATUS[statusKey];
                     if (!config) return <Tag>{status}</Tag>;
+                    
                     return (
-                      <Tag color={config.color} icon={config.icon}>
-                        {config.label}
-                      </Tag>
+                      <div 
+                        onClick={() => {
+                          setEditingTaskId(task.id);
+                          setEditingTaskField('status');
+                          setTaskEditData({ status: status || 'todo' });
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <Tag color={config.color} icon={config.icon}>
+                          {config.label}
+                        </Tag>
+                      </div>
                     );
                   },
                 },
