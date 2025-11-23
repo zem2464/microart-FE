@@ -60,6 +60,15 @@ export const TASK_FRAGMENT = gql`
         id
         name
       }
+      projectWorkTypes {
+        id
+        workTypeId
+        sequence
+        workType {
+          id
+          name
+        }
+      }
     }
     
     taskType {
@@ -329,6 +338,20 @@ export const TASK_STATUS_CHANGED_SUBSCRIPTION = gql`
     }
   }
   ${TASK_FRAGMENT}
+`;
+
+export const GET_TASKS_DASHBOARD = gql`
+  query GetTasksDashboard {
+    tasksDashboard {
+      totalTasks
+      totalProjects
+      todoTasks
+      inProgressTasks
+      reviewTasks
+      completedTasks
+      overdueTasks
+    }
+  }
 `;
 
 // Helper function to create task update input
