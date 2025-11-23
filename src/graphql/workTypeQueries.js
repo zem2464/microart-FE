@@ -14,6 +14,9 @@ export const GET_WORK_TYPES = gql`
         description
         color
         icon
+        WorkTypeTask {
+          order
+        }
       }
       createdAt
       updatedAt

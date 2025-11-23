@@ -188,8 +188,8 @@ const TaskTable = () => {
   });
 
   // Fetch all worktypes for tabs
-  const { data: worktypesData } = useQuery(GET_WORK_TYPES, {
-    fetchPolicy: "cache-first",
+  const { data: worktypesData, refetch: refetchWorkTypes } = useQuery(GET_WORK_TYPES, {
+    fetchPolicy: "cache-and-network",
   });
 
   // Fetch dashboard stats
@@ -677,7 +677,13 @@ const TaskTable = () => {
     const worktypeConfig = worktypes.find(
       (wt) => String(wt.id) === String(workTypeId)
     );
-    const taskTypes = worktypeConfig?.taskTypes || [];
+    // Sort task types by the order field from WorkTypeTask junction table
+    // Create a copy of the array before sorting to avoid mutating the cached data
+    const taskTypes = [...(worktypeConfig?.taskTypes || [])].sort((a, b) => {
+      const orderA = a.WorkTypeTask?.order ?? 0;
+      const orderB = b.WorkTypeTask?.order ?? 0;
+      return orderA - orderB;
+    });
     console.log("taskTypes", taskTypes);
     if (!actualData || taskTypes.length === 0) return [];
 
@@ -1250,7 +1256,10 @@ const TaskTable = () => {
             <Col span={1} style={{ textAlign: "right", paddingTop: 20 }}>
               <Button
                 icon={<ReloadOutlined />}
-                onClick={() => refetchTasks()}
+                onClick={() => {
+                  refetchTasks();
+                  refetchWorkTypes();
+                }}
               />
             </Col>
           </Row>
