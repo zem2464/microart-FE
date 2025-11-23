@@ -202,7 +202,10 @@ const TaskTable = () => {
     GET_GRADINGS_BY_WORK_TYPE,
     {
       variables: {
-        workTypeIds: selectedWorkTypeId && selectedWorkTypeId !== "all" ? [selectedWorkTypeId] : [],
+        workTypeIds:
+          selectedWorkTypeId && selectedWorkTypeId !== "all"
+            ? [selectedWorkTypeId]
+            : [],
       },
       skip: !selectedWorkTypeId || selectedWorkTypeId === "all",
       fetchPolicy: "cache-and-network",
@@ -241,7 +244,17 @@ const TaskTable = () => {
   // Refetch tasks when filters change
   useEffect(() => {
     refetchTasks();
-  }, [statusFilter, userFilter, priorityFilter, selectedWorkTypeId, gradingFilter, searchText, sortBy, sortOrder, refetchTasks]);
+  }, [
+    statusFilter,
+    userFilter,
+    priorityFilter,
+    selectedWorkTypeId,
+    gradingFilter,
+    searchText,
+    sortBy,
+    sortOrder,
+    refetchTasks,
+  ]);
 
   // Reset grading filter when worktype changes
   useEffect(() => {
@@ -408,12 +421,11 @@ const TaskTable = () => {
     Object.entries(groupedByWorkType).forEach(([workTypeId, workTypeData]) => {
       const rows = [];
 
-      // Get sorted task types for this worktype (for column order)
-      const taskTypes = Object.values(workTypeData.taskTypes).sort((a, b) => {
-        const orderA = a.sortOrder || a.order || 0;
-        const orderB = b.sortOrder || b.order || 0;
-        return orderA - orderB;
-      });
+      // Get task types from worktype configuration (already ordered by backend)
+      const worktypeConfig = worktypes.find(
+        (wt) => String(wt.id) === String(workTypeId)
+      );
+      const taskTypes = worktypeConfig?.taskTypes || [];
 
       // Create a row for each project - if project has multiple gradings, create multiple rows
       Object.values(workTypeData.projects).forEach((projectData) => {
@@ -449,9 +461,34 @@ const TaskTable = () => {
         const progress =
           totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-        const gradings = project.projectGradings || [];
+        // Filter project gradings to only include those belonging to the selected worktype
+        const allGradings = project.projectGradings || [];
+        console.log(
+          `Project ${project.projectCode} has ${allGradings.length} total gradings:`,
+          allGradings.map((pg) => ({
+            name: pg.grading?.name,
+            workTypeId: pg.grading?.workType?.id,
+            workTypeName: pg.grading?.workType?.name,
+          }))
+        );
 
-        // If project has gradings, create a row for each grading
+        const gradings = allGradings.filter((pg) => {
+          const gradingWorkTypeId = pg.grading?.workType?.id;
+          const matches =
+            gradingWorkTypeId &&
+            String(gradingWorkTypeId) === String(workTypeId);
+          console.log(
+            `  Grading ${pg.grading?.name}: workTypeId=${gradingWorkTypeId}, currentTab=${workTypeId}, matches=${matches}`
+          );
+          // Convert both to strings for comparison since workTypeId from tabs is a string
+          return matches;
+        });
+
+        console.log(
+          `After filtering for worktype ${workTypeId}: ${gradings.length} gradings`
+        );
+
+        // If project has gradings for this worktype, create a row for each grading
         if (gradings.length > 0) {
           gradings.forEach((grading, idx) => {
             rows.push({
@@ -634,18 +671,14 @@ const TaskTable = () => {
   const generateColumnsForWorkType = (workTypeId) => {
     // Get row data from tableDataByWorkType (filtered by grading)
     const actualData = tableDataByWorkType[workTypeId];
-    
-    // Get task types from groupedByWorkType (NOT filtered - contains all task types for worktype)
-    // This ensures columns remain consistent regardless of grading filter
-    const allWorktypeData = groupedByWorkType[workTypeId];
-    const taskTypes = allWorktypeData?.taskTypes 
-      ? Object.values(allWorktypeData.taskTypes).sort((a, b) => {
-          const orderA = a.sortOrder || a.order || 0;
-          const orderB = b.sortOrder || b.order || 0;
-          return orderA - orderB;
-        })
-      : [];
-    
+
+    // Get task types from the worktype configuration (from GET_WORK_TYPES)
+    // This ensures we use the proper sequence defined in the worktype
+    const worktypeConfig = worktypes.find(
+      (wt) => String(wt.id) === String(workTypeId)
+    );
+    const taskTypes = worktypeConfig?.taskTypes || [];
+    console.log("taskTypes", taskTypes);
     if (!actualData || taskTypes.length === 0) return [];
 
     const baseColumns = [
@@ -1066,9 +1099,7 @@ const TaskTable = () => {
                   </Tag>
                 </Space>
                 <Space size={4}>
-                  <SyncOutlined
-                    style={{ fontSize: 16, color: "#1890ff" }}
-                  />
+                  <SyncOutlined style={{ fontSize: 16, color: "#1890ff" }} />
                   <Text strong style={{ fontSize: 14 }}>
                     In Progress:
                   </Text>

@@ -46,6 +46,10 @@ export const TASK_FRAGMENT = gql`
           id
           name
           shortCode
+          workType {
+            id
+            name
+          }
         }
       }
       client {

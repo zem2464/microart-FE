@@ -12,6 +12,8 @@ export const GET_WORK_TYPES = gql`
         id
         name
         description
+        color
+        icon
       }
       createdAt
       updatedAt
