@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   Modal,
   Tabs,
@@ -26,8 +26,8 @@ import {
   Form,
   InputNumber,
   message,
-  Alert
-} from 'antd';
+  Alert,
+} from "antd";
 import {
   UserOutlined,
   EditOutlined,
@@ -46,15 +46,15 @@ import {
   FilterOutlined,
   ReloadOutlined,
   PlusOutlined,
-  ExclamationCircleOutlined
-} from '@ant-design/icons';
-import { useQuery, useMutation } from '@apollo/client';
-import dayjs from 'dayjs';
-import { 
-  GET_CLIENT_WORK_TYPES, 
+  ExclamationCircleOutlined,
+} from "@ant-design/icons";
+import { useQuery, useMutation } from "@apollo/client";
+import dayjs from "dayjs";
+import {
+  GET_CLIENT_WORK_TYPES,
   GET_CLIENT_SERVICE_PROVIDERS,
-  GET_TRANSACTIONS_BY_CLIENT 
-} from '../../gql/clients';
+  GET_TRANSACTIONS_BY_CLIENT,
+} from "../../gql/clients";
 import {
   GET_CLIENT_LEDGER_SUMMARY,
   GET_CLIENT_LEDGER_RANGE,
@@ -63,8 +63,8 @@ import {
   GET_CLIENT_CREDIT_BLOCKED_PROJECTS,
   RECORD_CLIENT_PAYMENT,
   ALLOCATE_PAYMENT_TO_INVOICE,
-  GET_PAYMENT_TYPES
-} from '../../gql/clientLedger';
+  GET_PAYMENT_TYPES,
+} from "../../gql/clientLedger";
 
 const { TabPane } = Tabs;
 const { Title, Text } = Typography;
@@ -72,93 +72,128 @@ const { Option } = Select;
 const { RangePicker } = DatePicker;
 
 const ClientDetail = ({ client, onClose, onEdit }) => {
-  const [activeTab, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState("profile");
   const [paymentForm] = Form.useForm();
   const [allocationForm] = Form.useForm();
-  
+
   // Ledger state
   const [ledgerFilters, setLedgerFilters] = useState({
-    invoiceStatus: 'all',
-    paymentStatus: 'all',
-    dateRange: [dayjs().startOf('month'), dayjs().endOf('month')],
-    showBlockedOnly: false
+    invoiceStatus: "all",
+    paymentStatus: "all",
+    dateRange: [dayjs().startOf("month"), dayjs().endOf("month")],
+    showBlockedOnly: false,
   });
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
 
   // Fetch related data
-  const { data: workTypesData, loading: workTypesLoading } = useQuery(GET_CLIENT_WORK_TYPES, {
-    variables: { clientId: client.id },
-    fetchPolicy: 'cache-and-network'
-  });
+  const { data: workTypesData, loading: workTypesLoading } = useQuery(
+    GET_CLIENT_WORK_TYPES,
+    {
+      variables: { clientId: client.id },
+      fetchPolicy: "cache-and-network",
+    }
+  );
 
-  const { data: serviceProvidersData, loading: serviceProvidersLoading } = useQuery(GET_CLIENT_SERVICE_PROVIDERS, {
-    variables: { clientId: client.id },
-    fetchPolicy: 'cache-and-network'
-  });
+  const { data: serviceProvidersData, loading: serviceProvidersLoading } =
+    useQuery(GET_CLIENT_SERVICE_PROVIDERS, {
+      variables: { clientId: client.id },
+      fetchPolicy: "cache-and-network",
+    });
 
-  const { data: transactionsData, loading: transactionsLoading } = useQuery(GET_TRANSACTIONS_BY_CLIENT, {
-    variables: { 
-      clientId: client.id,
-      filters: { limit: 10 } // Latest 10 transactions
-    },
-    fetchPolicy: 'cache-and-network'
-  });
+  const { data: transactionsData, loading: transactionsLoading } = useQuery(
+    GET_TRANSACTIONS_BY_CLIENT,
+    {
+      variables: {
+        clientId: client.id,
+        filters: { limit: 10 }, // Latest 10 transactions
+      },
+      fetchPolicy: "cache-and-network",
+    }
+  );
 
   // Ledger queries
-  const { data: ledgerData, loading: ledgerLoading, refetch: refetchLedger } = useQuery(GET_CLIENT_LEDGER_SUMMARY, {
+  const {
+    data: ledgerData,
+    loading: ledgerLoading,
+    refetch: refetchLedger,
+  } = useQuery(GET_CLIENT_LEDGER_SUMMARY, {
     variables: { clientId: client.id },
-    fetchPolicy: 'cache-and-network'
+    fetchPolicy: "cache-and-network",
   });
 
-  const { data: invoicesData, loading: invoicesLoading } = useQuery(GET_CLIENT_INVOICES, {
-    variables: { 
-      clientId: client.id,
-      filters: {
-        ...(ledgerFilters.invoiceStatus !== 'all' && { status: ledgerFilters.invoiceStatus }),
-        ...(ledgerFilters.dateRange && {
-          dateFrom: ledgerFilters.dateRange[0].format('YYYY-MM-DD'),
-          dateTo: ledgerFilters.dateRange[1].format('YYYY-MM-DD')
-        })
+  const { data: invoicesData, loading: invoicesLoading } = useQuery(
+    GET_CLIENT_INVOICES,
+    {
+      variables: {
+        clientId: client.id,
+        filters: {
+          ...(ledgerFilters.invoiceStatus !== "all" && {
+            status: ledgerFilters.invoiceStatus,
+          }),
+          ...(ledgerFilters.dateRange && {
+            dateFrom: ledgerFilters.dateRange[0].format("YYYY-MM-DD"),
+            dateTo: ledgerFilters.dateRange[1].format("YYYY-MM-DD"),
+          }),
+        },
+        pagination: { page: 1, limit: 50 },
       },
-      pagination: { page: 1, limit: 50 }
-    },
-    fetchPolicy: 'cache-and-network'
-  });
+      fetchPolicy: "cache-and-network",
+    }
+  );
 
-  const { data: paymentsData, loading: paymentsLoading } = useQuery(GET_CLIENT_PAYMENTS, {
-    variables: { 
-      clientId: client.id,
-      filters: {
-        ...(ledgerFilters.paymentStatus !== 'all' && { status: ledgerFilters.paymentStatus }),
-        ...(ledgerFilters.dateRange && {
-          dateFrom: ledgerFilters.dateRange[0].format('YYYY-MM-DD'),
-          dateTo: ledgerFilters.dateRange[1].format('YYYY-MM-DD')
-        })
+  const { data: paymentsData, loading: paymentsLoading } = useQuery(
+    GET_CLIENT_PAYMENTS,
+    {
+      variables: {
+        clientId: client.id,
+        filters: {
+          ...(ledgerFilters.paymentStatus !== "all" && {
+            status: ledgerFilters.paymentStatus,
+          }),
+          ...(ledgerFilters.dateRange && {
+            dateFrom: ledgerFilters.dateRange[0].format("YYYY-MM-DD"),
+            dateTo: ledgerFilters.dateRange[1].format("YYYY-MM-DD"),
+          }),
+        },
+        pagination: { page: 1, limit: 50 },
       },
-      pagination: { page: 1, limit: 50 }
-    },
-    fetchPolicy: 'cache-and-network'
-  });
+      fetchPolicy: "cache-and-network",
+    }
+  );
 
-  const { data: blockedProjectsData, loading: blockedProjectsLoading } = useQuery(GET_CLIENT_CREDIT_BLOCKED_PROJECTS, {
-    variables: { clientId: client.id },
-    fetchPolicy: 'cache-and-network'
-  });
+  const { data: blockedProjectsData, loading: blockedProjectsLoading } =
+    useQuery(GET_CLIENT_CREDIT_BLOCKED_PROJECTS, {
+      variables: { clientId: client.id },
+      fetchPolicy: "cache-and-network",
+    });
 
   // Range ledger (opening balance + transactions within selected range)
-  const { data: ledgerRangeData, loading: ledgerRangeLoading, refetch: refetchLedgerRange, error: ledgerRangeError } = useQuery(GET_CLIENT_LEDGER_RANGE, {
+  const {
+    data: ledgerRangeData,
+    loading: ledgerRangeLoading,
+    refetch: refetchLedgerRange,
+    error: ledgerRangeError,
+  } = useQuery(GET_CLIENT_LEDGER_RANGE, {
     variables: {
       clientId: client.id,
-      dateFrom: ledgerFilters.dateRange ? ledgerFilters.dateRange[0].format('YYYY-MM-DD') : null,
-      dateTo: ledgerFilters.dateRange ? ledgerFilters.dateRange[1].format('YYYY-MM-DD') : null,
-      pagination: { page: 1, limit: 1000 }
+      dateFrom: ledgerFilters.dateRange
+        ? ledgerFilters.dateRange[0].format("YYYY-MM-DD")
+        : null,
+      dateTo: ledgerFilters.dateRange
+        ? ledgerFilters.dateRange[1].format("YYYY-MM-DD")
+        : null,
+      pagination: { page: 1, limit: 1000 },
     },
-    skip: !client?.id || !ledgerFilters.dateRange || !ledgerFilters.dateRange[0] || !ledgerFilters.dateRange[1],
-    fetchPolicy: 'cache-and-network',
-    errorPolicy: 'all',
-    notifyOnNetworkStatusChange: true
+    skip:
+      !client?.id ||
+      !ledgerFilters.dateRange ||
+      !ledgerFilters.dateRange[0] ||
+      !ledgerFilters.dateRange[1],
+    fetchPolicy: "cache-and-network",
+    errorPolicy: "all",
+    notifyOnNetworkStatusChange: true,
   });
 
   const { data: paymentTypesData } = useQuery(GET_PAYMENT_TYPES);
@@ -176,8 +211,8 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
       }
     },
     onError: (error) => {
-      message.error('Error recording payment: ' + error.message);
-    }
+      message.error("Error recording payment: " + error.message);
+    },
   });
 
   const [allocatePayment] = useMutation(ALLOCATE_PAYMENT_TO_INVOICE, {
@@ -192,73 +227,81 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
       }
     },
     onError: (error) => {
-      message.error('Error allocating payment: ' + error.message);
-    }
+      message.error("Error allocating payment: " + error.message);
+    },
   });
 
   // Helper functions
   const getStatusColor = (status) => {
     const colors = {
-      active: 'green',
-      inactive: 'red',
-      suspended: 'orange',
-      pending: 'blue'
+      active: "green",
+      inactive: "red",
+      suspended: "orange",
+      pending: "blue",
     };
-    return colors[status] || 'default';
+    return colors[status] || "default";
   };
 
   const getClientTypeColor = (type) => {
     const colors = {
-      project: 'blue',
-      'walk-in': 'green',
-      corporate: 'purple',
-      individual: 'orange'
+      project: "blue",
+      "walk-in": "green",
+      corporate: "purple",
+      individual: "orange",
     };
-    return colors[type] || 'default';
+    return colors[type] || "default";
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR'
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
     }).format(amount || 0);
   };
 
   // Transaction table columns
   const transactionColumns = [
     {
-      title: 'Date',
-      dataIndex: 'paymentDate',
-      key: 'date',
+      title: "Date",
+      dataIndex: "paymentDate",
+      key: "date",
       render: (date) => new Date(date).toLocaleDateString(),
     },
     {
-      title: 'Type',
-      dataIndex: 'transactionType',
-      key: 'type',
+      title: "Type",
+      dataIndex: "transactionType",
+      key: "type",
       render: (type) => (
-        <Tag color={type === 'credit' ? 'green' : 'orange'}>
+        <Tag color={type === "credit" ? "green" : "orange"}>
           {type?.toUpperCase()}
         </Tag>
       ),
     },
     {
-      title: 'Amount',
-      dataIndex: 'amount',
-      key: 'amount',
+      title: "Amount",
+      dataIndex: "amount",
+      key: "amount",
       render: (amount) => formatCurrency(amount),
     },
     {
-      title: 'Description',
-      dataIndex: 'description',
-      key: 'description',
+      title: "Description",
+      dataIndex: "description",
+      key: "description",
     },
     {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
+      title: "Status",
+      dataIndex: "status",
+      key: "status",
       render: (status) => (
-        <Tag color={status === 'paid' ? 'green' : status === 'pending' ? 'orange' : 'red'}>
+        <Tag
+          color={
+            status === "paid"
+              ? "green"
+              : status === "pending"
+              ? "orange"
+              : "red"
+          }
+        >
           {status?.toUpperCase()}
         </Tag>
       ),
@@ -268,38 +311,36 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
   // Work types table columns
   const workTypeColumns = [
     {
-      title: 'Work Type',
-      dataIndex: 'workTypeName',
-      key: 'workType',
+      title: "Work Type",
+      dataIndex: "workTypeName",
+      key: "workType",
     },
     {
-      title: 'Rate Type',
-      dataIndex: 'rateType',
-      key: 'rateType',
-      render: (type) => (
-        <Tag>{type?.replace('_', ' ')?.toUpperCase()}</Tag>
-      ),
+      title: "Rate Type",
+      dataIndex: "rateType",
+      key: "rateType",
+      render: (type) => <Tag>{type?.replace("_", " ")?.toUpperCase()}</Tag>,
     },
     {
-      title: 'Rate',
-      dataIndex: 'rate',
-      key: 'rate',
+      title: "Rate",
+      dataIndex: "rate",
+      key: "rate",
       render: (rate, record) => (
         <span>
           {formatCurrency(rate)}
-          {record.rateType === 'hourly' && '/hr'}
-          {record.rateType === 'daily' && '/day'}
-          {record.rateType === 'monthly' && '/month'}
+          {record.rateType === "hourly" && "/hr"}
+          {record.rateType === "daily" && "/day"}
+          {record.rateType === "monthly" && "/month"}
         </span>
       ),
     },
     {
-      title: 'Status',
-      dataIndex: 'isActive',
-      key: 'status',
+      title: "Status",
+      dataIndex: "isActive",
+      key: "status",
       render: (isActive) => (
-        <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? 'ACTIVE' : 'INACTIVE'}
+        <Tag color={isActive ? "green" : "red"}>
+          {isActive ? "ACTIVE" : "INACTIVE"}
         </Tag>
       ),
     },
@@ -308,32 +349,32 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
   // Service providers table columns
   const serviceProviderColumns = [
     {
-      title: 'Service Provider',
-      dataIndex: 'serviceProviderName',
-      key: 'name',
+      title: "Service Provider",
+      dataIndex: "serviceProviderName",
+      key: "name",
     },
     {
-      title: 'Contact Person',
-      dataIndex: 'contactPerson',
-      key: 'contact',
+      title: "Contact Person",
+      dataIndex: "contactPerson",
+      key: "contact",
     },
     {
-      title: 'Email',
-      dataIndex: 'email',
-      key: 'email',
+      title: "Email",
+      dataIndex: "email",
+      key: "email",
     },
     {
-      title: 'Phone',
-      dataIndex: 'phone',
-      key: 'phone',
+      title: "Phone",
+      dataIndex: "phone",
+      key: "phone",
     },
     {
-      title: 'Status',
-      dataIndex: 'isActive',
-      key: 'status',
+      title: "Status",
+      dataIndex: "isActive",
+      key: "status",
       render: (isActive) => (
-        <Tag color={isActive ? 'green' : 'red'}>
-          {isActive ? 'ACTIVE' : 'INACTIVE'}
+        <Tag color={isActive ? "green" : "red"}>
+          {isActive ? "ACTIVE" : "INACTIVE"}
         </Tag>
       ),
     },
@@ -346,11 +387,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
         <Row gutter={[24, 16]}>
           <Col span={24}>
             <div className="flex items-center space-x-4 mb-4">
-              <Avatar
-                size={80}
-                src={client.logo}
-                icon={<UserOutlined />}
-              />
+              <Avatar size={80} src={client.logo} icon={<UserOutlined />} />
               <div>
                 <Title level={3} className="mb-1">
                   {client.companyName || client.displayName}
@@ -376,22 +413,28 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             {client.displayName}
           </Descriptions.Item>
           <Descriptions.Item label="Designation" span={1}>
-            {client.designation || 'N/A'}
+            {client.designation || "N/A"}
           </Descriptions.Item>
           <Descriptions.Item label="Company Name" span={1}>
-            {client.companyName || 'N/A'}
+            {client.companyName || "N/A"}
           </Descriptions.Item>
           <Descriptions.Item label="Industry" span={1}>
-            {client.industry || 'N/A'}
+            {client.industry || "N/A"}
           </Descriptions.Item>
           <Descriptions.Item label="Company Size" span={1}>
-            {client.companySize || 'N/A'}
+            {client.companySize || "N/A"}
           </Descriptions.Item>
         </Descriptions>
       </Card>
 
       {/* Contact Information */}
-      <Card title={<><PhoneOutlined /> Contact Information</>}>
+      <Card
+        title={
+          <>
+            <PhoneOutlined /> Contact Information
+          </>
+        }
+      >
         <Descriptions bordered column={2}>
           <Descriptions.Item label="Email" span={1}>
             <div className="flex items-center">
@@ -409,69 +452,101 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             {client.alternatePhone ? (
               <div className="flex items-center">
                 <PhoneOutlined className="mr-2" />
-                <a href={`tel:${client.alternatePhone}`}>{client.alternatePhone}</a>
+                <a href={`tel:${client.alternatePhone}`}>
+                  {client.alternatePhone}
+                </a>
               </div>
-            ) : 'N/A'}
+            ) : (
+              "N/A"
+            )}
           </Descriptions.Item>
           <Descriptions.Item label="Website" span={1}>
             {client.website ? (
               <div className="flex items-center">
                 <GlobalOutlined className="mr-2" />
-                <a href={client.website} target="_blank" rel="noopener noreferrer">
+                <a
+                  href={client.website}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
                   {client.website}
                 </a>
               </div>
-            ) : 'N/A'}
+            ) : (
+              "N/A"
+            )}
           </Descriptions.Item>
           <Descriptions.Item label="Preferred Contact" span={1}>
-            {client.preferredContactMethod || 'Email'}
+            {client.preferredContactMethod || "Email"}
           </Descriptions.Item>
           <Descriptions.Item label="Source" span={1}>
-            {client.source || 'N/A'}
+            {client.source || "N/A"}
           </Descriptions.Item>
         </Descriptions>
       </Card>
 
       {/* Address Information */}
-      <Card title={<><EnvironmentOutlined /> Address Information</>}>
+      <Card
+        title={
+          <>
+            <EnvironmentOutlined /> Address Information
+          </>
+        }
+      >
         <Descriptions bordered column={1}>
           <Descriptions.Item label="Address">
             {client.address}
           </Descriptions.Item>
           <Descriptions.Item label="Location">
-            {[
-              client.city?.name,
-              client.state?.name,
-              client.country?.name
-            ].filter(Boolean).join(', ')}
+            {[client.city?.name, client.state?.name, client.country?.name]
+              .filter(Boolean)
+              .join(", ")}
           </Descriptions.Item>
         </Descriptions>
       </Card>
 
       {/* Business Information */}
-      <Card title={<><BankOutlined /> Business Information</>}>
+      <Card
+        title={
+          <>
+            <BankOutlined /> Business Information
+          </>
+        }
+      >
         <Descriptions bordered column={2}>
           <Descriptions.Item label="Tax ID" span={1}>
-            {client.taxId || 'N/A'}
+            {client.taxId || "N/A"}
           </Descriptions.Item>
           <Descriptions.Item label="Registration Number" span={1}>
-            {client.registrationNumber || 'N/A'}
+            {client.registrationNumber || "N/A"}
           </Descriptions.Item>
           <Descriptions.Item label="Business Description" span={2}>
-            {client.businessDescription || 'N/A'}
+            {client.businessDescription || "N/A"}
           </Descriptions.Item>
         </Descriptions>
       </Card>
 
       {/* Additional Notes */}
       {client.notes && (
-        <Card title={<><FileTextOutlined /> Additional Notes</>}>
+        <Card
+          title={
+            <>
+              <FileTextOutlined /> Additional Notes
+            </>
+          }
+        >
           <Text>{client.notes}</Text>
         </Card>
       )}
 
       {/* Timestamps */}
-      <Card title={<><CalendarOutlined /> Record Information</>}>
+      <Card
+        title={
+          <>
+            <CalendarOutlined /> Record Information
+          </>
+        }
+      >
         <Descriptions bordered column={2}>
           <Descriptions.Item label="Created At">
             {new Date(client.createdAt).toLocaleString()}
@@ -480,10 +555,14 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             {new Date(client.updatedAt).toLocaleString()}
           </Descriptions.Item>
           <Descriptions.Item label="Created By">
-            {client.creator ? `${client.creator.firstName} ${client.creator.lastName}` : 'N/A'}
+            {client.creator
+              ? `${client.creator.firstName} ${client.creator.lastName}`
+              : "N/A"}
           </Descriptions.Item>
           <Descriptions.Item label="Updated By">
-            {client.updater ? `${client.updater.firstName} ${client.updater.lastName}` : 'N/A'}
+            {client.updater
+              ? `${client.updater.firstName} ${client.updater.lastName}`
+              : "N/A"}
           </Descriptions.Item>
         </Descriptions>
       </Card>
@@ -491,7 +570,13 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
   );
 
   const renderWorkTypesTab = () => (
-    <Card title={<><ToolOutlined /> Work Types</>}>
+    <Card
+      title={
+        <>
+          <ToolOutlined /> Work Types
+        </>
+      }
+    >
       <Table
         columns={workTypeColumns}
         dataSource={workTypesData?.clientWorkTypes || []}
@@ -499,14 +584,20 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
         rowKey="id"
         pagination={false}
         locale={{
-          emptyText: <Empty description="No work types assigned" />
+          emptyText: <Empty description="No work types assigned" />,
         }}
       />
     </Card>
   );
 
   const renderServiceProvidersTab = () => (
-    <Card title={<><TeamOutlined /> Service Providers</>}>
+    <Card
+      title={
+        <>
+          <TeamOutlined /> Service Providers
+        </>
+      }
+    >
       <Table
         columns={serviceProviderColumns}
         dataSource={serviceProvidersData?.clientServiceProviders || []}
@@ -514,7 +605,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
         rowKey="id"
         pagination={false}
         locale={{
-          emptyText: <Empty description="No service providers assigned" />
+          emptyText: <Empty description="No service providers assigned" />,
         }}
       />
     </Card>
@@ -522,7 +613,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
 
   const renderLedgerTab = () => {
     const ledgerSummary = ledgerData?.clientLedgerSummary;
-    
+
     return (
       <div className="space-y-6">
         {/* Credit Summary */}
@@ -534,7 +625,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                 value={ledgerSummary?.client?.creditLimit || 0}
                 precision={2}
                 prefix="₹"
-                valueStyle={{ color: '#1890ff' }}
+                valueStyle={{ color: "#1890ff" }}
               />
             </Card>
           </Col>
@@ -545,8 +636,11 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                 value={ledgerSummary?.summary?.availableCredit || 0}
                 precision={2}
                 prefix="₹"
-                valueStyle={{ 
-                  color: (ledgerSummary?.summary?.availableCredit || 0) > 0 ? '#52c41a' : '#f5222d' 
+                valueStyle={{
+                  color:
+                    (ledgerSummary?.summary?.availableCredit || 0) > 0
+                      ? "#52c41a"
+                      : "#f5222d",
                 }}
               />
             </Card>
@@ -558,7 +652,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                 value={ledgerSummary?.summary?.totalOutstanding || 0}
                 precision={2}
                 prefix="₹"
-                valueStyle={{ color: '#f5222d' }}
+                valueStyle={{ color: "#f5222d" }}
               />
             </Card>
           </Col>
@@ -569,7 +663,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                 value={ledgerSummary?.summary?.totalCreditBlocked || 0}
                 precision={2}
                 prefix="₹"
-                valueStyle={{ color: '#faad14' }}
+                valueStyle={{ color: "#faad14" }}
               />
             </Card>
           </Col>
@@ -580,31 +674,49 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
           <div className="flex items-center justify-between mb-4">
             <Title level={5}>Credit Utilization</Title>
             <Text>
-              {ledgerSummary?.summary?.creditUtilization?.toFixed(1) || 0}% of credit limit used
+              {ledgerSummary?.summary?.creditUtilization?.toFixed(1) || 0}% of
+              credit limit used
             </Text>
           </div>
           <Progress
             percent={ledgerSummary?.summary?.creditUtilization || 0}
             status={
-              (ledgerSummary?.summary?.creditUtilization || 0) > 90 ? 'exception' :
-              (ledgerSummary?.summary?.creditUtilization || 0) > 75 ? 'active' : 'success'
+              (ledgerSummary?.summary?.creditUtilization || 0) > 90
+                ? "exception"
+                : (ledgerSummary?.summary?.creditUtilization || 0) > 75
+                ? "active"
+                : "success"
             }
             strokeColor={
-              (ledgerSummary?.summary?.creditUtilization || 0) > 90 ? '#ff4d4f' :
-              (ledgerSummary?.summary?.creditUtilization || 0) > 75 ? '#faad14' : '#52c41a'
+              (ledgerSummary?.summary?.creditUtilization || 0) > 90
+                ? "#ff4d4f"
+                : (ledgerSummary?.summary?.creditUtilization || 0) > 75
+                ? "#faad14"
+                : "#52c41a"
             }
           />
         </Card>
 
         {/* Filters */}
-        <Card title={<><FilterOutlined /> Filters</>}>
+        <Card
+          title={
+            <>
+              <FilterOutlined /> Filters
+            </>
+          }
+        >
           <Row gutter={16}>
             <Col span={6}>
               <Select
                 placeholder="Invoice Status"
                 value={ledgerFilters.invoiceStatus}
-                onChange={(value) => setLedgerFilters(prev => ({ ...prev, invoiceStatus: value }))}
-                style={{ width: '100%' }}
+                onChange={(value) =>
+                  setLedgerFilters((prev) => ({
+                    ...prev,
+                    invoiceStatus: value,
+                  }))
+                }
+                style={{ width: "100%" }}
               >
                 <Option value="all">All Invoices</Option>
                 <Option value="pending">Pending</Option>
@@ -617,8 +729,13 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
               <Select
                 placeholder="Payment Status"
                 value={ledgerFilters.paymentStatus}
-                onChange={(value) => setLedgerFilters(prev => ({ ...prev, paymentStatus: value }))}
-                style={{ width: '100%' }}
+                onChange={(value) =>
+                  setLedgerFilters((prev) => ({
+                    ...prev,
+                    paymentStatus: value,
+                  }))
+                }
+                style={{ width: "100%" }}
               >
                 <Option value="all">All Payments</Option>
                 <Option value="allocated">Fully Allocated</Option>
@@ -628,10 +745,12 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             </Col>
             <Col span={8}>
               <RangePicker
-                placeholder={['Start Date', 'End Date']}
+                placeholder={["Start Date", "End Date"]}
                 value={ledgerFilters.dateRange}
-                onChange={(dates) => setLedgerFilters(prev => ({ ...prev, dateRange: dates }))}
-                style={{ width: '100%' }}
+                onChange={(dates) =>
+                  setLedgerFilters((prev) => ({ ...prev, dateRange: dates }))
+                }
+                style={{ width: "100%" }}
               />
             </Col>
             <Col span={4}>
@@ -639,10 +758,13 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                 icon={<ReloadOutlined />}
                 onClick={() => {
                   setLedgerFilters({
-                    invoiceStatus: 'all',
-                    paymentStatus: 'all',
-                    dateRange: [dayjs().startOf('month'), dayjs().endOf('month')],
-                    showBlockedOnly: false
+                    invoiceStatus: "all",
+                    paymentStatus: "all",
+                    dateRange: [
+                      dayjs().startOf("month"),
+                      dayjs().endOf("month"),
+                    ],
+                    showBlockedOnly: false,
                   });
                 }}
               >
@@ -653,22 +775,47 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
         </Card>
 
         {/* Date-range ledger (opening balance + transactions) */}
-        <Card title={<><WalletOutlined /> Date-wise Ledger</>} style={{ marginTop: 12 }}>
+        <Card
+          title={
+            <>
+              <WalletOutlined /> Date-wise Ledger
+            </>
+          }
+          style={{ marginTop: 12 }}
+        >
           {ledgerRangeLoading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', padding: 24 }}><Spin /></div>
+            <div
+              style={{ display: "flex", justifyContent: "center", padding: 24 }}
+            >
+              <Spin />
+            </div>
           ) : ledgerRangeError ? (
-            <div style={{ textAlign: 'center', padding: 24 }}>
-              <Text type="secondary">Unable to load ledger data for the selected date range.</Text>
+            <div style={{ textAlign: "center", padding: 24 }}>
+              <Text type="secondary">
+                Unable to load ledger data for the selected date range.
+              </Text>
             </div>
           ) : (
             (() => {
               const range = ledgerRangeData?.clientLedgerRange;
               const opening = Number(range?.openingBalance ?? 0);
               const txs = (range?.transactions || []).slice();
-              txs.sort((a, b) => new Date(a.transactionDate) - new Date(b.transactionDate));
+
+              // Debug: Log transaction data to check project and invoice info
+              if (txs.length > 0) {
+                console.log(
+                  "Ledger transactions sample:",
+                  JSON.stringify(txs[0], null, 2)
+                );
+              }
+
+              txs.sort(
+                (a, b) =>
+                  new Date(a.transactionDate) - new Date(b.transactionDate)
+              );
 
               let running = opening;
-              const txWithRunning = txs.map(t => {
+              const txWithRunning = txs.map((t) => {
                 const debit = Number(t.debitAmount || 0);
                 const credit = Number(t.creditAmount || 0);
                 running = running + credit - debit;
@@ -678,17 +825,43 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
               const closing = Number(range?.closingBalance ?? running);
 
               const balanceLabel = (amt) => {
-                if (amt > 0) return { text: 'To Pay (DR)', color: '#f5222d' };
-                if (amt < 0) return { text: 'To Receive (CR)', color: '#52c41a' };
-                return { text: 'Settled', color: '#1890ff' };
+                if (amt > 0) return { text: "To Pay (DR)", color: "#f5222d" };
+                if (amt < 0)
+                  return { text: "To Receive (CR)", color: "#52c41a" };
+                return { text: "Settled", color: "#1890ff" };
               };
 
               return (
                 <div>
                   <Row gutter={16} style={{ marginBottom: 12 }}>
-                    <Col span={8}><Card><Statistic title="Opening Balance" value={opening} precision={2} prefix="₹" /></Card></Col>
-                    <Col span={8}><Card><Statistic title="Closing Balance" value={closing} precision={2} prefix="₹" /></Card></Col>
-                    <Col span={8}><Card><Statistic title="Transactions" value={txWithRunning.length} /></Card></Col>
+                    <Col span={8}>
+                      <Card>
+                        <Statistic
+                          title="Opening Balance"
+                          value={opening}
+                          precision={2}
+                          prefix="₹"
+                        />
+                      </Card>
+                    </Col>
+                    <Col span={8}>
+                      <Card>
+                        <Statistic
+                          title="Closing Balance"
+                          value={closing}
+                          precision={2}
+                          prefix="₹"
+                        />
+                      </Card>
+                    </Col>
+                    <Col span={8}>
+                      <Card>
+                        <Statistic
+                          title="Transactions"
+                          value={txWithRunning.length}
+                        />
+                      </Card>
+                    </Col>
                   </Row>
 
                   <Table
@@ -696,24 +869,131 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                     rowKey="id"
                     size="small"
                     pagination={{ pageSize: 10 }}
+                    scroll={{ x: 1400 }}
                     columns={[
-                      { title: 'Date', dataIndex: 'transactionDate', key: 'transactionDate', render: d => d ? dayjs(d).format('DD/MM/YYYY') : '-' },
-                      { title: 'Ref', dataIndex: 'referenceNumber', key: 'referenceNumber' },
-                      { title: 'Type', dataIndex: 'transactionType', key: 'transactionType' },
-                      { title: 'DR/CR', key: 'drcr', render: (_, r) => (
-                          r.credit > 0 ? <Tag color="green">CR</Tag> : r.debit > 0 ? <Tag color="red">DR</Tag> : '-' 
-                        )
+                      {
+                        title: "Order Date",
+                        key: "orderDate",
+                        width: 100,
+                        render: (_, r) => {
+                          const project = r.invoice?.project;
+                          return project?.createdAt
+                            ? dayjs(project.createdAt).format("DD/MM/YYYY")
+                            : "-";
+                        },
                       },
-                      { title: 'Description', dataIndex: 'description', key: 'description' },
-                      { title: 'Debit', dataIndex: 'debit', key: 'debit', render: v => formatCurrency(v) },
-                      { title: 'Credit', dataIndex: 'credit', key: 'credit', render: v => formatCurrency(v) },
-                      { title: 'Running Balance', dataIndex: 'runningBalance', key: 'runningBalance', render: v => (
+                      {
+                        title: "Invoice Date",
+                        key: "invoiceDate",
+                        width: 100,
+                        render: (_, r) =>
+                          r.invoice?.invoiceDate
+                            ? dayjs(r.invoice.invoiceDate).format("DD/MM/YYYY")
+                            : "-",
+                      },
+                      {
+                        title: "Work Days",
+                        key: "workDays",
+                        width: 90,
+                        render: (_, r) => {
+                          const project = r.invoice?.project;
+                          if (project?.createdAt && r.invoice?.invoiceDate) {
+                            const days = dayjs(r.invoice.invoiceDate).diff(
+                              dayjs(project.createdAt),
+                              "day"
+                            );
+                            return `${days}d`;
+                          }
+                          return "-";
+                        },
+                      },
+                      {
+                        title: "Particulars",
+                        key: "particulars",
+                        width: 200,
+                        ellipsis: true,
+                        render: (_, r) => {
+                          const project = r.invoice?.project;
+                          if (project) {
+                            return (
+                              <div>
+                                <div style={{ fontWeight: 500 }}>
+                                  {project.projectCode}
+                                </div>
+                                <div style={{ fontSize: 12, color: "#666" }}>
+                                  {project.name || project.description}
+                                </div>
+                              </div>
+                            );
+                          }
+                          return r.description || "-";
+                        },
+                      },
+                      {
+                        title: "Details",
+                        key: "details",
+                        width: 300,
+                        render: (_, r) => {
+                          const project = r.invoice?.project;
+                          if (project?.projectGradings?.length > 0) {
+                            const lines = project.projectGradings.map((pg) => {
+                              const qty = pg.imageQuantity || 0;
+                              const rate =
+                                pg.customRate || pg.grading?.defaultRate || 0;
+                              const total = qty * rate;
+                              return `${
+                                pg.grading?.name || pg.grading?.shortCode
+                              }  (qty) ${qty} × ₹${rate.toFixed(
+                                2
+                              )} = ₹${total.toFixed(2)}`;
+                            });
+                            return (
+                              <div style={{ fontSize: 11, lineHeight: "1.4" }}>
+                                {lines.map((line, idx) => (
+                                  <div key={idx}>{line}</div>
+                                ))}
+                              </div>
+                            );
+                          }
+                          return r.description || "-";
+                        },
+                      },
+                      {
+                        title: "Debit",
+                        dataIndex: "debit",
+                        key: "debit",
+                        width: 110,
+                        align: "right",
+                        render: (v) => (v > 0 ? formatCurrency(v) : "-"),
+                      },
+                      {
+                        title: "Credit",
+                        dataIndex: "credit",
+                        key: "credit",
+                        width: 110,
+                        align: "right",
+                        render: (v) => (v > 0 ? formatCurrency(v) : "-"),
+                      },
+                      {
+                        title: "Running Balance",
+                        dataIndex: "runningBalance",
+                        key: "runningBalance",
+                        width: 140,
+                        align: "right",
+                        render: (v) => (
                           <div>
                             <div>{formatCurrency(Math.abs(v))}</div>
-                            <div style={{ color: balanceLabel(v).color, fontSize: 12 }}>{balanceLabel(v).text}</div>
+                            <div
+                              style={{
+                                color: balanceLabel(v).color,
+                                fontSize: 11,
+                              }}
+                            >
+                              {balanceLabel(v).text}
+                            </div>
                           </div>
-                        )
-                      }
+                        ),
+                      },
                     ]}
                   />
                 </div>
@@ -724,13 +1004,15 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
 
         {/* Credit Blocked Projects */}
         {blockedProjectsData?.clientCreditBlockedProjects?.length > 0 && (
-          <Card 
+          <Card
             title={
               <div className="flex items-center">
-                <ExclamationCircleOutlined style={{ color: '#faad14', marginRight: 8 }} />
+                <ExclamationCircleOutlined
+                  style={{ color: "#faad14", marginRight: 8 }}
+                />
                 <span>Credit Blocked Projects</span>
-                <Badge 
-                  count={blockedProjectsData.clientCreditBlockedProjects.length} 
+                <Badge
+                  count={blockedProjectsData.clientCreditBlockedProjects.length}
                   style={{ marginLeft: 8 }}
                 />
               </div>
@@ -745,32 +1027,32 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             <Table
               columns={[
                 {
-                  title: 'Project Code',
-                  dataIndex: 'projectCode',
-                  key: 'projectCode',
+                  title: "Project Code",
+                  dataIndex: "projectCode",
+                  key: "projectCode",
                 },
                 {
-                  title: 'Description',
-                  dataIndex: 'description',
-                  key: 'description',
+                  title: "Description",
+                  dataIndex: "description",
+                  key: "description",
                   ellipsis: true,
                 },
                 {
-                  title: 'Blocked Amount',
-                  dataIndex: 'creditBlockedAmount',
-                  key: 'blockedAmount',
+                  title: "Blocked Amount",
+                  dataIndex: "creditBlockedAmount",
+                  key: "blockedAmount",
                   render: (amount) => formatCurrency(amount),
                 },
                 {
-                  title: 'Blocked Date',
-                  dataIndex: 'creditBlockedAt',
-                  key: 'blockedDate',
+                  title: "Blocked Date",
+                  dataIndex: "creditBlockedAt",
+                  key: "blockedDate",
                   render: (date) => new Date(date).toLocaleDateString(),
                 },
                 {
-                  title: 'Status',
-                  dataIndex: 'status',
-                  key: 'status',
+                  title: "Status",
+                  dataIndex: "status",
+                  key: "status",
                   render: (status) => (
                     <Tag color="orange">{status?.toUpperCase()}</Tag>
                   ),
@@ -798,10 +1080,16 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             <Button
               icon={<CreditCardOutlined />}
               onClick={() => {
-                if (paymentsData?.clientPayments?.payments?.some(p => p.unallocatedAmount > 0)) {
+                if (
+                  paymentsData?.clientPayments?.payments?.some(
+                    (p) => p.unallocatedAmount > 0
+                  )
+                ) {
                   setShowAllocationModal(true);
                 } else {
-                  message.info('No unallocated payments available for allocation');
+                  message.info(
+                    "No unallocated payments available for allocation"
+                  );
                 }
               }}
             >
@@ -813,56 +1101,62 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
         {/* Invoices and Payments Tables */}
         <Row gutter={16}>
           <Col span={12}>
-            <Card 
-              title={<><FileTextOutlined /> Invoices</>}
+            <Card
+              title={
+                <>
+                  <FileTextOutlined /> Invoices
+                </>
+              }
               extra={
-                <Badge 
-                  count={invoicesData?.clientInvoices?.invoices?.length || 0} 
-                  showZero 
+                <Badge
+                  count={invoicesData?.clientInvoices?.invoices?.length || 0}
+                  showZero
                 />
               }
             >
               <Table
                 columns={[
                   {
-                    title: 'Invoice #',
-                    dataIndex: 'invoiceNumber',
-                    key: 'invoiceNumber',
+                    title: "Invoice #",
+                    dataIndex: "invoiceNumber",
+                    key: "invoiceNumber",
                   },
                   {
-                    title: 'Project',
-                    dataIndex: ['project', 'projectCode'],
-                    key: 'projectCode',
+                    title: "Project",
+                    dataIndex: ["project", "projectCode"],
+                    key: "projectCode",
                   },
                   {
-                    title: 'Amount',
-                    dataIndex: 'totalAmount',
-                    key: 'amount',
+                    title: "Amount",
+                    dataIndex: "totalAmount",
+                    key: "amount",
                     render: (amount) => formatCurrency(amount),
                   },
                   {
-                    title: 'Balance',
-                    dataIndex: 'balanceAmount',
-                    key: 'balance',
+                    title: "Balance",
+                    dataIndex: "balanceAmount",
+                    key: "balance",
                     render: (balance) => (
-                      <Text style={{ color: balance > 0 ? '#f5222d' : '#52c41a' }}>
+                      <Text
+                        style={{ color: balance > 0 ? "#f5222d" : "#52c41a" }}
+                      >
                         {formatCurrency(balance)}
                       </Text>
                     ),
                   },
                   {
-                    title: 'Status',
-                    dataIndex: 'status',
-                    key: 'status',
+                    title: "Status",
+                    dataIndex: "status",
+                    key: "status",
                     render: (status) => {
                       const colors = {
-                        pending: 'orange',
-                        partial: 'blue',
-                        paid: 'green',
-                        overdue: 'red'
+                        pending: "orange",
+                        partial: "blue",
+                        paid: "green",
+                        overdue: "red",
                       };
                       return (
-                        <Tag color={colors[status] || 'default'}>
+                        <Tag color={colors[status] || "default"}>
                           {status?.toUpperCase()}
                         </Tag>
                       );
@@ -878,48 +1172,54 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             </Card>
           </Col>
           <Col span={12}>
-            <Card 
-              title={<><WalletOutlined /> Payments</>}
+            <Card
+              title={
+                <>
+                  <WalletOutlined /> Payments
+                </>
+              }
               extra={
-                <Badge 
-                  count={paymentsData?.clientPayments?.payments?.length || 0} 
-                  showZero 
+                <Badge
+                  count={paymentsData?.clientPayments?.payments?.length || 0}
+                  showZero
                 />
               }
             >
               <Table
                 columns={[
                   {
-                    title: 'Payment #',
-                    dataIndex: 'paymentNumber',
-                    key: 'paymentNumber',
+                    title: "Payment #",
+                    dataIndex: "paymentNumber",
+                    key: "paymentNumber",
                   },
                   {
-                    title: 'Date',
-                    dataIndex: 'paymentDate',
-                    key: 'date',
+                    title: "Date",
+                    dataIndex: "paymentDate",
+                    key: "date",
                     render: (date) => new Date(date).toLocaleDateString(),
                   },
                   {
-                    title: 'Amount',
-                    dataIndex: 'amount',
-                    key: 'amount',
+                    title: "Amount",
+                    dataIndex: "amount",
+                    key: "amount",
                     render: (amount) => formatCurrency(amount),
                   },
                   {
-                    title: 'Unallocated',
-                    dataIndex: 'unallocatedAmount',
-                    key: 'unallocated',
+                    title: "Unallocated",
+                    dataIndex: "unallocatedAmount",
+                    key: "unallocated",
                     render: (amount) => (
-                      <Text style={{ color: amount > 0 ? '#faad14' : '#52c41a' }}>
+                      <Text
+                        style={{ color: amount > 0 ? "#faad14" : "#52c41a" }}
+                      >
                         {formatCurrency(amount)}
                       </Text>
                     ),
                   },
                   {
-                    title: 'Type',
-                    dataIndex: ['paymentType', 'name'],
-                    key: 'type',
+                    title: "Type",
+                    dataIndex: ["paymentType", "name"],
+                    key: "type",
                   },
                 ]}
                 dataSource={paymentsData?.clientPayments?.payments || []}
@@ -934,7 +1234,10 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                       setShowAllocationModal(true);
                     }
                   },
-                  style: { cursor: record.unallocatedAmount > 0 ? 'pointer' : 'default' }
+                  style: {
+                    cursor:
+                      record.unallocatedAmount > 0 ? "pointer" : "default",
+                  },
                 })}
               />
             </Card>
@@ -953,7 +1256,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             <Statistic
               title="Total Transactions"
               value={transactionsData?.transactionsByClient?.length || 0}
-              valueStyle={{ color: '#1890ff' }}
+              valueStyle={{ color: "#1890ff" }}
             />
           </Card>
         </Col>
@@ -961,10 +1264,14 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
           <Card>
             <Statistic
               title="Total Invoiced"
-              value={transactionsData?.transactionsByClient?.filter(t => t.transactionType === 'debit')?.reduce((sum, t) => sum + t.amount, 0) || 0}
+              value={
+                transactionsData?.transactionsByClient
+                  ?.filter((t) => t.transactionType === "debit")
+                  ?.reduce((sum, t) => sum + t.amount, 0) || 0
+              }
               precision={2}
               prefix="₹"
-              valueStyle={{ color: '#f5222d' }}
+              valueStyle={{ color: "#f5222d" }}
             />
           </Card>
         </Col>
@@ -972,17 +1279,27 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
           <Card>
             <Statistic
               title="Total Paid"
-              value={transactionsData?.transactionsByClient?.filter(t => t.transactionType === 'credit')?.reduce((sum, t) => sum + t.amount, 0) || 0}
+              value={
+                transactionsData?.transactionsByClient
+                  ?.filter((t) => t.transactionType === "credit")
+                  ?.reduce((sum, t) => sum + t.amount, 0) || 0
+              }
               precision={2}
               prefix="₹"
-              valueStyle={{ color: '#52c41a' }}
+              valueStyle={{ color: "#52c41a" }}
             />
           </Card>
         </Col>
       </Row>
 
       {/* Recent Transactions */}
-      <Card title={<><DollarOutlined /> Recent Transactions</>}>
+      <Card
+        title={
+          <>
+            <DollarOutlined /> Recent Transactions
+          </>
+        }
+      >
         <Table
           columns={transactionColumns}
           dataSource={transactionsData?.transactionsByClient || []}
@@ -990,7 +1307,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
           rowKey="id"
           pagination={false}
           locale={{
-            emptyText: <Empty description="No transactions found" />
+            emptyText: <Empty description="No transactions found" />,
           }}
         />
       </Card>
@@ -1005,11 +1322,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             <UserOutlined />
             <span>Client Details</span>
           </div>
-          <Button
-            type="primary"
-            icon={<EditOutlined />}
-            onClick={onEdit}
-          >
+          <Button type="primary" icon={<EditOutlined />} onClick={onEdit}>
             Edit Client
           </Button>
         </div>
@@ -1022,64 +1335,65 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
     >
       <div className="py-4">
         <Tabs activeKey={activeTab} onChange={setActiveTab}>
-          <TabPane 
+          <TabPane
             tab={
               <span>
                 <UserOutlined />
                 Details
               </span>
-            } 
+            }
             key="profile"
           >
             {renderProfileTab()}
           </TabPane>
-          <TabPane 
+          <TabPane
             tab={
               <span>
                 <WalletOutlined />
                 Ledger
-                {ledgerData?.clientLedgerSummary?.summary?.totalCreditBlocked > 0 && (
-                  <Badge 
-                    count="!" 
-                    size="small" 
-                    style={{ backgroundColor: '#faad14' }}
+                {ledgerData?.clientLedgerSummary?.summary?.totalCreditBlocked >
+                  0 && (
+                  <Badge
+                    count="!"
+                    size="small"
+                    style={{ backgroundColor: "#faad14" }}
                   />
                 )}
               </span>
-            } 
+            }
             key="ledger"
           >
             {renderLedgerTab()}
           </TabPane>
-          <TabPane 
+          <TabPane
             tab={
               <span>
                 <ToolOutlined />
                 Work Types
               </span>
-            } 
+            }
             key="workTypes"
           >
             {renderWorkTypesTab()}
           </TabPane>
-          <TabPane 
+          <TabPane
             tab={
               <span>
                 <TeamOutlined />
                 Service Providers
               </span>
-            } 
+            }
             key="serviceProviders"
           >
             {renderServiceProvidersTab()}
           </TabPane>
-          <TabPane 
+          <TabPane
             tab={
               <span>
                 <DollarOutlined />
                 Transactions
               </span>
-            } 
+            }
             key="transactions"
           >
             {renderTransactionsTab()}
@@ -1107,9 +1421,9 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                 input: {
                   clientId: client.id,
                   ...values,
-                  paymentDate: values.paymentDate.format('YYYY-MM-DD')
-                }
-              }
+                  paymentDate: values.paymentDate.format("YYYY-MM-DD"),
+                },
+              },
             });
           }}
         >
@@ -1118,10 +1432,12 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
               <Form.Item
                 name="paymentTypeId"
                 label="Payment Type"
-                rules={[{ required: true, message: 'Please select payment type' }]}
+                rules={[
+                  { required: true, message: "Please select payment type" },
+                ]}
               >
                 <Select placeholder="Select payment type">
-                  {paymentTypesData?.paymentTypes?.map(type => (
+                  {paymentTypesData?.paymentTypes?.map((type) => (
                     <Option key={type.id} value={type.id}>
                       {type.name} ({type.type})
                     </Option>
@@ -1133,14 +1449,16 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
               <Form.Item
                 name="amount"
                 label="Amount"
-                rules={[{ required: true, message: 'Please enter amount' }]}
+                rules={[{ required: true, message: "Please enter amount" }]}
               >
                 <InputNumber
-                  style={{ width: '100%' }}
+                  style={{ width: "100%" }}
                   min={0.01}
                   precision={2}
-                  formatter={value => `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value.replace(/₹\s?|(,*)/g, '')}
+                  formatter={(value) =>
+                    `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                  }
+                  parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
                 />
               </Form.Item>
             </Col>
@@ -1150,24 +1468,20 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
               <Form.Item
                 name="paymentDate"
                 label="Payment Date"
-                rules={[{ required: true, message: 'Please select payment date' }]}
+                rules={[
+                  { required: true, message: "Please select payment date" },
+                ]}
               >
-                <DatePicker style={{ width: '100%' }} />
+                <DatePicker style={{ width: "100%" }} />
               </Form.Item>
             </Col>
             <Col span={12}>
-              <Form.Item
-                name="referenceNumber"
-                label="Reference Number"
-              >
+              <Form.Item name="referenceNumber" label="Reference Number">
                 <Input placeholder="Cheque/Transaction reference" />
               </Form.Item>
             </Col>
           </Row>
-          <Form.Item
-            name="notes"
-            label="Notes"
-          >
+          <Form.Item name="notes" label="Notes">
             <Input.TextArea rows={3} placeholder="Additional notes..." />
           </Form.Item>
           <Form.Item>
@@ -1175,9 +1489,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
               <Button type="primary" htmlType="submit">
                 Record Payment
               </Button>
-              <Button onClick={() => setShowPaymentModal(false)}>
-                Cancel
-              </Button>
+              <Button onClick={() => setShowPaymentModal(false)}>Cancel</Button>
             </Space>
           </Form.Item>
         </Form>
@@ -1198,7 +1510,11 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
         {selectedPayment && (
           <div className="mb-4">
             <Alert
-              message={`Payment #${selectedPayment.paymentNumber} - Unallocated: ${formatCurrency(selectedPayment.unallocatedAmount)}`}
+              message={`Payment #${
+                selectedPayment.paymentNumber
+              } - Unallocated: ${formatCurrency(
+                selectedPayment.unallocatedAmount
+              )}`}
               type="info"
             />
           </div>
@@ -1212,9 +1528,9 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                 input: {
                   paymentId: selectedPayment?.id,
                   invoiceId: values.invoiceId,
-                  allocatedAmount: values.allocatedAmount
-                }
-              }
+                  allocatedAmount: values.allocatedAmount,
+                },
+              },
             });
           }}
         >
@@ -1223,21 +1539,23 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
               <Form.Item
                 name="invoiceId"
                 label="Select Invoice"
-                rules={[{ required: true, message: 'Please select an invoice' }]}
+                rules={[
+                  { required: true, message: "Please select an invoice" },
+                ]}
               >
-                <Select 
+                <Select
                   placeholder="Select invoice to allocate payment"
                   showSearch
                   optionFilterProp="children"
                 >
                   {invoicesData?.clientInvoices?.invoices
-                    ?.filter(invoice => invoice.balanceAmount > 0)
-                    ?.map(invoice => (
-                    <Option key={invoice.id} value={invoice.id}>
-                      {invoice.invoiceNumber} - {invoice.project.projectCode} 
-                      (Balance: {formatCurrency(invoice.balanceAmount)})
-                    </Option>
-                  ))}
+                    ?.filter((invoice) => invoice.balanceAmount > 0)
+                    ?.map((invoice) => (
+                      <Option key={invoice.id} value={invoice.id}>
+                        {invoice.invoiceNumber} - {invoice.project.projectCode}
+                        (Balance: {formatCurrency(invoice.balanceAmount)})
+                      </Option>
+                    ))}
                 </Select>
               </Form.Item>
             </Col>
@@ -1245,15 +1563,17 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
               <Form.Item
                 name="allocatedAmount"
                 label="Amount to Allocate"
-                rules={[{ required: true, message: 'Please enter amount' }]}
+                rules={[{ required: true, message: "Please enter amount" }]}
               >
                 <InputNumber
-                  style={{ width: '100%' }}
+                  style={{ width: "100%" }}
                   min={0.01}
                   max={selectedPayment?.unallocatedAmount}
                   precision={2}
-                  formatter={value => `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                  parser={value => value.replace(/₹\s?|(,*)/g, '')}
+                  formatter={(value) =>
+                    `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                  }
+                  parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
                 />
               </Form.Item>
             </Col>

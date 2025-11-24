@@ -611,6 +611,9 @@ export const GET_PROJECT_STATS = gql`
       flyOnCreditCount
       flyOnCreditEstimatedCost
       flyOnCreditActualCost
+      noInvoiceCount
+      noInvoiceEstimatedCost
+      noInvoiceActualCost
     }
   }
 `;

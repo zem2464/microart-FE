@@ -130,14 +130,28 @@ export const GET_CLIENT_LEDGER_RANGE = gql`
         transactionDate
         referenceNumber
         status
-        project {
-          id
-          projectCode
-          description
-        }
         invoice {
           id
           invoiceNumber
+          invoiceDate
+          project {
+            id
+            projectCode
+            name
+            description
+            createdAt
+            projectGradings {
+              id
+              imageQuantity
+              customRate
+              grading {
+                id
+                name
+                shortCode
+                defaultRate
+              }
+            }
+          }
         }
         payment {
           id

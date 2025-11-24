@@ -40,6 +40,7 @@ import {
   CloseOutlined,
   ClockCircleOutlined,
   DollarOutlined,
+  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation } from "@apollo/client";
 import {
@@ -98,6 +99,10 @@ const ProjectManagement = () => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [actualImageCount, setActualImageCount] = useState(0);
 
+  // Invoice generation modal state
+  const [invoiceModalVisible, setInvoiceModalVisible] = useState(false);
+  const [projectToInvoice, setProjectToInvoice] = useState(null);
+
   // Credit approval modal state
   const [creditApprovalModalVisible, setCreditApprovalModalVisible] =
     useState(false);
@@ -108,6 +113,25 @@ const ProjectManagement = () => {
   const [editingStatus, setEditingStatus] = useState({});
   const [tempValues, setTempValues] = useState({});
 
+  // Build filters object for GraphQL query
+  const buildFilters = useCallback(() => {
+    const filters = {};
+    
+    if (statusFilter !== "all") {
+      if (statusFilter === "NO_INVOICE") {
+        filters.noInvoice = true;
+      } else if (statusFilter !== "REQUESTED") {
+        filters.status = statusFilter;
+      }
+    }
+    
+    if (clientFilter !== "all") {
+      filters.clientId = clientFilter;
+    }
+    
+    return filters;
+  }, [statusFilter, clientFilter]);
+
   // GraphQL Queries
   const {
     data: projectsData,
@@ -117,7 +141,7 @@ const ProjectManagement = () => {
     fetchMore,
   } = useQuery(GET_PROJECTS, {
     variables: {
-      filters: {},
+      filters: buildFilters(),
       page: 1,
       limit: 20,
       sortBy: "createdAt",
@@ -139,7 +163,7 @@ const ProjectManagement = () => {
   });
 
   // New stats query for accurate project counts
-  const { data: statsData, loading: statsLoading } = useQuery(GET_PROJECT_STATS, {
+  const { data: statsData, loading: statsLoading, refetch: refetchStats } = useQuery(GET_PROJECT_STATS, {
     fetchPolicy: "cache-and-network",
   });
 
@@ -256,6 +280,9 @@ const ProjectManagement = () => {
         try {
           refetchClients && refetchClients();
         } catch (e) {}
+        try {
+          refetchStats && refetchStats();
+        } catch (e) {}
       } else {
         message.error(
           data?.generateProjectInvoice?.message || "Failed to generate invoice"
@@ -301,6 +328,18 @@ const ProjectManagement = () => {
   const allProjects =
     projectsData?.projects?.projects || projectsData?.projects?.data || [];
 
+  // Refetch projects when filters change
+  useEffect(() => {
+    refetchProjects({
+      filters: buildFilters(),
+      page: 1,
+      limit: 20,
+      sortBy: "createdAt",
+      sortOrder: "DESC",
+    });
+    setPage(1); // Reset page on filter change
+  }, [statusFilter, clientFilter, buildFilters, refetchProjects]);
+
   // Check if there are more items to load
   useEffect(() => {
     if (projectsData?.projects?.pagination) {
@@ -317,7 +356,7 @@ const ProjectManagement = () => {
     try {
       await fetchMore({
         variables: {
-          filters: {},
+          filters: buildFilters(),
           page: page + 1,
           limit: 20,
           sortBy: "createdAt",
@@ -384,7 +423,7 @@ const ProjectManagement = () => {
     }
   }, [allProjects]);
 
-  // Filter projects based on search and filters
+  // Filter projects based on search (status and client filtering now handled server-side)
   const filteredProjects =
     allProjects.filter((project) => {
       const code = (
@@ -400,20 +439,14 @@ const ProjectManagement = () => {
         code.toLowerCase().includes(searchLower) ||
         desc.toLowerCase().includes(searchLower);
 
-      const projStatus = (project.status || "").toString().toUpperCase();
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "REQUESTED" 
-          ? project.creditRequest?.status === "approved" // Fly-on-Credit filter
-          : projStatus === (statusFilter || "").toString().toUpperCase());
+      // Additional client-side filtering for REQUESTED (fly-on-credit)
+      // since this uses a relationship that's harder to filter server-side
+      if (statusFilter === "REQUESTED") {
+        return matchesSearch && project.creditRequest?.status === "approved";
+      }
 
-      const projClientId = project.clientId || project.client?.id;
-      const matchesClient =
-        clientFilter === "all" ||
-        projClientId === clientFilter ||
-        projClientId === parseInt(clientFilter);
-
-      return matchesSearch && matchesStatus && matchesClient;
+      // For other filters (NO_INVOICE, status, client), server handles it
+      return matchesSearch;
     }) || [];
 
   // Helper function to generate folder name for copying
@@ -542,6 +575,7 @@ const ProjectManagement = () => {
 
   console.log('📊 statsMap after processing:', statsMap);
   console.log('📊 Fly-on-Credit count from response:', projectStatsResponse.flyOnCreditCount);
+  console.log('📊 No Invoice count from response:', projectStatsResponse.noInvoiceCount);
 
   const stats = {
     total: projectStats.reduce((sum, s) => sum + s.count, 0),
@@ -553,12 +587,14 @@ const ProjectManagement = () => {
     cancelled: statsMap.cancelled?.count || 0,
     onHold: statsMap.on_hold?.count || 0,
     flyOnCredit: projectStatsResponse.flyOnCreditCount || 0, // Use dedicated fly-on-credit count from response
+    noInvoice: projectStatsResponse.noInvoiceCount || 0, // Use server-side count for completed projects without invoices
     totalEstimatedCost: projectStats.reduce((sum, s) => sum + (s.totalEstimatedCost || 0), 0),
     totalActualCost: projectStats.reduce((sum, s) => sum + (s.totalActualCost || 0), 0),
   };
 
   console.log('📊 Final stats object:', stats);
   console.log('📊 Fly-on-Credit count:', stats.flyOnCredit);
+  console.log('📊 No Invoice count:', stats.noInvoice);
 
   // Handle project actions
   const handleViewProject = (project) => {
@@ -697,6 +733,24 @@ const ProjectManagement = () => {
           approvalNotes: approvalNotes,
         },
       },
+    });
+  };
+
+  // Invoice generation handler
+  const handleGenerateInvoice = () => {
+    if (!projectToInvoice) return;
+    
+    generateInvoice({
+      variables: { projectId: projectToInvoice.id },
+    }).then(() => {
+      // optimistically mark as invoiced locally
+      setInvoicedProjectIds((prev) => new Set(prev).add(projectToInvoice.id));
+      setInvoiceModalVisible(false);
+      setProjectToInvoice(null);
+    }).catch((err) => {
+      // Error handling is in mutation onError callback
+      setInvoiceModalVisible(false);
+      setProjectToInvoice(null);
     });
   };
 
@@ -1034,22 +1088,8 @@ const ProjectManagement = () => {
                   icon={<FileTextOutlined />}
                   style={{ color: "#1890ff" }}
                   onClick={() => {
-                    Modal.confirm({
-                      title: "Generate Invoice",
-                      content: `Generate invoice for project ${
-                        record.projectCode || record.id
-                      }?`,
-                      okText: "Generate",
-                      onOk: () =>
-                        generateInvoice({
-                          variables: { projectId: record.id },
-                        }).then(() => {
-                          // optimistically mark as invoiced locally
-                          setInvoicedProjectIds((prev) =>
-                            new Set(prev).add(record.id)
-                          );
-                        }),
-                    });
+                    setProjectToInvoice(record);
+                    setInvoiceModalVisible(true);
                   }}
                 />
               </Tooltip>
@@ -1244,6 +1284,32 @@ const ProjectManagement = () => {
                     {stats.flyOnCredit}
                   </Tag>
                 </Space>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
+                    backgroundColor: stats.noInvoice > 0 ? "#fff7e6" : "transparent",
+                    border: stats.noInvoice > 0 ? "1px solid #ffa940" : "none",
+                  }}
+                  className="hover:bg-orange-100"
+                  onClick={() => setStatusFilter("NO_INVOICE")}
+                >
+                  <ExclamationCircleOutlined
+                    style={{ fontSize: 16, color: "#fa8c16" }}
+                  />
+                  <Text strong style={{ fontSize: 14 }}>
+                    No Invoice:
+                  </Text>
+                  <Tag
+                    color="orange"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.noInvoice}
+                  </Tag>
+                </Space>
               </Space>
             </Col>
           </Row>
@@ -1293,6 +1359,7 @@ const ProjectManagement = () => {
                 <Option value="ACTIVE">Active</Option>
                 <Option value="COMPLETED">Completed</Option>
                 <Option value="REQUESTED">Fly-on-Credit</Option>
+                <Option value="NO_INVOICE">No Invoice</Option>
                 <Option value="CANCELLED">Cancelled</Option>
               </Select>
             </Col>
@@ -1571,6 +1638,121 @@ const ProjectManagement = () => {
                 style={{ marginTop: 8 }}
               />
             </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* Invoice Generation Modal */}
+      <Modal
+        title="Generate Invoice"
+        open={invoiceModalVisible}
+        onOk={handleGenerateInvoice}
+        onCancel={() => {
+          setInvoiceModalVisible(false);
+          setProjectToInvoice(null);
+        }}
+        okText="Generate Invoice"
+        okButtonProps={{
+          type: "primary",
+          icon: <FileTextOutlined />,
+        }}
+        width={600}
+      >
+        {projectToInvoice && (
+          <div>
+            <Alert
+              message="Invoice Generation"
+              description="Review the project details below before generating the invoice."
+              type="info"
+              showIcon
+              style={{ marginBottom: 20 }}
+            />
+
+            <Descriptions
+              title="Project Details"
+              column={1}
+              bordered
+              size="small"
+              style={{ marginBottom: 20 }}
+            >
+              <Descriptions.Item label="Project Code">
+                <Text strong>{projectToInvoice.projectCode}</Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Client">
+                <Text strong>
+                  {projectToInvoice.client?.displayName || 
+                   projectToInvoice.client?.companyName ||
+                   projectToInvoice.client?.clientCode}
+                </Text>
+              </Descriptions.Item>
+              <Descriptions.Item label="Status">
+                <Tag color={
+                  projectToInvoice.status === 'completed' ? 'green' : 
+                  projectToInvoice.status === 'active' ? 'blue' : 'default'
+                }>
+                  {projectToInvoice.status?.toUpperCase()}
+                </Tag>
+              </Descriptions.Item>
+              
+              {/* Show grading details */}
+              {projectToInvoice.projectGradings && projectToInvoice.projectGradings.length > 0 ? (
+                <>
+                  <Descriptions.Item label="Gradings">
+                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                      {projectToInvoice.projectGradings.map((pg, idx) => (
+                        <div key={idx}>
+                          <Text strong>{pg.grading?.name}</Text>
+                          {' - '}
+                          <Text>{pg.imageQuantity} images</Text>
+                          {' × '}
+                          <Text>₹{(pg.customRate || pg.grading?.defaultRate || 0).toLocaleString()}</Text>
+                          {' = '}
+                          <Text strong style={{ color: '#1890ff' }}>
+                            ₹{(pg.estimatedCost || 0).toLocaleString()}
+                          </Text>
+                        </div>
+                      ))}
+                    </Space>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Total Images">
+                    <Text strong>{projectToInvoice.totalImageQuantity || 0}</Text>
+                  </Descriptions.Item>
+                </>
+              ) : (
+                <>
+                  <Descriptions.Item label="Grading">
+                    {projectToInvoice.grading?.name || 'N/A'}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Images">
+                    <Text strong>{projectToInvoice.imageQuantity || 0}</Text>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="Rate per Image">
+                    ₹{(projectToInvoice.grading?.defaultRate || 0).toLocaleString()}
+                  </Descriptions.Item>
+                </>
+              )}
+              
+              <Descriptions.Item label="Estimated Cost">
+                <Text strong style={{ fontSize: '16px', color: '#52c41a' }}>
+                  ₹{((projectToInvoice.totalEstimatedCost || projectToInvoice.estimatedCost) || 0).toLocaleString()}
+                </Text>
+              </Descriptions.Item>
+              
+              {projectToInvoice.totalActualCost > 0 && (
+                <Descriptions.Item label="Actual Cost">
+                  <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
+                    ₹{(projectToInvoice.totalActualCost || projectToInvoice.actualCost || 0).toLocaleString()}
+                  </Text>
+                </Descriptions.Item>
+              )}
+            </Descriptions>
+
+            <Alert
+              message="Confirmation"
+              description="Click 'Generate Invoice' to create an invoice for this project. This action cannot be undone."
+              type="warning"
+              showIcon
+            />
           </div>
         )}
       </Modal>

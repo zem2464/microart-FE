@@ -77,7 +77,7 @@ const PRIORITY_COLORS = {
 const TaskTable = () => {
   const currentUser = useReactiveVar(userCacheVar);
   const [searchText, setSearchText] = useState("");
-  const [statusFilter, setStatusFilter] = useState("active"); // Default to 'active' to hide completed
+  const [statusFilter, setStatusFilter] = useState("all"); // Show all tasks including completed
   const [userFilter, setUserFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [selectedWorkTypeId, setSelectedWorkTypeId] = useState("all");
@@ -93,6 +93,7 @@ const TaskTable = () => {
   // Editing states for inline editing
   const [editingCell, setEditingCell] = useState({
     projectId: null,
+    gradingId: null,
     taskTypeId: null,
     field: null,
   });
@@ -486,9 +487,48 @@ const TaskTable = () => {
         // If project has gradings for this worktype, create a row for each grading
         if (gradings.length > 0) {
           gradings.forEach((grading, idx) => {
+            const gradingId = grading.gradingId || grading.id;
+            
+            // Filter tasks for this specific grading
+            const gradingTasks = projectData.tasksList.filter(task => {
+              const taskGradingId = task.gradingTask?.grading?.id;
+              return taskGradingId && String(taskGradingId) === String(gradingId);
+            });
+            
+            // Create tasksByType map for this grading only
+            const tasksByTypeForGrading = {};
+            gradingTasks.forEach(task => {
+              const taskTypeId = task.taskType?.id ? String(task.taskType.id) : "no-tasktype";
+              tasksByTypeForGrading[taskTypeId] = task;
+            });
+            
+            // Calculate status for this grading's tasks only
+            const gradingStatusCounts = {
+              TODO: 0,
+              IN_PROGRESS: 0,
+              REVIEW: 0,
+              REVISION: 0,
+              COMPLETED: 0,
+              CANCELLED: 0,
+              ON_HOLD: 0,
+            };
+            
+            gradingTasks.forEach((task) => {
+              const status = (task.status || "TODO").toUpperCase();
+              if (gradingStatusCounts[status] !== undefined) {
+                gradingStatusCounts[status]++;
+              }
+            });
+            
+            const gradingTotalTasks = gradingTasks.length;
+            const gradingCompletedTasks = gradingStatusCounts.COMPLETED;
+            const gradingProgress =
+              gradingTotalTasks > 0 ? Math.round((gradingCompletedTasks / gradingTotalTasks) * 100) : 0;
+            
             rows.push({
-              key: `${workTypeId}-${project.id}-grading-${idx}`,
+              key: `${workTypeId}-${project.id}-grading-${gradingId}`,
               projectId: project.id,
+              gradingId: gradingId,
               project: project,
               projectCode: project.projectCode || project.projectNumber,
               projectName: project.name,
@@ -501,18 +541,18 @@ const TaskTable = () => {
               dueDate: earliestDueDate,
               priority: project.priority || "B",
               status:
-                progress === 100
+                gradingProgress === 100
                   ? "COMPLETED"
-                  : totalTasks > 0
+                  : gradingTotalTasks > 0
                     ? "IN_PROGRESS"
                     : "TODO",
-              progress,
-              totalTasks,
-              completedTasks,
-              statusCounts,
-              // Tasks mapped by taskTypeId for easy column access
-              tasksByType: projectData.tasks,
-              allTasks: projectData.tasksList,
+              progress: gradingProgress,
+              totalTasks: gradingTotalTasks,
+              completedTasks: gradingCompletedTasks,
+              statusCounts: gradingStatusCounts,
+              // Tasks mapped by taskTypeId for this grading only
+              tasksByType: tasksByTypeForGrading,
+              allTasks: gradingTasks,
             });
           });
         } else {
@@ -520,6 +560,7 @@ const TaskTable = () => {
           rows.push({
             key: `${workTypeId}-${project.id}`,
             projectId: project.id,
+            gradingId: null,
             project: project,
             projectCode: project.projectCode || project.projectNumber,
             projectName: project.name,
@@ -614,22 +655,23 @@ const TaskTable = () => {
   }, [allWorkTypeTabs]);
 
   // Inline editing functions for task cells
-  const isEditingCell = (projectId, taskTypeId, field) => {
+  const isEditingCell = (projectId, gradingId, taskTypeId, field) => {
     return (
       editingCell.projectId === projectId &&
+      editingCell.gradingId === gradingId &&
       editingCell.taskTypeId === taskTypeId &&
       editingCell.field === field
     );
   };
 
-  const startEditCell = (projectId, taskTypeId, field, currentValue, e) => {
+  const startEditCell = (projectId, gradingId, taskTypeId, field, currentValue, e) => {
     e?.stopPropagation();
-    setEditingCell({ projectId, taskTypeId, field });
+    setEditingCell({ projectId, gradingId, taskTypeId, field });
     setEditedData({ [field]: currentValue });
   };
 
   const cancelEditCell = () => {
-    setEditingCell({ projectId: null, taskTypeId: null, field: null });
+    setEditingCell({ projectId: null, gradingId: null, taskTypeId: null, field: null });
     setEditedData({});
   };
 
@@ -760,6 +802,7 @@ const TaskTable = () => {
 
               const isEditingStatus = isEditingCell(
                 record.projectId,
+                record.gradingId,
                 taskType.id,
                 "status"
               );
@@ -822,6 +865,7 @@ const TaskTable = () => {
                     e.stopPropagation();
                     startEditCell(
                       record.projectId,
+                      record.gradingId,
                       taskType.id,
                       "status",
                       task.status
@@ -868,6 +912,7 @@ const TaskTable = () => {
 
               const isEditingAssignee = isEditingCell(
                 record.projectId,
+                record.gradingId,
                 taskType.id,
                 "assigneeId"
               );
@@ -948,6 +993,7 @@ const TaskTable = () => {
                     e.stopPropagation();
                     startEditCell(
                       record.projectId,
+                      record.gradingId,
                       taskType.id,
                       "assigneeId",
                       task.assigneeId
@@ -1002,6 +1048,7 @@ const TaskTable = () => {
         render: (date, record) => {
           const isEditing = isEditingCell(
             record.projectId,
+            record.gradingId,
             "dueDate",
             "dueDate"
           );
@@ -1054,7 +1101,7 @@ const TaskTable = () => {
             <div
               onClick={(e) => {
                 e.stopPropagation();
-                startEditCell(record.projectId, "dueDate", "dueDate", date);
+                startEditCell(record.projectId, record.gradingId, "dueDate", "dueDate", date);
               }}
               style={{ cursor: "pointer" }}
             >
