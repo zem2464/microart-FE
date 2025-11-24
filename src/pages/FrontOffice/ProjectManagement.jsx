@@ -63,11 +63,13 @@ const { Option } = Select;
 
 // Status display map for labels and colors
 const STATUS_MAP = {
-  DRAFT: { label: "Draft", color: "orange" },
+  DRAFT: { label: "Draft", color: "default" },
   ACTIVE: { label: "Active", color: "green" },
-  IN_PROGRESS: { label: "In Progress", color: "blue" },
-  COMPLETED: { label: "Completed", color: "blue" },
-  CANCELLED: { label: "Cancelled", color: "red" },
+  IN_PROGRESS: { label: "In Progress", color: "processing" },
+  REVIEW: { label: "Review", color: "cyan" },
+  COMPLETED: { label: "Completed", color: "success" },
+  CANCELLED: { label: "Cancelled", color: "error" },
+  ON_HOLD: { label: "On Hold", color: "warning" },
   REQUESTED: { label: "Pending Approval", color: "purple" },
 };
 
@@ -703,7 +705,7 @@ const ProjectManagement = () => {
     setEditingStatus((prev) => ({ ...prev, [projectId]: true }));
     setTempValues((prev) => ({
       ...prev,
-      [`status_${projectId}`]: currentStatus,
+      [`status_${projectId}`]: currentStatus?.toLowerCase(),
     }));
   };
 
@@ -721,7 +723,7 @@ const ProjectManagement = () => {
         variables: {
           id: projectId,
           input: {
-            status: newStatus,
+            status: newStatus.toUpperCase(),
           },
         },
       });
@@ -778,10 +780,12 @@ const ProjectManagement = () => {
         const isEditing = editingStatus[record.id];
         const tempValue = tempValues[`status_${record.id}`];
 
-        const statusOptions = [
-          { value: "draft", label: "Draft", color: "default" },
-          { value: "active", label: "Active", color: "blue" },
-        ];
+        // Derive options from STATUS_MAP
+        const statusOptions = Object.entries(STATUS_MAP).map(([key, config]) => ({
+          value: key.toLowerCase(),
+          label: config.label,
+          color: config.color,
+        }));
 
         if (isEditing) {
           return (
@@ -795,54 +799,45 @@ const ProjectManagement = () => {
                   }))
                 }
                 size="small"
-                style={{ width: 120 }}
+                style={{ width: 140 }}
               >
                 {statusOptions.map((option) => (
-                  <Select.Option key={option.value} value={option.value}>
-                    {option.label}
-                  </Select.Option>
+                  <Option key={option.value} value={option.value}>
+                    <Tag color={option.color}>{option.label}</Tag>
+                  </Option>
                 ))}
               </Select>
-              <div className="flex space-x-1">
-                <Tooltip title="Save">
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<CheckOutlined />}
-                    onClick={() => handleSaveStatusEdit(record.id)}
-                    style={{ color: "#52c41a" }}
-                  />
-                </Tooltip>
-                <Tooltip title="Cancel">
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<CloseOutlined />}
-                    onClick={() => handleCancelStatusEdit(record.id)}
-                    style={{ color: "#ff4d4f" }}
-                  />
-                </Tooltip>
-              </div>
+              <Button
+                type="primary"
+                size="small"
+                icon={<CheckOutlined />}
+                onClick={() => handleSaveStatusEdit(record.id)}
+              />
+              <Button
+                size="small"
+                icon={<CloseOutlined />}
+                onClick={() => handleCancelStatusEdit(record.id)}
+              />
             </div>
           );
         }
 
-        const currentStatus = statusOptions.find(
-          (s) => s.value === status?.toLowerCase()
-        );
+        const statusKey = (status || "").toUpperCase();
+        const statusConfig = STATUS_MAP[statusKey] || {
+          label: status,
+          color: "default",
+        };
 
         return (
-          <div className="group">
-            <div
-              className="cursor-pointer hover:bg-gray-50 px-2 py-1 rounded flex items-center justify-between"
-              onClick={() => handleEditStatus(record.id, status?.toLowerCase())}
-              title="Click to edit status"
-            >
-              <Tag color={currentStatus?.color || "default"}>
-                {currentStatus?.label || status?.toUpperCase()}
-              </Tag>
-              <EditOutlined className="opacity-0 group-hover:opacity-100 text-xs ml-1" />
-            </div>
+          <div className="group flex items-center justify-between">
+            <Tag color={statusConfig.color}>{statusConfig.label}</Tag>
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              className="opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={() => handleEditStatus(record.id, status)}
+            />
           </div>
         );
       },

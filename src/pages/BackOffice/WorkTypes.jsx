@@ -15,7 +15,17 @@ import {
   GET_WORK_TYPES,
   UPDATE_WORK_TYPE,
   DELETE_WORK_TYPE,
+  REORDER_WORK_TYPES,
 } from "../../gql/workTypes";
+import { DndContext, PointerSensor, useSensor, useSensors, closestCenter } from "@dnd-kit/core";
+import { restrictToVerticalAxis } from "@dnd-kit/modifiers";
+import {
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { MenuOutlined } from "@ant-design/icons";
 import {
   CommonTable,
   StatusTag,
@@ -31,7 +41,17 @@ import {
 const WorkTypes = () => {
   const [loading, setLoading] = useState(false);
   const [searchValue, setSearchValue] = useState("");
+
   const userData = useReactiveVar(userCacheVar);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
 
   // Permission checks
   const canCreate = hasPermission(
@@ -86,6 +106,17 @@ const WorkTypes = () => {
     },
     onError: (error) => {
       message.error(`Failed to delete work type: ${error.message}`);
+    },
+  });
+
+  const [reorderWorkTypes] = useMutation(REORDER_WORK_TYPES, {
+    refetchQueries: [{ query: GET_WORK_TYPES }],
+    awaitRefetchQueries: true,
+    onCompleted: () => {
+      message.success("Work types reordered successfully");
+    },
+    onError: (error) => {
+      message.error(`Failed to reorder work types: ${error.message}`);
     },
   });
 
@@ -262,6 +293,12 @@ const WorkTypes = () => {
   // Table columns configuration
   const columns = [
     {
+      title: "",
+      key: "sort",
+      width: 30,
+      render: () => <MenuOutlined style={{ cursor: "grab", color: "#999" }} />,
+    },
+    {
       title: "Name",
       dataIndex: "name",
       key: "name",
@@ -354,7 +391,7 @@ const WorkTypes = () => {
             icon: <DeleteOutlined />,
             label: "Delete",
             danger: true,
-            onClick: () => {handleDelete(record)}, // Handled in
+            onClick: () => { handleDelete(record) }, // Handled in
             popconfirm: {
               title: "Are you sure you want to delete this work type?",
               description: "This action cannot be undone.",
@@ -367,27 +404,128 @@ const WorkTypes = () => {
     },
   ];
 
+
+
+  const handleDragStart = (event) => {
+    console.log("🎯 Drag started:", event.active.id);
+  };
+
+  const onDragEnd = async ({ active, over }) => {
+    console.log("🎯 Drag ended:", { activeId: active.id, overId: over?.id });
+
+    if (!over) {
+      console.log("⚠️ No drop target");
+      return;
+    }
+
+    if (active.id !== over.id) {
+      const activeIndex = filteredData.findIndex((i) => i.id === active.id);
+      const overIndex = filteredData.findIndex((i) => i.id === over.id);
+
+      console.log("📊 Reordering:", { activeIndex, overIndex });
+
+      const items = Array.from(filteredData);
+      const [reorderedItem] = items.splice(activeIndex, 1);
+      items.splice(overIndex, 0, reorderedItem);
+
+      const workTypeIds = items.map((item) => item.id);
+      console.log("📤 Sending reorder mutation:", workTypeIds);
+
+      try {
+        await reorderWorkTypes({
+          variables: { workTypeIds },
+        });
+        console.log("✅ Reorder successful");
+      } catch (error) {
+        console.error("❌ Reorder error:", error);
+      }
+    }
+  };
+
   return (
-    <CommonTable
-      title="Work Types"
-      subtitle="Manage service packages and their associated task types"
-      dataSource={filteredData}
-      columns={columns}
-      loading={queryLoading || loading}
-      onSearch={setSearchValue}
-      searchPlaceholder="Search work types..."
-      onAdd={canCreate ? handleCreate : null}
-      addButtonText="Add Work Type"
-      showExport={true}
-      pagination={{
-        pageSize: 10,
-        showSizeChanger: true,
-        showQuickJumper: true,
-        showTotal: (total, range) =>
-          `${range[0]}-${range[1]} of ${total} work types`,
-        pageSizeOptions: [10, 25, 50, 100],
-      }}
-    />
+    <DndContext
+      sensors={sensors}
+      modifiers={[restrictToVerticalAxis]}
+      onDragStart={handleDragStart}
+      onDragEnd={onDragEnd}
+      collisionDetection={closestCenter}
+    >
+      <CommonTable
+        title="Work Types"
+        subtitle="Manage service packages and their associated task types"
+        dataSource={filteredData}
+        columns={columns}
+        loading={queryLoading || loading}
+        onSearch={setSearchValue}
+        searchPlaceholder="Search work types..."
+        onAdd={canCreate ? handleCreate : null}
+        addButtonText="Add Work Type"
+        showExport={true}
+        pagination={false} // Disable pagination for drag and drop
+        rowKey="id"
+        components={{
+          body: {
+            wrapper: ({ children, ...props }) => (
+              <SortableContext
+                items={filteredData.map((i) => i.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <tbody {...props}>{children}</tbody>
+              </SortableContext>
+            ),
+            row: DraggableBodyRow,
+          },
+        }}
+      />
+    </DndContext>
+  );
+};
+
+const DraggableBodyRow = ({ children, ...props }) => {
+  const rowId = props["data-row-key"];
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
+    id: rowId,
+  });
+
+  // Debug logging
+  React.useEffect(() => {
+    if (isDragging) {
+      console.log("🔄 Row is being dragged:", rowId);
+    }
+  }, [isDragging, rowId]);
+
+  const style = {
+    ...props.style,
+    transform: CSS.Transform.toString(transform && { ...transform, scaleY: 1 }),
+    transition,
+    cursor: "move",
+    userSelect: "none",
+    ...(isDragging ? {
+      position: "relative",
+      zIndex: 9999,
+      opacity: 0.5,
+      background: "#e6f7ff",
+      boxShadow: "0 4px 12px rgba(0,0,0,0.15)"
+    } : {}),
+  };
+
+  return (
+    <tr
+      {...props}
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...listeners}
+    >
+      {children}
+    </tr>
   );
 };
 

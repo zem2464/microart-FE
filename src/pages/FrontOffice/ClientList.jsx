@@ -45,14 +45,17 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 
 const ClientList = () => {
-  const [filters, setFilters] = useState({});
+  const [filters, setFilters] = useState({
+    search: "",
+    clientType: undefined,
+    priority: undefined,
+    isActive: undefined,
+  });
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [sorter, setSorter] = useState({ field: "createdAt", order: "DESC" });
-  const [searchText, setSearchText] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
   const [editingCredit, setEditingCredit] = useState({}); // Track which credit limits are being edited
   const [editingStatus, setEditingStatus] = useState({}); // Track which statuses are being edited
   const [tempValues, setTempValues] = useState({}); // Store temporary edit values
@@ -109,6 +112,18 @@ const ClientList = () => {
 
   const clients = data?.clients || [];
   const totalCount = data?.clientsCount || 0;
+
+  // Refetch when filters or sorter change
+  React.useEffect(() => {
+    setPage(1); // Reset to first page when filters change
+    refetch({
+      filters,
+      page: 1,
+      limit: pageSize,
+      sortBy: sorter.field,
+      sortOrder: sorter.order,
+    });
+  }, [filters, sorter, pageSize, refetch]);
 
   // Check if there are more items to load
   React.useEffect(() => {
@@ -169,43 +184,8 @@ const ClientList = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // Filter clients based on search and status
-  const filteredClients = useMemo(() => {
-    return clients.filter((client) => {
-      // Search filter
-      if (searchText) {
-        const search = searchText.toLowerCase();
-        const companyName = (client.companyName || "").toLowerCase();
-        const displayName = (client.displayName || "").toLowerCase();
-        const firstName = (client.firstName || "").toLowerCase();
-        const lastName = (client.lastName || "").toLowerCase();
-        const email = (client.email || "").toLowerCase();
-        const phone = (client.phone || "").toLowerCase();
-        const clientCode = (client.clientCode || "").toLowerCase();
-
-        if (
-          !companyName.includes(search) &&
-          !displayName.includes(search) &&
-          !firstName.includes(search) &&
-          !lastName.includes(search) &&
-          !email.includes(search) &&
-          !phone.includes(search) &&
-          !clientCode.includes(search)
-        ) {
-          return false;
-        }
-      }
-
-      // Status filter
-      if (statusFilter && statusFilter !== "all") {
-        if (client.status !== statusFilter) {
-          return false;
-        }
-      }
-
-      return true;
-    });
-  }, [clients, searchText, statusFilter]);
+  // Use backend-filtered data directly
+  const filteredClients = clients;
 
   // Client type colors - memoized
   const getClientTypeColor = useCallback((type) => {
@@ -1095,24 +1075,64 @@ const ClientList = () => {
               <Input
                 placeholder="Search clients..."
                 prefix={<SearchOutlined />}
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
+                value={filters.search}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setFilters((prev) => ({ ...prev, search: value }));
+                  setPage(1);
+                }}
                 allowClear
+                onPressEnter={(e) => handleSearch(e.target.value)}
               />
             </Col>
             <Col span={4}>
               <Select
-                placeholder="Status"
-                value={statusFilter}
-                onChange={setStatusFilter}
+                placeholder="Client Type"
+                value={filters.clientType}
+                onChange={(value) => {
+                  setFilters((prev) => ({ ...prev, clientType: value }));
+                  setPage(1);
+                }}
                 style={{ width: "100%" }}
+                allowClear
               >
-                <Option value="all">All Status</Option>
-                <Option value="ACTIVE">Active</Option>
-                <Option value="INACTIVE">Inactive</Option>
+                <Option value="permanent">Permanent</Option>
+                <Option value="walkIn">Walk-In</Option>
               </Select>
             </Col>
-            <Col span={12} style={{ textAlign: "right" }}>
+            <Col span={4}>
+              <Select
+                placeholder="Priority"
+                value={filters.priority}
+                onChange={(value) => {
+                  setFilters((prev) => ({ ...prev, priority: value }));
+                  setPage(1);
+                }}
+                style={{ width: "100%" }}
+                allowClear
+              >
+                <Option value="low">Low</Option>
+                <Option value="medium">Medium</Option>
+                <Option value="high">High</Option>
+                <Option value="urgent">Urgent</Option>
+              </Select>
+            </Col>
+            <Col span={4}>
+              <Select
+                placeholder="Status"
+                value={filters.isActive}
+                onChange={(value) => {
+                  setFilters((prev) => ({ ...prev, isActive: value }));
+                  setPage(1);
+                }}
+                style={{ width: "100%" }}
+                allowClear
+              >
+                <Option value={true}>Active</Option>
+                <Option value={false}>Inactive</Option>
+              </Select>
+            </Col>
+            <Col span={4} style={{ textAlign: "right" }}>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}

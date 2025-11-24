@@ -8,16 +8,12 @@ import {
   Button,
   Space,
   DatePicker,
-  Progress,
   Tooltip,
   message,
-  Drawer,
-  Descriptions,
   Row,
   Col,
   Typography,
   Tabs,
-  Avatar,
 } from "antd";
 import {
   SearchOutlined,
@@ -28,8 +24,6 @@ import {
   ClockCircleOutlined,
   SyncOutlined,
   ExclamationCircleOutlined,
-  CloseOutlined,
-  EditOutlined,
   SaveOutlined,
   CloseCircleOutlined,
 } from "@ant-design/icons";
@@ -45,7 +39,6 @@ import {
 import { GET_AVAILABLE_USERS } from "../../graphql/projectQueries";
 import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import { GET_GRADINGS_BY_WORK_TYPE } from "../../graphql/gradingQueries";
-import TaskCard from "../../components/TaskCard";
 import { userCacheVar } from "../../cache/userCacheVar";
 
 dayjs.extend(relativeTime);
@@ -399,7 +392,9 @@ const TaskTable = () => {
       }
 
       // Add task to project
-      const taskTypeId = task.taskType?.id || "no-tasktype";
+      const taskTypeId = task.taskType?.id
+        ? String(task.taskType.id)
+        : "no-tasktype";
       grouped[workTypeId].projects[projectId].tasks[taskTypeId] = task;
       grouped[workTypeId].projects[projectId].tasksList.push(task);
 
@@ -509,8 +504,8 @@ const TaskTable = () => {
                 progress === 100
                   ? "COMPLETED"
                   : totalTasks > 0
-                  ? "IN_PROGRESS"
-                  : "TODO",
+                    ? "IN_PROGRESS"
+                    : "TODO",
               progress,
               totalTasks,
               completedTasks,
@@ -540,8 +535,8 @@ const TaskTable = () => {
               progress === 100
                 ? "COMPLETED"
                 : totalTasks > 0
-                ? "IN_PROGRESS"
-                : "TODO",
+                  ? "IN_PROGRESS"
+                  : "TODO",
             progress,
             totalTasks,
             completedTasks,
@@ -692,8 +687,9 @@ const TaskTable = () => {
         title: "Project / Client",
         dataIndex: "projectCode",
         key: "project",
-        width: 200,
+        width: 180,
         fixed: "left",
+        ellipsis: true,
         render: (text, record) => (
           <div style={{ fontSize: 12 }}>
             <div style={{ color: "#262626", fontWeight: 600, marginBottom: 2 }}>
@@ -710,7 +706,8 @@ const TaskTable = () => {
       {
         title: "Grading / Qty",
         key: "grading",
-        width: 150,
+        width: 120,
+        ellipsis: true,
         render: (_, record) => {
           if (!record.grading) {
             return <Text type="secondary">-</Text>;
@@ -727,7 +724,7 @@ const TaskTable = () => {
         title: "Order Date",
         dataIndex: "orderDate",
         key: "orderDate",
-        width: 110,
+        width: 100,
         render: (date) => (date ? dayjs(date).format("MMM D, YYYY") : "-"),
       },
     ];
@@ -747,7 +744,7 @@ const TaskTable = () => {
             title: "Status",
             key: `task-${taskType.id}-status`,
             className: "task-type-column",
-            width: 130,
+            width: 110,
             align: "center",
             onCell: () => ({
               style: {
@@ -855,7 +852,7 @@ const TaskTable = () => {
             title: "Assignee",
             key: `task-${taskType.id}-assignee`,
             className: "task-type-column",
-            width: 150,
+            width: 120,
             align: "center",
             onCell: () => ({
               style: {
@@ -875,34 +872,55 @@ const TaskTable = () => {
                 "assigneeId"
               );
 
-              if (isEditingAssignee) {
+              // If task is unassigned OR we are explicitly editing, show the Select
+              if (!task.assignee || isEditingAssignee) {
                 return (
                   <div
                     onClick={(e) => e.stopPropagation()}
                     style={{ padding: "4px 0" }}
                   >
-                    <Space
-                      direction="vertical"
+                    <Select
                       size="small"
-                      style={{ width: "100%" }}
-                    >
-                      <Select
-                        size="small"
-                        value={editedData.assigneeId || task.assigneeId}
-                        onChange={(value) =>
-                          setEditedData({ ...editedData, assigneeId: value })
+                      value={
+                        isEditingAssignee
+                          ? editedData.assigneeId
+                          : task.assigneeId || undefined
+                      }
+                      onChange={(value) => {
+                        if (isEditingAssignee) {
+                          setEditedData({ ...editedData, assigneeId: value });
+                        } else {
+                          // Direct assignment for unassigned tasks
+                          updateTask({
+                            variables: {
+                              id: task.id,
+                              input: { assigneeId: value },
+                            },
+                          });
                         }
-                        style={{ width: "100%" }}
-                        placeholder="Select assignee"
-                        allowClear
-                      >
-                        {users.map((user) => (
-                          <Option key={user.id} value={user.id}>
-                            {user.firstName} {user.lastName}
-                          </Option>
-                        ))}
-                      </Select>
-                      <Space size="small">
+                      }}
+                      style={{ width: "100%" }}
+                      placeholder="Assign User"
+                      allowClear
+                      showSearch
+                      filterOption={(input, option) =>
+                        (option?.children ?? "")
+                          .toLowerCase()
+                          .includes(input.toLowerCase())
+                      }
+                      onDropdownVisibleChange={(open) => {
+                        // If closing without selection and it was unassigned, we don't need to do anything special
+                        // If it was editing mode, we might want to keep it open? No, standard behavior is fine.
+                      }}
+                    >
+                      {users.map((user) => (
+                        <Option key={user.id} value={user.id}>
+                          {user.firstName} {user.lastName}
+                        </Option>
+                      ))}
+                    </Select>
+                    {isEditingAssignee && (
+                      <Space size="small" style={{ marginTop: 4 }}>
                         <Button
                           type="primary"
                           size="small"
@@ -919,7 +937,7 @@ const TaskTable = () => {
                           Cancel
                         </Button>
                       </Space>
-                    </Space>
+                    )}
                   </div>
                 );
               }
@@ -935,18 +953,37 @@ const TaskTable = () => {
                       task.assigneeId
                     );
                   }}
-                  style={{ cursor: "pointer", padding: "4px" }}
+                  style={{ 
+                    cursor: "pointer", 
+                    padding: "4px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }}
                 >
-                  <Tooltip title="Click to assign/edit assignee">
-                    {task.assignee ? (
-                      <Tag icon={<UserOutlined />} color="green">
-                        {task.assignee.firstName} {task.assignee.lastName}
-                      </Tag>
-                    ) : (
-                      <Tag icon={<UserOutlined />} color="orange">
-                        Unassigned
-                      </Tag>
-                    )}
+                  <Tooltip title={`${task.assignee.firstName} ${task.assignee.lastName} - Click to reassign`}>
+                    <div style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "2px 8px",
+                      background: "#f0f5ff",
+                      border: "1px solid #adc6ff",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      color: "#1890ff",
+                      maxWidth: "100%",
+                      overflow: "hidden"
+                    }}>
+                      <UserOutlined style={{ fontSize: "12px", flexShrink: 0 }} />
+                      <span style={{
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap"
+                      }}>
+                        {task.assignee.firstName.charAt(0)}. {task.assignee.lastName}
+                      </span>
+                    </div>
                   </Tooltip>
                 </div>
               );
@@ -961,7 +998,7 @@ const TaskTable = () => {
         title: "Due Date",
         dataIndex: "dueDate",
         key: "dueDate",
-        width: 150,
+        width: 120,
         render: (date, record) => {
           const isEditing = isEditingCell(
             record.projectId,
@@ -1043,7 +1080,7 @@ const TaskTable = () => {
         title: "Priority",
         dataIndex: "priority",
         key: "priority",
-        width: 100,
+        width: 80,
         render: (priority) => (
           <Tag color={PRIORITY_COLORS[priority]}>
             {priority === "A" ? "High" : priority === "B" ? "Medium" : "Low"}
@@ -1293,13 +1330,7 @@ const TaskTable = () => {
                     </span>
                   ),
                   children: (
-                    <div
-                      style={{
-                        maxHeight: "calc(100vh - 400px)",
-                        overflowY: "auto",
-                        overflowX: "auto",
-                      }}
-                    >
+                    <div>
                       {tasksLoading && !tasksData ? (
                         <div
                           style={{ textAlign: "center", padding: "48px 16px" }}
@@ -1361,8 +1392,9 @@ const TaskTable = () => {
                           columns={generateColumnsForWorkType(workTypeId)}
                           dataSource={actualData.rows}
                           pagination={false}
-                          scroll={{ x: "max-content" }}
+                          scroll={{ y: 600 }}
                           size="small"
+                          tableLayout="fixed"
                           // loading={updateTaskLoading}
                           rowKey="key"
                           rowClassName={(record, index) => {

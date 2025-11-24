@@ -7,6 +7,7 @@ export const WORK_TYPE_FRAGMENT = gql`
     name
     description
     isActive
+    sortOrder
     createdAt
     updatedAt
     creator {
@@ -112,5 +113,11 @@ export const UPDATE_WORK_TYPE = gql`
 export const DELETE_WORK_TYPE = gql`
   mutation DeleteWorkType($id: ID!) {
     deleteWorkType(id: $id)
+  }
+`;
+
+export const REORDER_WORK_TYPES = gql`
+  mutation ReorderWorkTypes($workTypeIds: [ID!]!) {
+    reorderWorkTypes(workTypeIds: $workTypeIds)
   }
 `;

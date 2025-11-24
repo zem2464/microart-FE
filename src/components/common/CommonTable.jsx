@@ -7,7 +7,6 @@ import {
   Input,
   Tooltip,
   Tag,
-  Typography,
   Popconfirm,
 } from "antd";
 import {
@@ -221,6 +220,7 @@ export const CommonTable = ({
         bordered={bordered}
         {...tableProps}
         {...otherProps}
+        rowKey={otherProps.rowKey || "id"}
       />
       {/* Footer */}
       {tableFooter && (
