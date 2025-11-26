@@ -23,7 +23,7 @@ RUN npm ci && npm cache clean --force
 COPY . .
 
 # Build the application
-RUN npm run build
+RUN NODE_OPTIONS="--max-old-space-size=768" npm run build
 
 # Production stage
 FROM nginx:alpine
