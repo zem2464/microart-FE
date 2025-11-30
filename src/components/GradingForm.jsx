@@ -115,8 +115,8 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
     const workType = workTypesData?.workTypes?.find(wt => wt.id === workTypeId);
     setSelectedWorkType(workType);
     
-    // Auto-populate all TaskTypes associated with this WorkType
-    if (workType?.taskTypes && mode === 'create') {
+    // Auto-populate all TaskTypes associated with this WorkType for both create and edit modes
+    if (workType?.taskTypes) {
       const autoTaskTypePricings = workType.taskTypes
         .filter(taskType => taskType.isActive)
         .map(taskType => ({
@@ -129,9 +129,10 @@ const GradingForm = ({ grading, mode, onSuccess, onCancel, submitting, onSubmitC
           currency: 'INR', // Default currency, no user selection needed
           unit: 'image', // Fixed to image only
           isActive: true,
+          order: taskType.WorkTypeTask?.order || 0,
         }));
       setTaskTypePricings(autoTaskTypePricings);
-    } else if (mode === 'create') {
+    } else {
       setTaskTypePricings([]);
     }
   };
