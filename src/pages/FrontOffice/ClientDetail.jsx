@@ -908,6 +908,12 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                         },
                       },
                       {
+                        title: "Invoice No.",
+                        key: "invoiceNumber",
+                        width: 120,
+                        render: (_, r) => r.invoice?.invoiceNumber || "-",
+                      },
+                      {
                         title: "Particulars",
                         key: "particulars",
                         width: 200,

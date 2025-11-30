@@ -21,6 +21,7 @@ import {
   DashboardOutlined,
   PlusOutlined,
   UserAddOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
@@ -33,6 +34,7 @@ import TaskTable from "../pages/FrontOffice/TaskTable";
 import ProjectManagement from "../pages/FrontOffice/ProjectManagement";
 import ClientDashboard from "../pages/FrontOffice/ClientDashboard";
 import ClientList from "../pages/FrontOffice/ClientList";
+import LedgerReport from "../pages/FrontOffice/LedgerReport";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -87,6 +89,11 @@ const FrontOfficeLayout = () => {
       key: "/projects",
       icon: <ProjectOutlined />,
       label: <Link to="/projects">Projects</Link>,
+    },
+    {
+      key: "/ledger",
+      icon: <FileTextOutlined />,
+      label: <Link to="/ledger">Ledger</Link>,
     },
     {
       key: "/clients",
@@ -212,6 +219,7 @@ const FrontOfficeLayout = () => {
           <Routes>
             <Route path="/" element={<TaskTable />} />
             <Route path="/projects" element={<ProjectManagement />} />
+            <Route path="/ledger" element={<LedgerReport />} />
             <Route path="/clients/dashboard" element={<ClientDashboard />} />
             <Route path="/clients" element={<ClientList />} />
           </Routes>

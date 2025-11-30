@@ -46,6 +46,30 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
     dayjs().endOf("month"),
   ]);
 
+  // Add styles for balance rows
+  React.useEffect(() => {
+    const style = document.createElement("style");
+    style.textContent = `
+      .ledger-opening-balance-row {
+        background-color: #e6f7ff !important;
+        font-weight: 600;
+      }
+      .ledger-closing-balance-row {
+        background-color: #f6ffed !important;
+        font-weight: 600;
+        border-top: 2px solid #52c41a !important;
+      }
+      .ledger-opening-balance-row:hover,
+      .ledger-closing-balance-row:hover {
+        background-color: inherit !important;
+      }
+    `;
+    document.head.appendChild(style);
+    return () => {
+      document.head.removeChild(style);
+    };
+  }, []);
+
   // Server-backed range ledger: openingBalance + transactions
   const {
     data: ledgerRangeData,
@@ -704,7 +728,33 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                   return { ...t, debit, credit, runningBalance: running };
                 });
 
-                const closing = Number(range?.closingBalance ?? running);
+                // Use backend-calculated closing balance
+                const closing = Number(range?.closingBalance ?? opening);
+
+                // Create opening and closing balance rows
+                const openingRow = {
+                  id: "opening-balance",
+                  transactionDate: dateRange[0].format("YYYY-MM-DD"),
+                  description: "Opening Balance",
+                  debit: 0,
+                  credit: 0,
+                  runningBalance: opening,
+                  isBalanceRow: true,
+                  isOpeningBalance: true,
+                };
+
+                const closingRow = {
+                  id: "closing-balance",
+                  transactionDate: dateRange[1].format("YYYY-MM-DD"),
+                  description: "Closing Balance",
+                  debit: 0,
+                  credit: 0,
+                  runningBalance: closing,
+                  isBalanceRow: true,
+                  isClosingBalance: true,
+                };
+
+                const tableData = [openingRow, ...txWithRunning, closingRow];
 
                 const balanceLabel = (amt) => {
                   if (amt > 0) return { text: "To Pay (DR)", color: "#f5222d" };
@@ -747,9 +797,14 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                     </Row>
 
                     <Table
-                      dataSource={txWithRunning}
+                      dataSource={tableData}
                       rowKey="id"
                       size="small"
+                      rowClassName={(record) => {
+                        if (record.isOpeningBalance) return "ledger-opening-balance-row";
+                        if (record.isClosingBalance) return "ledger-closing-balance-row";
+                        return "";
+                      }}
                       pagination={{ pageSize: 10 }}
                       // scroll={{ x: 1400 }}
                       columns={[
@@ -758,6 +813,7 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                           key: "orderDate",
                           // width: 100,
                           render: (_, r) => {
+                            if (r.isBalanceRow) return null;
                             const project = r.invoice?.project;
                             return project?.createdAt
                               ? dayjs(project.createdAt).format("DD/MM/YYYY")
@@ -768,18 +824,21 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                           title: "Invoice Date",
                           key: "invoiceDate",
                           // width: 100,
-                          render: (_, r) =>
-                            r.invoice?.invoiceDate
+                          render: (_, r) => {
+                            if (r.isBalanceRow) return null;
+                            return r.invoice?.invoiceDate
                               ? dayjs(r.invoice.invoiceDate).format(
                                   "DD/MM/YYYY"
                                 )
-                              : "-",
+                              : "-";
+                          },
                         },
                         {
                           title: "Work Days",
                           key: "workDays",
                           width: 90,
                           render: (_, r) => {
+                            if (r.isBalanceRow) return null;
                             const project = r.invoice?.project;
                             if (project?.createdAt && r.invoice?.invoiceDate) {
                               const days = dayjs(r.invoice.invoiceDate).diff(
@@ -792,11 +851,33 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                           },
                         },
                         {
+                          title: "Invoice No.",
+                          key: "invoiceNumber",
+                          width: 120,
+                          render: (_, r) => {
+                            if (r.isBalanceRow) return null;
+                            return r.invoice?.invoiceNumber || "-";
+                          },
+                        },
+                        {
                           title: "Particulars",
                           key: "particulars",
                           // width: 200,
                           ellipsis: true,
                           render: (_, r) => {
+                            if (r.isBalanceRow) {
+                              return (
+                                <Text
+                                  strong
+                                  style={{
+                                    fontSize: 14,
+                                    color: r.isOpeningBalance ? "#1890ff" : "#52c41a",
+                                  }}
+                                >
+                                  {r.description}
+                                </Text>
+                              );
+                            }
                             const project = r.invoice?.project;
                             if (project) {
                               return (
@@ -818,6 +899,7 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                           key: "details",
                           width: 300,
                           render: (_, r) => {
+                            if (r.isBalanceRow) return null;
                             const project = r.invoice?.project;
                             if (project?.projectGradings?.length > 0) {
                               const lines = project.projectGradings.map(
@@ -854,7 +936,10 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                           key: "debit",
                           // width: 110,
                           align: "right",
-                          render: (v) => (v > 0 ? formatCurrency(v) : "-"),
+                          render: (v, r) => {
+                            if (r.isBalanceRow) return null;
+                            return v > 0 ? formatCurrency(v) : "-";
+                          },
                         },
                         {
                           title: "Credit",
@@ -862,7 +947,10 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                           key: "credit",
                           // width: 110,
                           align: "right",
-                          render: (v) => (v > 0 ? formatCurrency(v) : "-"),
+                          render: (v, r) => {
+                            if (r.isBalanceRow) return null;
+                            return v > 0 ? formatCurrency(v) : "-";
+                          },
                         },
                         {
                           title: "Running Balance",
@@ -870,19 +958,35 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                           key: "runningBalance",
                           // width: 140,
                           align: "right",
-                          render: (v) => (
-                            <div>
-                              <div>{formatCurrency(Math.abs(v))}</div>
-                              <div
-                                style={{
-                                  color: balanceLabel(v).color,
-                                  fontSize: 11,
-                                }}
-                              >
-                                {balanceLabel(v).text}
+                          render: (v, r) => {
+                            const color = v > 0 ? "#f5222d" : v < 0 ? "#52c41a" : "#1890ff";
+                            const fontWeight = r.isBalanceRow ? 600 : 500;
+                            const fontSize = r.isBalanceRow ? 14 : undefined;
+                            
+                            if (r.isBalanceRow) {
+                              return (
+                                <div>
+                                  <Text style={{ color, fontWeight, fontSize }}>
+                                    {formatCurrency(v)}
+                                  </Text>
+                                </div>
+                              );
+                            }
+                            
+                            return (
+                              <div>
+                                <div>{formatCurrency(Math.abs(v))}</div>
+                                <div
+                                  style={{
+                                    color: balanceLabel(v).color,
+                                    fontSize: 11,
+                                  }}
+                                >
+                                  {balanceLabel(v).text}
+                                </div>
                               </div>
-                            </div>
-                          ),
+                            );
+                          },
                         },
                       ]}
                     />
