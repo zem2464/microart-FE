@@ -113,6 +113,25 @@ const UserDetail = ({ user, onClose }) => {
         </Descriptions>
       </Card>
 
+      {/* Work Types */}
+      <Card size="small" title="Work Types" style={{ marginBottom: 16 }}>
+        <Descriptions column={1} size="small">
+          <Descriptions.Item label="Assigned Work Types">
+            {user.workTypes && user.workTypes.length > 0 ? (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {user.workTypes.map((workType) => (
+                  <Tag key={workType.id} color="blue">
+                    {workType.name}
+                  </Tag>
+                ))}
+              </div>
+            ) : (
+              <Text type="secondary">No work types assigned</Text>
+            )}
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
+
       {/* Employment Information */}
       <Card size="small" title="Employment Information" style={{ marginBottom: 16 }}>
         <Descriptions column={1} size="small">

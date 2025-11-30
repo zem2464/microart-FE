@@ -14,6 +14,23 @@ export const ME_QUERY = gql`
         roleType
       }
       roleId
+      userWorkTypes {
+        id
+        workTypeId
+        isActive
+        workType {
+          id
+          name
+          description
+          isActive
+        }
+      }
+      workTypes {
+        id
+        name
+        description
+        isActive
+      }
     }
   }
 `;

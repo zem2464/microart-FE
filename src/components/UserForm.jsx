@@ -14,6 +14,7 @@ import {
 import { useMutation, useQuery } from "@apollo/client";
 import { CREATE_USER, UPDATE_USER, GET_USERS } from "../gql/users";
 import { GET_ROLES } from "../gql/roles";
+import { GET_WORK_TYPES } from "../gql/workTypes";
 import dayjs from "dayjs";
 
 const { Option } = Select;
@@ -25,6 +26,11 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
 
   // Fetch roles for dropdown
   const { data: rolesData, loading: rolesLoading } = useQuery(GET_ROLES, {
+    fetchPolicy: "cache-and-network",
+  });
+
+  // Fetch work types for dropdown
+  const { data: workTypesData, loading: workTypesLoading } = useQuery(GET_WORK_TYPES, {
     fetchPolicy: "cache-and-network",
   });
 
@@ -56,9 +62,12 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
 
   // Reset and set form values when drawer opens
   React.useEffect(() => {
-    if (open && !rolesLoading) {
+    if (open && !rolesLoading && !workTypesLoading) {
       form.resetFields();
       if (user) {
+        // Extract workTypeIds from user's workTypes
+        const workTypeIds = user.workTypes?.map(wt => wt.id) || [];
+        
         form.setFieldsValue({
           firstName: user.firstName || "",
           lastName: user.lastName || "",
@@ -76,6 +85,7 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           hourlyRate: user.hourlyRate || 0,
           canLogin: user.canLogin ?? true,
           isActive: user.isActive ?? true,
+          workTypeIds: workTypeIds,
         });
       } else {
         // Set default values for new user
@@ -87,13 +97,14 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           hourlyRate: 0,
           canLogin: true,
           isActive: true,
+          workTypeIds: [],
         });
       }
     }
     if (!open) {
       form.resetFields();
     }
-  }, [open, user, rolesLoading, form]);
+  }, [open, user, rolesLoading, workTypesLoading, form]);
 
   const handleSubmit = async () => {
     try {
@@ -116,7 +127,7 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
     }
   };
 
-  if (rolesLoading) return <Spin />;
+  if (rolesLoading || workTypesLoading) return <Spin />;
 
   return (
     <Form
@@ -221,6 +232,31 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
                 {role.name} ({role.roleType})
               </Option>
             ))}
+          </Select>
+        </Form.Item>
+
+        <Form.Item
+          name="workTypeIds"
+          label="Work Types"
+          tooltip="Select which work types this user can work on"
+        >
+          <Select
+            mode="multiple"
+            placeholder="Select work types"
+            size="middle"
+            showSearch
+            optionFilterProp="children"
+            style={{ width: "100%" }}
+            loading={workTypesLoading}
+            allowClear
+          >
+            {workTypesData?.workTypes
+              ?.filter(wt => wt.isActive)
+              .map((workType) => (
+                <Option key={workType.id} value={workType.id}>
+                  {workType.name}
+                </Option>
+              ))}
           </Select>
         </Form.Item>
 

@@ -417,6 +417,10 @@ export const GET_AVAILABLE_USERS = gql`
         name
       }
       isEmployee
+      workTypes {
+        id
+        name
+      }
     }
   }
 `;

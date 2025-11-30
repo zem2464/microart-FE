@@ -182,9 +182,12 @@ const TaskTable = () => {
   });
 
   // Fetch all worktypes for tabs
-  const { data: worktypesData, refetch: refetchWorkTypes } = useQuery(GET_WORK_TYPES, {
-    fetchPolicy: "cache-and-network",
-  });
+  const { data: worktypesData, refetch: refetchWorkTypes } = useQuery(
+    GET_WORK_TYPES,
+    {
+      fetchPolicy: "cache-and-network",
+    }
+  );
 
   // Fetch dashboard stats
   const { data: dashboardData } = useQuery(GET_TASKS_DASHBOARD, {
@@ -317,6 +320,30 @@ const TaskTable = () => {
   const tasks = allTasks;
   const users = usersData?.availableUsers || [];
   const worktypes = worktypesData?.workTypes || [];
+
+  // Filter users based on selected work type
+  const filteredUsers = useMemo(() => {
+    if (!selectedWorkTypeId || selectedWorkTypeId === "all") {
+      return { assignedUsers: users, unassignedUsers: [] };
+    }
+
+    const assignedUsers = [];
+    const unassignedUsers = [];
+
+    users.forEach(user => {
+      const userWorkTypeIds = user.workTypes?.map(wt => wt.id.toString()) || [];
+      
+      if (userWorkTypeIds.length === 0) {
+        // User has no work types assigned
+        unassignedUsers.push(user);
+      } else if (userWorkTypeIds.includes(selectedWorkTypeId.toString())) {
+        // User has the selected work type
+        assignedUsers.push(user);
+      }
+    });
+
+    return { assignedUsers, unassignedUsers };
+  }, [users, selectedWorkTypeId]);
 
   // Reset page when filters / search / sorting changes
   useEffect(() => {
@@ -488,20 +515,24 @@ const TaskTable = () => {
         if (gradings.length > 0) {
           gradings.forEach((grading, idx) => {
             const gradingId = grading.gradingId || grading.id;
-            
+
             // Filter tasks for this specific grading
-            const gradingTasks = projectData.tasksList.filter(task => {
+            const gradingTasks = projectData.tasksList.filter((task) => {
               const taskGradingId = task.gradingTask?.grading?.id;
-              return taskGradingId && String(taskGradingId) === String(gradingId);
+              return (
+                taskGradingId && String(taskGradingId) === String(gradingId)
+              );
             });
-            
+
             // Create tasksByType map for this grading only
             const tasksByTypeForGrading = {};
-            gradingTasks.forEach(task => {
-              const taskTypeId = task.taskType?.id ? String(task.taskType.id) : "no-tasktype";
+            gradingTasks.forEach((task) => {
+              const taskTypeId = task.taskType?.id
+                ? String(task.taskType.id)
+                : "no-tasktype";
               tasksByTypeForGrading[taskTypeId] = task;
             });
-            
+
             // Calculate status for this grading's tasks only
             const gradingStatusCounts = {
               TODO: 0,
@@ -512,19 +543,21 @@ const TaskTable = () => {
               CANCELLED: 0,
               ON_HOLD: 0,
             };
-            
+
             gradingTasks.forEach((task) => {
               const status = (task.status || "TODO").toUpperCase();
               if (gradingStatusCounts[status] !== undefined) {
                 gradingStatusCounts[status]++;
               }
             });
-            
+
             const gradingTotalTasks = gradingTasks.length;
             const gradingCompletedTasks = gradingStatusCounts.COMPLETED;
             const gradingProgress =
-              gradingTotalTasks > 0 ? Math.round((gradingCompletedTasks / gradingTotalTasks) * 100) : 0;
-            
+              gradingTotalTasks > 0
+                ? Math.round((gradingCompletedTasks / gradingTotalTasks) * 100)
+                : 0;
+
             rows.push({
               key: `${workTypeId}-${project.id}-grading-${gradingId}`,
               projectId: project.id,
@@ -544,8 +577,8 @@ const TaskTable = () => {
                 gradingProgress === 100
                   ? "COMPLETED"
                   : gradingTotalTasks > 0
-                    ? "IN_PROGRESS"
-                    : "TODO",
+                  ? "IN_PROGRESS"
+                  : "TODO",
               progress: gradingProgress,
               totalTasks: gradingTotalTasks,
               completedTasks: gradingCompletedTasks,
@@ -576,8 +609,8 @@ const TaskTable = () => {
               progress === 100
                 ? "COMPLETED"
                 : totalTasks > 0
-                  ? "IN_PROGRESS"
-                  : "TODO",
+                ? "IN_PROGRESS"
+                : "TODO",
             progress,
             totalTasks,
             completedTasks,
@@ -604,20 +637,29 @@ const TaskTable = () => {
   }, [groupedByWorkType]);
 
   // Use GET_WORK_TYPES for all available worktypes as tabs
+  // Filter by user's assigned work types if available
   const allWorkTypeTabs = useMemo(() => {
     const result = {};
 
+    // Get user's work type IDs from ME query
+    const userWorkTypeIds = currentUser?.workTypes?.map(wt => wt.id.toString()) || [];
+    
     // Create tabs from all available worktypes
     worktypes.forEach((workType) => {
       if (workType.isActive) {
         const workTypeId = workType.id.toString();
-        result[workTypeId] = {
-          workTypeId,
-          workTypeName: workType.name,
-          workType: workType,
-          taskTypes: workType.taskTypes || [],
-          rows: [], // Will be populated from tableDataByWorkType
-        };
+        
+        // Filter: only show work types assigned to the user
+        // If user has no work types assigned, show all (for backward compatibility/admins)
+        if (userWorkTypeIds.length === 0 || userWorkTypeIds.includes(workTypeId)) {
+          result[workTypeId] = {
+            workTypeId,
+            workTypeName: workType.name,
+            workType: workType,
+            taskTypes: workType.taskTypes || [],
+            rows: [], // Will be populated from tableDataByWorkType
+          };
+        }
       }
     });
 
@@ -637,7 +679,7 @@ const TaskTable = () => {
     );
 
     return result;
-  }, [worktypes, tableDataByWorkType]);
+  }, [worktypes, tableDataByWorkType, currentUser]);
 
   // Set default worktype tab when data loads
   useEffect(() => {
@@ -664,14 +706,26 @@ const TaskTable = () => {
     );
   };
 
-  const startEditCell = (projectId, gradingId, taskTypeId, field, currentValue, e) => {
+  const startEditCell = (
+    projectId,
+    gradingId,
+    taskTypeId,
+    field,
+    currentValue,
+    e
+  ) => {
     e?.stopPropagation();
     setEditingCell({ projectId, gradingId, taskTypeId, field });
     setEditedData({ [field]: currentValue });
   };
 
   const cancelEditCell = () => {
-    setEditingCell({ projectId: null, gradingId: null, taskTypeId: null, field: null });
+    setEditingCell({
+      projectId: null,
+      gradingId: null,
+      taskTypeId: null,
+      field: null,
+    });
     setEditedData({});
   };
 
@@ -948,21 +1002,38 @@ const TaskTable = () => {
                       placeholder="Assign User"
                       allowClear
                       showSearch
-                      filterOption={(input, option) =>
-                        (option?.children ?? "")
+                      filterOption={(input, option) => {
+                        const children = option?.children;
+                        const searchText = Array.isArray(children)
+                          ? children.join(" ")
+                          : String(children ?? "");
+                        return searchText
                           .toLowerCase()
-                          .includes(input.toLowerCase())
-                      }
+                          .includes(input.toLowerCase());
+                      }}
                       onDropdownVisibleChange={(open) => {
                         // If closing without selection and it was unassigned, we don't need to do anything special
                         // If it was editing mode, we might want to keep it open? No, standard behavior is fine.
                       }}
                     >
-                      {users.map((user) => (
-                        <Option key={user.id} value={user.id}>
-                          {user.firstName} {user.lastName}
-                        </Option>
-                      ))}
+                      {filteredUsers.assignedUsers.length > 0 && (
+                        <Select.OptGroup label="Assigned to Work Type">
+                          {filteredUsers.assignedUsers.map((user) => (
+                            <Option key={user.id} value={user.id}>
+                              {user.firstName} {user.lastName}
+                            </Option>
+                          ))}
+                        </Select.OptGroup>
+                      )}
+                      {filteredUsers.unassignedUsers.length > 0 && (
+                        <Select.OptGroup label="No Work Type Assigned">
+                          {filteredUsers.unassignedUsers.map((user) => (
+                            <Option key={user.id} value={user.id}>
+                              {user.firstName} {user.lastName}
+                            </Option>
+                          ))}
+                        </Select.OptGroup>
+                      )}
                     </Select>
                     {isEditingAssignee && (
                       <Space size="small" style={{ marginTop: 4 }}>
@@ -999,35 +1070,44 @@ const TaskTable = () => {
                       task.assigneeId
                     );
                   }}
-                  style={{ 
-                    cursor: "pointer", 
+                  style={{
+                    cursor: "pointer",
                     padding: "4px",
                     display: "flex",
                     alignItems: "center",
-                    justifyContent: "center"
+                    justifyContent: "center",
                   }}
                 >
-                  <Tooltip title={`${task.assignee.firstName} ${task.assignee.lastName} - Click to reassign`}>
-                    <div style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      padding: "2px 8px",
-                      background: "#f0f5ff",
-                      border: "1px solid #adc6ff",
-                      borderRadius: "4px",
-                      fontSize: "12px",
-                      color: "#1890ff",
-                      maxWidth: "100%",
-                      overflow: "hidden"
-                    }}>
-                      <UserOutlined style={{ fontSize: "12px", flexShrink: 0 }} />
-                      <span style={{
+                  <Tooltip
+                    title={`${task.assignee.firstName} ${task.assignee.lastName} - Click to reassign`}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        padding: "2px 8px",
+                        background: "#f0f5ff",
+                        border: "1px solid #adc6ff",
+                        borderRadius: "4px",
+                        fontSize: "12px",
+                        color: "#1890ff",
+                        maxWidth: "100%",
                         overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap"
-                      }}>
-                        {task.assignee.firstName.charAt(0)}. {task.assignee.lastName}
+                      }}
+                    >
+                      <UserOutlined
+                        style={{ fontSize: "12px", flexShrink: 0 }}
+                      />
+                      <span
+                        style={{
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {task.assignee.firstName}.{" "}
+                        {task.assignee.lastName.charAt(0)}
                       </span>
                     </div>
                   </Tooltip>
@@ -1101,7 +1181,13 @@ const TaskTable = () => {
             <div
               onClick={(e) => {
                 e.stopPropagation();
-                startEditCell(record.projectId, record.gradingId, "dueDate", "dueDate", date);
+                startEditCell(
+                  record.projectId,
+                  record.gradingId,
+                  "dueDate",
+                  "dueDate",
+                  date
+                );
               }}
               style={{ cursor: "pointer" }}
             >
@@ -1307,18 +1393,35 @@ const TaskTable = () => {
                 style={{ width: "100%" }}
                 allowClear
                 showSearch
-                filterOption={(input, option) =>
-                  option.children.toLowerCase().includes(input.toLowerCase())
-                }
+                filterOption={(input, option) => {
+                  const children = option?.children;
+                  const searchText = Array.isArray(children)
+                    ? children.join(" ")
+                    : String(children ?? "");
+                  return searchText.toLowerCase().includes(input.toLowerCase());
+                }}
               >
                 <Option value="all">All Users</Option>
                 <Option value="assignedToMe">Assigned to Me</Option>
                 <Option value="unassigned">Unassigned Tasks</Option>
-                {users.map((user) => (
-                  <Option key={user.id} value={user.id}>
-                    {user.firstName} {user.lastName}
-                  </Option>
-                ))}
+                {filteredUsers.assignedUsers.length > 0 && (
+                  <Select.OptGroup label="Assigned to Work Type">
+                    {filteredUsers.assignedUsers.map((user) => (
+                      <Option key={user.id} value={user.id}>
+                        {user.firstName} {user.lastName}
+                      </Option>
+                    ))}
+                  </Select.OptGroup>
+                )}
+                {filteredUsers.unassignedUsers.length > 0 && (
+                  <Select.OptGroup label="No Work Type Assigned">
+                    {filteredUsers.unassignedUsers.map((user) => (
+                      <Option key={user.id} value={user.id}>
+                        {user.firstName} {user.lastName}
+                      </Option>
+                    ))}
+                  </Select.OptGroup>
+                )}
               </Select>
             </Col>
             <Col span={2}>

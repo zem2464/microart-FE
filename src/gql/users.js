@@ -33,6 +33,19 @@ export const GET_USERS = gql`
       deletedAt
       createdAt
       updatedAt
+      userWorkTypes {
+        id
+        workTypeId
+        isActive
+        workType {
+          id
+          name
+        }
+      }
+      workTypes {
+        id
+        name
+      }
     }
   }
 `;
@@ -70,6 +83,19 @@ export const GET_USER = gql`
       deletedAt
       createdAt
       updatedAt
+      userWorkTypes {
+        id
+        workTypeId
+        isActive
+        workType {
+          id
+          name
+        }
+      }
+      workTypes {
+        id
+        name
+      }
     }
   }
 `;
@@ -102,6 +128,19 @@ export const CREATE_USER = gql`
       isActive
       createdBy
       updatedBy
+      userWorkTypes {
+        id
+        workTypeId
+        isActive
+        workType {
+          id
+          name
+        }
+      }
+      workTypes {
+        id
+        name
+      }
     }
   }
 `;
@@ -133,6 +172,19 @@ export const UPDATE_USER = gql`
       hasSetInitialPassword
       isActive
       updatedBy
+      userWorkTypes {
+        id
+        workTypeId
+        isActive
+        workType {
+          id
+          name
+        }
+      }
+      workTypes {
+        id
+        name
+      }
     }
   }
 `;
