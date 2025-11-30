@@ -116,7 +116,7 @@ const ProjectManagement = () => {
   // Build filters object for GraphQL query
   const buildFilters = useCallback(() => {
     const filters = {};
-    
+
     if (statusFilter !== "all") {
       if (statusFilter === "NO_INVOICE") {
         filters.noInvoice = true;
@@ -124,11 +124,11 @@ const ProjectManagement = () => {
         filters.status = statusFilter;
       }
     }
-    
+
     if (clientFilter !== "all") {
       filters.clientId = clientFilter;
     }
-    
+
     return filters;
   }, [statusFilter, clientFilter]);
 
@@ -163,7 +163,11 @@ const ProjectManagement = () => {
   });
 
   // New stats query for accurate project counts
-  const { data: statsData, loading: statsLoading, refetch: refetchStats } = useQuery(GET_PROJECT_STATS, {
+  const {
+    data: statsData,
+    loading: statsLoading,
+    refetch: refetchStats,
+  } = useQuery(GET_PROJECT_STATS, {
     fetchPolicy: "cache-and-network",
   });
 
@@ -404,8 +408,8 @@ const ProjectManagement = () => {
 
   // Attach window scroll listener
   useEffect(() => {
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
   // Populate invoicedProjectIds from server-provided project.invoiceId / project.invoice
@@ -559,23 +563,29 @@ const ProjectManagement = () => {
   // Calculate statistics using stats query for accurate total counts
   const projectStatsResponse = statsData?.projectStats || {};
   const projectStats = projectStatsResponse.stats || [];
-  
+
   // Debug: Log the raw stats data
-  console.log('📊 Raw projectStats from backend:', projectStatsResponse);
-  
+  console.log("📊 Raw projectStats from backend:", projectStatsResponse);
+
   // Build stats object from backend stats
   const statsMap = projectStats.reduce((acc, stat) => {
     acc[stat.status.toLowerCase()] = {
       count: stat.count,
       estimatedCost: stat.totalEstimatedCost,
-      actualCost: stat.totalActualCost
+      actualCost: stat.totalActualCost,
     };
     return acc;
   }, {});
 
-  console.log('📊 statsMap after processing:', statsMap);
-  console.log('📊 Fly-on-Credit count from response:', projectStatsResponse.flyOnCreditCount);
-  console.log('📊 No Invoice count from response:', projectStatsResponse.noInvoiceCount);
+  console.log("📊 statsMap after processing:", statsMap);
+  console.log(
+    "📊 Fly-on-Credit count from response:",
+    projectStatsResponse.flyOnCreditCount
+  );
+  console.log(
+    "📊 No Invoice count from response:",
+    projectStatsResponse.noInvoiceCount
+  );
 
   const stats = {
     total: projectStats.reduce((sum, s) => sum + s.count, 0),
@@ -588,8 +598,14 @@ const ProjectManagement = () => {
     onHold: statsMap.on_hold?.count || 0,
     flyOnCredit: projectStatsResponse.flyOnCreditCount || 0, // Use dedicated fly-on-credit count from response
     noInvoice: projectStatsResponse.noInvoiceCount || 0, // Use server-side count for completed projects without invoices
-    totalEstimatedCost: projectStats.reduce((sum, s) => sum + (s.totalEstimatedCost || 0), 0),
-    totalActualCost: projectStats.reduce((sum, s) => sum + (s.totalActualCost || 0), 0),
+    totalEstimatedCost: projectStats.reduce(
+      (sum, s) => sum + (s.totalEstimatedCost || 0),
+      0
+    ),
+    totalActualCost: projectStats.reduce(
+      (sum, s) => sum + (s.totalActualCost || 0),
+      0
+    ),
   };
 
   // Handle project actions
@@ -735,19 +751,21 @@ const ProjectManagement = () => {
   // Invoice generation handler
   const handleGenerateInvoice = () => {
     if (!projectToInvoice) return;
-    
+
     generateInvoice({
       variables: { projectId: projectToInvoice.id },
-    }).then(() => {
-      // optimistically mark as invoiced locally
-      setInvoicedProjectIds((prev) => new Set(prev).add(projectToInvoice.id));
-      setInvoiceModalVisible(false);
-      setProjectToInvoice(null);
-    }).catch((err) => {
-      // Error handling is in mutation onError callback
-      setInvoiceModalVisible(false);
-      setProjectToInvoice(null);
-    });
+    })
+      .then(() => {
+        // optimistically mark as invoiced locally
+        setInvoicedProjectIds((prev) => new Set(prev).add(projectToInvoice.id));
+        setInvoiceModalVisible(false);
+        setProjectToInvoice(null);
+      })
+      .catch((err) => {
+        // Error handling is in mutation onError callback
+        setInvoiceModalVisible(false);
+        setProjectToInvoice(null);
+      });
   };
 
   // Status editing handlers (inline editing like ClientList)
@@ -831,11 +849,13 @@ const ProjectManagement = () => {
         const tempValue = tempValues[`status_${record.id}`];
 
         // Derive options from STATUS_MAP
-        const statusOptions = Object.entries(STATUS_MAP).map(([key, config]) => ({
-          value: key.toLowerCase(),
-          label: config.label,
-          color: config.color,
-        }));
+        const statusOptions = Object.entries(STATUS_MAP).map(
+          ([key, config]) => ({
+            value: key.toLowerCase(),
+            label: config.label,
+            color: config.color,
+          })
+        );
 
         if (isEditing) {
           return (
@@ -900,7 +920,7 @@ const ProjectManagement = () => {
         // Display multiple work types
         const workTypes = record.workTypes || [];
         const gradings = record.projectGradings || [];
-        
+
         return (
           <div>
             {/* Work Types */}
@@ -915,21 +935,27 @@ const ProjectManagement = () => {
                 <Text type="secondary">No work type</Text>
               )}
             </div>
-            
+
             {/* Gradings */}
             <div>
               {gradings.length > 0 ? (
                 gradings.slice(0, 2).map((pg, idx) => (
-                  <Tag key={pg.id} color="gold" style={{ marginBottom: 2, fontSize: '11px' }}>
+                  <Tag
+                    key={pg.id}
+                    color="gold"
+                    style={{ marginBottom: 2, fontSize: "11px" }}
+                  >
                     {pg.grading?.name || pg.grading?.shortCode || "N/A"} - ₹
                     {pg.customRate || pg.grading?.defaultRate || 0}
                   </Tag>
                 ))
               ) : (
-                <Text type="secondary" style={{ fontSize: '11px' }}>No grading</Text>
+                <Text type="secondary" style={{ fontSize: "11px" }}>
+                  No grading
+                </Text>
               )}
               {gradings.length > 2 && (
-                <Tag color="default" style={{ fontSize: '10px' }}>
+                <Tag color="default" style={{ fontSize: "10px" }}>
                   +{gradings.length - 2} more
                 </Tag>
               )}
@@ -944,8 +970,7 @@ const ProjectManagement = () => {
       key: "orderDate",
       width: 120,
       sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
-      render: (date) =>
-        date ? dayjs(date).format("MMM DD, YYYY") : "N/A",
+      render: (date) => (date ? dayjs(date).format("MMM DD, YYYY") : "N/A"),
     },
     {
       title: "Tasks",
@@ -1287,7 +1312,8 @@ const ProjectManagement = () => {
                     padding: "4px 8px",
                     borderRadius: "4px",
                     transition: "background-color 0.3s",
-                    backgroundColor: stats.noInvoice > 0 ? "#fff7e6" : "transparent",
+                    backgroundColor:
+                      stats.noInvoice > 0 ? "#fff7e6" : "transparent",
                     border: stats.noInvoice > 0 ? "1px solid #ffa940" : "none",
                   }}
                   className="hover:bg-orange-100"
@@ -1396,8 +1422,7 @@ const ProjectManagement = () => {
             rowKey="id"
             loading={(projectsLoading || statsLoading) && !isLoadingMore}
             rowClassName={(record) =>
-              record.creditRequest &&
-              record.creditRequest.status === "approved"
+              record.creditRequest && record.creditRequest.status === "approved"
                 ? "bg-yellow-50"
                 : ""
             }
@@ -1405,11 +1430,11 @@ const ProjectManagement = () => {
             scroll={{ x: 1200 }}
             size="small"
           />
-            {isLoadingMore && (
-              <div style={{ textAlign: "center", padding: "16px" }}>
-                <Text type="secondary">Loading more projects...</Text>
-              </div>
-            )}
+          {isLoadingMore && (
+            <div style={{ textAlign: "center", padding: "16px" }}>
+              <Text type="secondary">Loading more projects...</Text>
+            </div>
+          )}
           {!hasMore && filteredProjects.length > 0 && (
             <div style={{ textAlign: "center", padding: "16px" }}>
               <Text type="secondary">No more projects to load</Text>
@@ -1676,34 +1701,51 @@ const ProjectManagement = () => {
               </Descriptions.Item>
               <Descriptions.Item label="Client">
                 <Text strong>
-                  {projectToInvoice.client?.displayName || 
-                   projectToInvoice.client?.companyName ||
-                   projectToInvoice.client?.clientCode}
+                  {projectToInvoice.client?.displayName ||
+                    projectToInvoice.client?.companyName ||
+                    projectToInvoice.client?.clientCode}
                 </Text>
               </Descriptions.Item>
               <Descriptions.Item label="Status">
-                <Tag color={
-                  projectToInvoice.status === 'completed' ? 'green' : 
-                  projectToInvoice.status === 'active' ? 'blue' : 'default'
-                }>
+                <Tag
+                  color={
+                    projectToInvoice.status === "completed"
+                      ? "green"
+                      : projectToInvoice.status === "active"
+                      ? "blue"
+                      : "default"
+                  }
+                >
                   {projectToInvoice.status?.toUpperCase()}
                 </Tag>
               </Descriptions.Item>
-              
+
               {/* Show grading details */}
-              {projectToInvoice.projectGradings && projectToInvoice.projectGradings.length > 0 ? (
+              {projectToInvoice.projectGradings &&
+              projectToInvoice.projectGradings.length > 0 ? (
                 <>
                   <Descriptions.Item label="Gradings">
-                    <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                    <Space
+                      direction="vertical"
+                      size="small"
+                      style={{ width: "100%" }}
+                    >
                       {projectToInvoice.projectGradings.map((pg, idx) => (
                         <div key={idx}>
                           <Text strong>{pg.grading?.name}</Text>
-                          {' - '}
+                          {" - "}
                           <Text>{pg.imageQuantity} images</Text>
-                          {' × '}
-                          <Text>₹{(pg.customRate || pg.grading?.defaultRate || 0).toLocaleString()}</Text>
-                          {' = '}
-                          <Text strong style={{ color: '#1890ff' }}>
+                          {" × "}
+                          <Text>
+                            ₹
+                            {(
+                              pg.customRate ||
+                              pg.grading?.defaultRate ||
+                              0
+                            ).toLocaleString()}
+                          </Text>
+                          {" = "}
+                          <Text strong style={{ color: "#1890ff" }}>
                             ₹{(pg.estimatedCost || 0).toLocaleString()}
                           </Text>
                         </div>
@@ -1711,33 +1753,48 @@ const ProjectManagement = () => {
                     </Space>
                   </Descriptions.Item>
                   <Descriptions.Item label="Total Images">
-                    <Text strong>{projectToInvoice.totalImageQuantity || 0}</Text>
+                    <Text strong>
+                      {projectToInvoice.totalImageQuantity || 0}
+                    </Text>
                   </Descriptions.Item>
                 </>
               ) : (
                 <>
                   <Descriptions.Item label="Grading">
-                    {projectToInvoice.grading?.name || 'N/A'}
+                    {projectToInvoice.grading?.name || "N/A"}
                   </Descriptions.Item>
                   <Descriptions.Item label="Images">
                     <Text strong>{projectToInvoice.imageQuantity || 0}</Text>
                   </Descriptions.Item>
                   <Descriptions.Item label="Rate per Image">
-                    ₹{(projectToInvoice.grading?.defaultRate || 0).toLocaleString()}
+                    ₹
+                    {(
+                      projectToInvoice.grading?.defaultRate || 0
+                    ).toLocaleString()}
                   </Descriptions.Item>
                 </>
               )}
-              
+
               <Descriptions.Item label="Estimated Cost">
-                <Text strong style={{ fontSize: '16px', color: '#52c41a' }}>
-                  ₹{((projectToInvoice.totalEstimatedCost || projectToInvoice.estimatedCost) || 0).toLocaleString()}
+                <Text strong style={{ fontSize: "16px", color: "#52c41a" }}>
+                  ₹
+                  {(
+                    projectToInvoice.totalEstimatedCost ||
+                    projectToInvoice.estimatedCost ||
+                    0
+                  ).toLocaleString()}
                 </Text>
               </Descriptions.Item>
-              
+
               {projectToInvoice.totalActualCost > 0 && (
                 <Descriptions.Item label="Actual Cost">
-                  <Text strong style={{ fontSize: '16px', color: '#1890ff' }}>
-                    ₹{(projectToInvoice.totalActualCost || projectToInvoice.actualCost || 0).toLocaleString()}
+                  <Text strong style={{ fontSize: "16px", color: "#1890ff" }}>
+                    ₹
+                    {(
+                      projectToInvoice.totalActualCost ||
+                      projectToInvoice.actualCost ||
+                      0
+                    ).toLocaleString()}
                   </Text>
                 </Descriptions.Item>
               )}
