@@ -592,10 +592,6 @@ const ProjectManagement = () => {
     totalActualCost: projectStats.reduce((sum, s) => sum + (s.totalActualCost || 0), 0),
   };
 
-  console.log('📊 Final stats object:', stats);
-  console.log('📊 Fly-on-Credit count:', stats.flyOnCredit);
-  console.log('📊 No Invoice count:', stats.noInvoice);
-
   // Handle project actions
   const handleViewProject = (project) => {
     // Open project details in the shared drawer
