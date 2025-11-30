@@ -14,6 +14,8 @@ import ChangeExpirePassword from "./pages/ChangeExpirePassword";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ViewModeProvider, useViewMode } from "./contexts/ViewModeContext";
 import { AppDrawerProvider } from "./contexts/DrawerContext";
+import { PaymentProvider } from "./contexts/PaymentContext";
+import RecordPaymentModal from "./components/RecordPaymentModal";
 import { userCacheVar, isApplicationLoading } from "./cache/userCacheVar";
 import { useReactiveVar } from "@apollo/client";
 
@@ -112,7 +114,10 @@ function App() {
       <AuthProvider>
         <ViewModeProvider>
           <AppDrawerProvider>
-            <AppContent />
+            <PaymentProvider>
+              <AppContent />
+              <RecordPaymentModal />
+            </PaymentProvider>
           </AppDrawerProvider>
         </ViewModeProvider>
       </AuthProvider>

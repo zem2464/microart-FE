@@ -130,10 +130,26 @@ export const GET_CLIENT_LEDGER_RANGE = gql`
         transactionDate
         referenceNumber
         status
+        client {
+          id
+          clientCode
+          displayName
+          firstName
+          lastName
+          companyName
+        }
         invoice {
           id
           invoiceNumber
           invoiceDate
+          dueDate
+          balanceAmount
+          totalAmount
+          paidAmount
+          status
+          subtotalAmount
+          taxAmount
+          discountAmount
           project {
             id
             projectCode
@@ -152,10 +168,41 @@ export const GET_CLIENT_LEDGER_RANGE = gql`
               }
             }
           }
+          allocations {
+            id
+            allocatedAmount
+            allocationDate
+            isAutoAllocated
+            payment {
+              id
+              paymentNumber
+              paymentDate
+              amount
+              paymentType {
+                id
+                name
+                type
+              }
+            }
+          }
         }
         payment {
           id
           paymentNumber
+          paymentDate
+          amount
+          totalAllocated
+          unallocatedAmount
+          status
+          referenceNumber
+          chequeDate
+          bankName
+          notes
+          paymentType {
+            id
+            name
+            type
+          }
         }
         createdBy {
           id

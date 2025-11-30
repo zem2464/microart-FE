@@ -27,6 +27,11 @@ const Login = () => {
     <div className="h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8 overflow-hidden">
       <div className="max-w-md w-full space-y-6 max-h-full overflow-y-auto">
         <div className="text-center">
+          <img 
+            src="/images/images.png" 
+            alt="MicroArt Logo" 
+            style={{ height: '80px', margin: '0 auto 16px' }}
+          />
           <Title level={2} className="text-gradient">
             MicroArt
           </Title>

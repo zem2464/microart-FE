@@ -50,6 +50,7 @@ import {
 } from "@ant-design/icons";
 import { useQuery, useMutation } from "@apollo/client";
 import dayjs from "dayjs";
+import { usePayment } from "../../contexts/PaymentContext";
 import {
   GET_CLIENT_WORK_TYPES,
   GET_CLIENT_SERVICE_PROVIDERS,
@@ -61,9 +62,7 @@ import {
   GET_CLIENT_INVOICES,
   GET_CLIENT_PAYMENTS,
   GET_CLIENT_CREDIT_BLOCKED_PROJECTS,
-  RECORD_CLIENT_PAYMENT,
   ALLOCATE_PAYMENT_TO_INVOICE,
-  GET_PAYMENT_TYPES,
 } from "../../gql/clientLedger";
 
 const { TabPane } = Tabs;
@@ -73,8 +72,8 @@ const { RangePicker } = DatePicker;
 
 const ClientDetail = ({ client, onClose, onEdit }) => {
   const [activeTab, setActiveTab] = useState("profile");
-  const [paymentForm] = Form.useForm();
   const [allocationForm] = Form.useForm();
+  const { openPaymentModal } = usePayment();
 
   // Ledger state
   const [ledgerFilters, setLedgerFilters] = useState({
@@ -83,7 +82,6 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
     dateRange: [dayjs().startOf("month"), dayjs().endOf("month")],
     showBlockedOnly: false,
   });
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [showAllocationModal, setShowAllocationModal] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState(null);
 
@@ -196,25 +194,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
     notifyOnNetworkStatusChange: true,
   });
 
-  const { data: paymentTypesData } = useQuery(GET_PAYMENT_TYPES);
-
   // Mutations
-  const [recordPayment] = useMutation(RECORD_CLIENT_PAYMENT, {
-    onCompleted: (data) => {
-      if (data.recordClientPayment.success) {
-        message.success(data.recordClientPayment.message);
-        setShowPaymentModal(false);
-        paymentForm.resetFields();
-        refetchLedger();
-      } else {
-        message.error(data.recordClientPayment.message);
-      }
-    },
-    onError: (error) => {
-      message.error("Error recording payment: " + error.message);
-    },
-  });
-
   const [allocatePayment] = useMutation(ALLOCATE_PAYMENT_TO_INVOICE, {
     onCompleted: (data) => {
       if (data.allocatePaymentToInvoice.success) {
@@ -908,10 +888,19 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                         },
                       },
                       {
-                        title: "Invoice No.",
-                        key: "invoiceNumber",
+                        title: "Document No.",
+                        key: "documentNumber",
                         width: 120,
-                        render: (_, r) => r.invoice?.invoiceNumber || "-",
+                        render: (_, r) => {
+                          if (r.payment) {
+                            return (
+                              <Tag color="green">
+                                {r.payment.paymentNumber}
+                              </Tag>
+                            );
+                          }
+                          return r.invoice?.invoiceNumber || "-";
+                        },
                       },
                       {
                         title: "Particulars",
@@ -920,7 +909,22 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                         ellipsis: true,
                         render: (_, r) => {
                           const project = r.invoice?.project;
-                          if (project) {
+                          const payment = r.payment;
+                          
+                          if (payment) {
+                            // This is a payment transaction
+                            return (
+                              <div>
+                                <div style={{ fontWeight: 500 }}>
+                                  {payment.paymentNumber}
+                                </div>
+                                <div style={{ fontSize: 12, color: "#666" }}>
+                                  Payment Received
+                                </div>
+                              </div>
+                            );
+                          } else if (project) {
+                            // This is an invoice transaction
                             return (
                               <div>
                                 <div style={{ fontWeight: 500 }}>
@@ -941,7 +945,31 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                         width: 300,
                         render: (_, r) => {
                           const project = r.invoice?.project;
-                          if (project?.projectGradings?.length > 0) {
+                          const payment = r.payment;
+                          
+                          if (payment) {
+                            // Show payment details
+                            return (
+                              <div style={{ fontSize: 11, lineHeight: "1.4" }}>
+                                {payment.paymentType && (
+                                  <div>
+                                    <strong>Type:</strong> {payment.paymentType.name} ({payment.paymentType.type})
+                                  </div>
+                                )}
+                                {payment.paymentDate && (
+                                  <div>
+                                    <strong>Date:</strong> {dayjs(payment.paymentDate).format("DD/MM/YYYY")}
+                                  </div>
+                                )}
+                                {r.referenceNumber && (
+                                  <div>
+                                    <strong>Ref:</strong> {r.referenceNumber}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          } else if (project?.projectGradings?.length > 0) {
+                            // Show project grading details
                             const lines = project.projectGradings.map((pg) => {
                               const qty = pg.imageQuantity || 0;
                               const rate =
@@ -1072,37 +1100,6 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             />
           </Card>
         )}
-
-        {/* Action Buttons */}
-        <Card>
-          <Space>
-            <Button
-              type="primary"
-              icon={<PlusOutlined />}
-              onClick={() => setShowPaymentModal(true)}
-            >
-              Record Payment
-            </Button>
-            <Button
-              icon={<CreditCardOutlined />}
-              onClick={() => {
-                if (
-                  paymentsData?.clientPayments?.payments?.some(
-                    (p) => p.unallocatedAmount > 0
-                  )
-                ) {
-                  setShowAllocationModal(true);
-                } else {
-                  message.info(
-                    "No unallocated payments available for allocation"
-                  );
-                }
-              }}
-            >
-              Allocate Payments
-            </Button>
-          </Space>
-        </Card>
 
         {/* Invoices and Payments Tables */}
         <Row gutter={16}>
@@ -1249,6 +1246,37 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
             </Card>
           </Col>
         </Row>
+
+        {/* Action Buttons */}
+        <Card>
+          <Space>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={() => openPaymentModal(client.id)}
+            >
+              Record Payment
+            </Button>
+            <Button
+              icon={<CreditCardOutlined />}
+              onClick={() => {
+                if (
+                  paymentsData?.clientPayments?.payments?.some(
+                    (p) => p.unallocatedAmount > 0
+                  )
+                ) {
+                  setShowAllocationModal(true);
+                } else {
+                  message.info(
+                    "No unallocated payments available for allocation"
+                  );
+                }
+              }}
+            >
+              Allocate Payments
+            </Button>
+          </Space>
+        </Card>
       </div>
     );
   };
@@ -1406,100 +1434,6 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
           </TabPane>
         </Tabs>
       </div>
-
-      {/* Payment Modal */}
-      <Modal
-        title="Record Client Payment"
-        open={showPaymentModal}
-        onCancel={() => {
-          setShowPaymentModal(false);
-          paymentForm.resetFields();
-        }}
-        footer={null}
-        width={600}
-      >
-        <Form
-          form={paymentForm}
-          layout="vertical"
-          onFinish={(values) => {
-            recordPayment({
-              variables: {
-                input: {
-                  clientId: client.id,
-                  ...values,
-                  paymentDate: values.paymentDate.format("YYYY-MM-DD"),
-                },
-              },
-            });
-          }}
-        >
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="paymentTypeId"
-                label="Payment Type"
-                rules={[
-                  { required: true, message: "Please select payment type" },
-                ]}
-              >
-                <Select placeholder="Select payment type">
-                  {paymentTypesData?.paymentTypes?.map((type) => (
-                    <Option key={type.id} value={type.id}>
-                      {type.name} ({type.type})
-                    </Option>
-                  ))}
-                </Select>
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item
-                name="amount"
-                label="Amount"
-                rules={[{ required: true, message: "Please enter amount" }]}
-              >
-                <InputNumber
-                  style={{ width: "100%" }}
-                  min={0.01}
-                  precision={2}
-                  formatter={(value) =>
-                    `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                  }
-                  parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
-                />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Row gutter={16}>
-            <Col span={12}>
-              <Form.Item
-                name="paymentDate"
-                label="Payment Date"
-                rules={[
-                  { required: true, message: "Please select payment date" },
-                ]}
-              >
-                <DatePicker style={{ width: "100%" }} />
-              </Form.Item>
-            </Col>
-            <Col span={12}>
-              <Form.Item name="referenceNumber" label="Reference Number">
-                <Input placeholder="Cheque/Transaction reference" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="notes" label="Notes">
-            <Input.TextArea rows={3} placeholder="Additional notes..." />
-          </Form.Item>
-          <Form.Item>
-            <Space>
-              <Button type="primary" htmlType="submit">
-                Record Payment
-              </Button>
-              <Button onClick={() => setShowPaymentModal(false)}>Cancel</Button>
-            </Space>
-          </Form.Item>
-        </Form>
-      </Modal>
 
       {/* Payment Allocation Modal */}
       <Modal

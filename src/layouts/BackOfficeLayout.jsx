@@ -11,6 +11,7 @@ import {
   TagsOutlined,
   SecurityScanOutlined,
   DollarOutlined,
+  WalletOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
@@ -27,6 +28,7 @@ import WorkTypes from "../pages/BackOffice/WorkTypes";
 import Gradings from "../pages/BackOffice/Gradings";
 import Roles from "../pages/BackOffice/Roles";
 import AuditLogs from "../pages/BackOffice/AuditLogs";
+import PaymentTypes from "../pages/BackOffice/PaymentTypes";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -56,6 +58,11 @@ const BackOfficeLayout = () => {
       key: "/gradings",
       icon: <DollarOutlined />,
       label: <Link to="/gradings">Gradings</Link>,
+    },
+    {
+      key: "/payment-types",
+      icon: <WalletOutlined />,
+      label: <Link to="/payment-types">Payment Types</Link>,
     },
     {
       key: "/users",
@@ -112,9 +119,11 @@ const BackOfficeLayout = () => {
         {/* Title and Menu */}
         <div className="flex items-center w-full min-w-0">
           <div className="flex items-center mr-8">
-            <Title level={4} className="mb-0 mr-3 text-gradient">
-              MicroArt Admin
-            </Title>
+            <img 
+              src="/images/images.png" 
+              alt="MicroArt Logo" 
+              style={{ height: '130px', marginRight: '12px' }}
+            />
             <Badge 
               count="Admin" 
               style={{ 
@@ -172,6 +181,7 @@ const BackOfficeLayout = () => {
             <Route path="/task-types" element={<TaskTypes />} />
             <Route path="/work-types" element={<WorkTypes />} />
             <Route path="/gradings" element={<Gradings />} />
+            <Route path="/payment-types" element={<PaymentTypes />} />
             <Route path="/users" element={<Users />} />
             <Route path="/roles" element={<Roles />} />
             <Route path="/audit-logs" element={<AuditLogs />} />

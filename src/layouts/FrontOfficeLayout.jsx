@@ -22,8 +22,11 @@ import {
   PlusOutlined,
   UserAddOutlined,
   FileTextOutlined,
+  DollarOutlined,
+  TransactionOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
+import { usePayment } from "../contexts/PaymentContext";
 import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
@@ -35,6 +38,7 @@ import ProjectManagement from "../pages/FrontOffice/ProjectManagement";
 import ClientDashboard from "../pages/FrontOffice/ClientDashboard";
 import ClientList from "../pages/FrontOffice/ClientList";
 import LedgerReport from "../pages/FrontOffice/LedgerReport";
+import Transactions from "../pages/FrontOffice/Transactions";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -44,6 +48,7 @@ const FrontOfficeLayout = () => {
   const { logout } = useAuth();
   const location = useLocation();
   const { showClientFormDrawer, showProjectFormDrawer } = useAppDrawer();
+  const { openPaymentModal } = usePayment();
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -89,6 +94,11 @@ const FrontOfficeLayout = () => {
       key: "/projects",
       icon: <ProjectOutlined />,
       label: <Link to="/projects">Projects</Link>,
+    },
+    {
+      key: "/transactions",
+      icon: <TransactionOutlined />,
+      label: <Link to="/transactions">Transactions</Link>,
     },
     {
       key: "/ledger",
@@ -142,9 +152,11 @@ const FrontOfficeLayout = () => {
         {/* Title and Menu */}
         <div className="flex items-center w-full min-w-0">
           <div className="flex items-center mr-8">
-            <Title level={4} className="mb-0 mr-3 text-gradient">
-              MicroArt
-            </Title>
+            <img 
+              src="/images/images.png" 
+              alt="MicroArt Logo" 
+              style={{ height: '130px', marginRight: '12px' }}
+            />
             <Badge
               count="Employee"
               style={{
@@ -188,6 +200,15 @@ const FrontOfficeLayout = () => {
                 onClick={() => showProjectFormDrawer(null, "create")}
               />
             </Tooltip>
+            <Tooltip title="Record Payment" placement="bottom">
+              <Button
+                type="primary"
+                shape="circle"
+                icon={<DollarOutlined />}
+                onClick={() => openPaymentModal()}
+                className="bg-blue-500 hover:bg-blue-600 border-blue-500"
+              />
+            </Tooltip>
           </Space>
 
           <ViewSwitcher size="small" />
@@ -219,6 +240,7 @@ const FrontOfficeLayout = () => {
           <Routes>
             <Route path="/" element={<TaskTable />} />
             <Route path="/projects" element={<ProjectManagement />} />
+            <Route path="/transactions" element={<Transactions />} />
             <Route path="/ledger" element={<LedgerReport />} />
             <Route path="/clients/dashboard" element={<ClientDashboard />} />
             <Route path="/clients" element={<ClientList />} />
