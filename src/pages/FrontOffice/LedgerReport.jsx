@@ -49,6 +49,8 @@ const LedgerReport = () => {
   // State for filters
   const [selectedClient, setSelectedClient] = useState(null);
   const [dateFilterType, setDateFilterType] = useState("monthly");
+  const [selectedMonth, setSelectedMonth] = useState(dayjs());
+  const [selectedYear, setSelectedYear] = useState(dayjs());
   const [customDateRange, setCustomDateRange] = useState([
     dayjs().startOf("month"),
     dayjs().endOf("month"),
@@ -118,7 +120,9 @@ const LedgerReport = () => {
 
     switch (value) {
       case "monthly":
-        setDateRange([today.startOf("month"), today.endOf("month")]);
+        // Use selected month or current month
+        const monthToUse = selectedMonth || today;
+        setDateRange([monthToUse.startOf("month"), monthToUse.endOf("month")]);
         break;
       case "fy":
         // Financial Year: April to March
@@ -129,7 +133,9 @@ const LedgerReport = () => {
         ]);
         break;
       case "yearly":
-        setDateRange([today.startOf("year"), today.endOf("year")]);
+        // Use selected year or current year
+        const yearToUse = selectedYear || today;
+        setDateRange([yearToUse.startOf("year"), yearToUse.endOf("year")]);
         break;
       case "custom":
         setDateRange(customDateRange);
@@ -139,9 +145,28 @@ const LedgerReport = () => {
     }
   };
 
+  // Handle month change
+  const handleMonthChange = (date) => {
+    setSelectedMonth(date);
+    setShowLedger(false); // Hide ledger when month changes
+    if (dateFilterType === "monthly" && date) {
+      setDateRange([date.startOf("month"), date.endOf("month")]);
+    }
+  };
+
+  // Handle year change
+  const handleYearChange = (date) => {
+    setSelectedYear(date);
+    setShowLedger(false); // Hide ledger when year changes
+    if (dateFilterType === "yearly" && date) {
+      setDateRange([date.startOf("year"), date.endOf("year")]);
+    }
+  };
+
   // Handle custom date range change
   const handleCustomDateChange = (dates) => {
     setCustomDateRange(dates);
+    setShowLedger(false); // Hide ledger when custom date changes
     if (dateFilterType === "custom") {
       setDateRange(dates);
     }
@@ -162,10 +187,13 @@ const LedgerReport = () => {
 
   // Reset filters
   const handleReset = () => {
+    const today = dayjs();
     setSelectedClient(null);
     setDateFilterType("monthly");
-    setDateRange([dayjs().startOf("month"), dayjs().endOf("month")]);
-    setCustomDateRange([dayjs().startOf("month"), dayjs().endOf("month")]);
+    setDateRange([today.startOf("month"), today.endOf("month")]);
+    setCustomDateRange([today.startOf("month"), today.endOf("month")]);
+    setSelectedMonth(today);
+    setSelectedYear(today);
     setShowLedger(false);
   };
 
@@ -928,7 +956,10 @@ const LedgerReport = () => {
                 showSearch
                 placeholder="Select Client"
                 value={selectedClient}
-                onChange={setSelectedClient}
+                onChange={(value) => {
+                  setSelectedClient(value);
+                  setShowLedger(false); // Hide ledger when client changes
+                }}
                 style={{ width: "100%" }}
                 loading={clientsLoading}
                 optionFilterProp="children"
@@ -996,15 +1027,37 @@ const LedgerReport = () => {
               <div style={{ marginBottom: 8 }}>
                 <Text strong>Date Range</Text>
               </div>
-              <RangePicker
-                value={
-                  dateFilterType === "custom" ? customDateRange : dateRange
-                }
-                onChange={handleCustomDateChange}
-                disabled={dateFilterType !== "custom"}
-                style={{ width: "100%" }}
-                format="DD/MM/YYYY"
-              />
+              {dateFilterType === "monthly" && (
+                <DatePicker
+                  picker="month"
+                  value={selectedMonth}
+                  onChange={handleMonthChange}
+                  style={{ width: "100%" }}
+                  format="MMMM YYYY"
+                  placeholder="Select Month"
+                />
+              )}
+              {dateFilterType === "yearly" && (
+                <DatePicker
+                  picker="year"
+                  value={selectedYear}
+                  onChange={handleYearChange}
+                  style={{ width: "100%" }}
+                  format="YYYY"
+                  placeholder="Select Year"
+                />
+              )}
+              {(dateFilterType === "custom" || dateFilterType === "fy") && (
+                <RangePicker
+                  value={
+                    dateFilterType === "custom" ? customDateRange : dateRange
+                  }
+                  onChange={handleCustomDateChange}
+                  disabled={dateFilterType === "fy"}
+                  style={{ width: "100%" }}
+                  format="DD/MM/YYYY"
+                />
+              )}
             </Col>
 
             <Col span={6}>
@@ -1141,10 +1194,23 @@ const LedgerReport = () => {
 
         {/* Empty state when ledger not shown */}
         {!showLedger && (
-          <Empty
-            description="Select a client and click 'Show Ledger' to view transactions"
-            style={{ marginTop: 40 }}
-          />
+          <Card style={{ marginTop: 16, textAlign: "center", padding: "60px 20px" }}>
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description={
+                <div>
+                  <Typography.Title level={4} style={{ marginBottom: 8 }}>
+                    Ready to Generate Ledger Report? 📊
+                  </Typography.Title>
+                  <Typography.Text type="secondary">
+                    {selectedClient
+                      ? "Hit the 'Show Ledger' button to view detailed transactions and balances"
+                      : "Select a client and date range, then click 'Show Ledger' to begin"}
+                  </Typography.Text>
+                </div>
+              }
+            />
+          </Card>
         )}
       </Card>
     </div>

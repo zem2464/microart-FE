@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback } from "react";
 import { Typography, Button, Input, Select, message, Spin } from "antd";
 import {
   PlusOutlined,
@@ -63,7 +63,7 @@ const STATUS_COLUMNS = [
 // Status mapping between frontend and backend
 const STATUS_MAP = {
   "todo": "TODO",
-  "in_progress": "IN_PROGRESS", 
+  "in_progress": "IN_PROGRESS",
   "revision": "REVISION",
   "completed": "COMPLETED"
 };
@@ -71,33 +71,29 @@ const STATUS_MAP = {
 const REVERSE_STATUS_MAP = {
   "TODO": "todo",
   "IN_PROGRESS": "in_progress",
-  "REVISION": "revision", 
+  "REVISION": "revision",
   "COMPLETED": "completed"
 };
 
 // Functional drag board with key-based remounting
-const StableDragBoard = React.memo(({ 
-  tasksByStatus, 
-  usersData, 
-  updatingTasks, 
-  onTaskClick, 
-  onDragStart, 
-  onDragUpdate, 
+const StableDragBoard = React.memo(({
+  tasksByStatus,
+  usersData,
+  updatingTasks,
+  onTaskClick,
+  onDragStart,
+  onDragUpdate,
   onDragEnd,
   boardKey // Add this to force remount when needed
 }) => {
-  const [isDragging, setIsDragging] = useState(false);
-  
+
   const handleDragStart = useCallback((start) => {
-    console.log('[StableDragBoard] Drag started - freezing updates');
-    setIsDragging(true);
+
     onDragStart(start);
   }, [onDragStart]);
 
   const handleDragEnd = useCallback((result) => {
-    console.log('[StableDragBoard] Drag ended - allowing updates');
-    setIsDragging(false);
-    
+
     // Call parent's drag end handler
     onDragEnd(result, () => {
       // Parent cleanup callback - nothing needed here
@@ -212,7 +208,6 @@ const TaskBoard = () => {
     },
     fetchPolicy: "cache-and-network",
     onCompleted: (data) => {
-      console.log("TaskBoard received tasks data:", data?.tasks?.tasks?.length);
     },
     onError: (error) => {
       console.error("Tasks query error:", error);
@@ -252,15 +247,14 @@ const TaskBoard = () => {
   // Group tasks by status
   const tasksByStatus = useMemo(() => {
     const tasks = tasksData?.tasks?.tasks || [];
-    
+
     // Filter out invalid tasks
     const validTasks = tasks.filter((task) => {
-      const isValid = task && task.id && 
-        task.id !== "undefined" && 
-        task.id !== "null" && 
+      const isValid = task && task.id &&
+        task.id !== "undefined" &&
+        task.id !== "null" &&
         task.id !== null;
       if (!isValid) {
-        console.warn("Filtering out invalid task:", task);
       }
       return isValid;
     });
@@ -279,7 +273,6 @@ const TaskBoard = () => {
 
   // Drag handlers
   const handleDragStart = useCallback((start) => {
-    console.log('[TaskBoard] Drag started:', start.draggableId);
     window.__isDraggingTask = true;
   }, []);
 
@@ -288,17 +281,15 @@ const TaskBoard = () => {
   }, []);
 
   const handleDragEnd = useCallback(async (result, cleanup) => {
-    console.log('[TaskBoard] Drag ended:', result);
-    
+
     const { destination, source, draggableId } = result;
-    
+
     // Always cleanup drag state immediately
     window.__isDraggingTask = false;
 
     // If no destination or no change, force refresh and return
-    if (!destination || 
-        (destination.droppableId === source.droppableId && destination.index === source.index)) {
-      console.log('[TaskBoard] No valid drop destination, refreshing board');
+    if (!destination ||
+      (destination.droppableId === source.droppableId && destination.index === source.index)) {
       setBoardKey(prev => prev + 1);
       return;
     }
@@ -306,14 +297,11 @@ const TaskBoard = () => {
     // Find the task being moved
     const allTasks = Object.values(tasksByStatus).flat();
     const task = allTasks.find((t) => String(t.id) === draggableId);
-    
+
     if (!task) {
-      console.warn('[TaskBoard] Task not found:', draggableId);
       setBoardKey(prev => prev + 1);
       return;
     }
-
-    console.log(`[TaskBoard] Moving task ${draggableId} from ${source.droppableId} to ${destination.droppableId}`);
 
     // Mark task as updating
     setUpdatingTasks((prev) => new Set(prev).add(draggableId));
@@ -321,11 +309,9 @@ const TaskBoard = () => {
     try {
       // Get the new status
       const newStatus = STATUS_MAP[destination.droppableId] || destination.droppableId.toUpperCase();
-      
-      console.log(`[TaskBoard] Updating task ${draggableId} to status: ${newStatus}`);
-      
+
       // Perform the mutation with proper cache update
-      const result = await updateTaskStatus({
+      await updateTaskStatus({
         variables: {
           id: draggableId,
           status: newStatus,
@@ -341,7 +327,6 @@ const TaskBoard = () => {
         },
         // Manual cache update to ensure immediate UI sync
         update: (cache, { data: { updateTaskStatus } }) => {
-          console.log('[TaskBoard] Manually updating Apollo cache');
           try {
             // Read current cache
             const existingTasks = cache.readQuery({
@@ -359,7 +344,7 @@ const TaskBoard = () => {
             });
 
             // Update the task in cache
-            const updatedTasks = existingTasks.tasks.tasks.map(t => 
+            const updatedTasks = existingTasks.tasks.tasks.map(t =>
               t.id === draggableId ? { ...t, status: newStatus } : t
             );
 
@@ -384,25 +369,20 @@ const TaskBoard = () => {
                 }
               },
             });
-            console.log('[TaskBoard] Cache updated successfully');
           } catch (cacheError) {
-            console.warn('[TaskBoard] Cache update failed:', cacheError);
           }
         }
       });
 
-      console.log(`[TaskBoard] Task ${draggableId} successfully updated in backend`);
-      
       // Force a board refresh to ensure UI sync
       setTimeout(() => {
         setBoardKey(prev => prev + 1);
-        console.log('[TaskBoard] Board refreshed after successful update');
       }, 100);
-      
+
     } catch (error) {
       console.error('[TaskBoard] Failed to update task status:', error);
       message.error("Failed to update task status");
-      
+
       // Force refresh on error to restore correct state
       setBoardKey(prev => prev + 1);
     } finally {

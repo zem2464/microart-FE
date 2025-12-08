@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useReactiveVar } from '@apollo/client';
+import { userCacheVar } from '../cache/userCacheVar';
 import {
   Card,
   Typography,
@@ -34,6 +36,7 @@ import {
   CloseOutlined,
   DeleteOutlined,
   ReloadOutlined,
+  PictureOutlined,
 } from "@ant-design/icons";
 import { useMutation, useQuery, useSubscription } from "@apollo/client";
 import dayjs from "dayjs";
@@ -50,6 +53,8 @@ import {
 } from "../gql/taskComments";
 import { useTaskSubscriptions } from "../hooks/useTaskSubscriptions";
 import MentionInput from "./MentionInput";
+import TaskImageQuantityTracker from "./TaskImageQuantityTracker";
+import TaskAssignmentManager from "./TaskAssignmentManager";
 
 const { TextArea } = Input;
 const { Text } = Typography;
@@ -122,6 +127,7 @@ const TaskCard = ({
   clientPreferences = null,
 }) => {
   const [modalVisible, setModalVisible] = useState(showModal);
+  const currentUser = useReactiveVar(userCacheVar);
 
   // Sync modal visibility with showModal prop
   useEffect(() => {
@@ -134,6 +140,7 @@ const TaskCard = ({
   const [isEditing, setIsEditing] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentText, setEditCommentText] = useState("");
+
   const [editCommentMentions, setEditCommentMentions] = useState([]);
   // Comment sorting state
   const [commentSortOrder, setCommentSortOrder] = useState("desc"); // 'desc' = latest first, 'asc' = oldest first
@@ -1027,25 +1034,78 @@ const TaskCard = ({
                   />
                 </div>
 
-                {/* Assignee */}
+                {/* Assignee - Show multiple if taskAssignments exist */}
                 <div
-                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                  style={{ display: "flex", flexDirection: "column", gap: "4px", alignItems: "flex-end" }}
                 >
-                  {getUserAvatar(task.assignee?.id || task.assigneeId)}
-                  <Text style={{ fontSize: "10px", color: "#172B4D" }}>
-                    {
-                      getUserDisplayName(
-                        task.assignee?.id || task.assigneeId
-                      ).split(" ")[0]
-                    }
-                  </Text>
-                  {isPreferredUser(
-                    task.assignee?.id || task.assigneeId,
-                    task.taskTypeId
-                  ) && (
-                    <Text style={{ fontSize: "8px", color: "#52c41a" }}>
-                      ⭐
-                    </Text>
+                  {task.taskAssignments && task.taskAssignments.length > 0 ? (
+                    <>
+                      <Avatar.Group maxCount={3} size="small">
+                        {task.taskAssignments.map((assignment) => {
+                          const isCurrentUser = assignment.userId === currentUser?.id;
+                          const progress = assignment.imageQuantity > 0 
+                            ? Math.round((assignment.completedImageQuantity / assignment.imageQuantity) * 100) 
+                            : 0;
+                          return (
+                            <Tooltip 
+                              key={assignment.id}
+                              title={
+                                <div style={{ fontSize: '11px' }}>
+                                  <div style={{ fontWeight: 600 }}>
+                                    {assignment.user?.firstName} {assignment.user?.lastName}
+                                    {isCurrentUser && <span style={{ color: '#40a9ff' }}> (You)</span>}
+                                  </div>
+                                  <div>Progress: {assignment.completedImageQuantity}/{assignment.imageQuantity} images ({progress}%)</div>
+                                  <div>Status: {assignment.status}</div>
+                                </div>
+                              }
+                            >
+                              <Avatar 
+                                size="small"
+                                style={{ 
+                                  backgroundColor: isCurrentUser ? '#40a9ff' : '#1890ff',
+                                  border: isCurrentUser ? '2px solid #0050b3' : 'none',
+                                  fontWeight: isCurrentUser ? 600 : 400
+                                }}
+                              >
+                                {assignment.user?.firstName?.charAt(0)}
+                              </Avatar>
+                            </Tooltip>
+                          );
+                        })}
+                      </Avatar.Group>
+                      {/* Show total progress */}
+                      {(() => {
+                        const totalCompleted = task.taskAssignments.reduce((sum, a) => sum + a.completedImageQuantity, 0);
+                        const totalProgress = task.imageQuantity > 0 
+                          ? Math.round((totalCompleted / task.imageQuantity) * 100) 
+                          : 0;
+                        return (
+                          <Text style={{ fontSize: "9px", color: "#6B778C" }}>
+                            {totalCompleted}/{task.imageQuantity} ({totalProgress}%)
+                          </Text>
+                        );
+                      })()}
+                    </>
+                  ) : (
+                    <>
+                      {getUserAvatar(task.assignee?.id || task.assigneeId)}
+                      <Text style={{ fontSize: "10px", color: "#172B4D" }}>
+                        {
+                          getUserDisplayName(
+                            task.assignee?.id || task.assigneeId
+                          ).split(" ")[0]
+                        }
+                      </Text>
+                      {isPreferredUser(
+                        task.assignee?.id || task.assigneeId,
+                        task.taskTypeId
+                      ) && (
+                        <Text style={{ fontSize: "8px", color: "#52c41a" }}>
+                          ⭐
+                        </Text>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -1470,6 +1530,37 @@ const TaskCard = ({
                   )}
                 </Row>
               </div>
+
+              {/* Task Image Quantity Tracking */}
+              {(task.imageQuantity || task.project?.imageQuantity || task.gradingTask?.grading?.imageQuantity) && (
+                <div style={{ marginBottom: "16px" }}>
+                  <Divider style={{ margin: "16px 0" }}>Image Progress</Divider>
+                  <TaskImageQuantityTracker
+                    task={{
+                      ...task,
+                      imageQuantity: task.imageQuantity || 
+                                   task.gradingTask?.grading?.imageQuantity || 
+                                   task.project?.imageQuantity
+                    }}
+                    onUpdate={(updatedTask) => {
+                      if (onTaskUpdate) onTaskUpdate(updatedTask);
+                    }}
+                    readOnly={readOnly}
+                  />
+                </div>
+              )}
+
+              {/* Task Assignments - Multiple Users */}
+              {task.imageQuantity > 0 && (
+                <div style={{ marginBottom: "16px" }}>
+                  <Divider style={{ margin: "16px 0" }}>User Assignments</Divider>
+                  <TaskAssignmentManager
+                    task={task}
+                    availableUsers={availableUsers}
+                    readOnly={readOnly}
+                  />
+                </div>
+              )}
 
               {/* Project Internal Notes Display */}
               {task.project?.notes && (

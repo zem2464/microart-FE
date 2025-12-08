@@ -15,7 +15,7 @@ import {
   meUserData,
   isApplicationLoading,
 } from "./cache/userCacheVar";
-import { getAuthToken, debugCookies } from "./utils/cookieUtils";
+import { getAuthToken } from "./utils/cookieUtils";
 
 const createErrorLink = (client) =>
   onError(({ graphQLErrors, networkError }) => {
@@ -97,11 +97,15 @@ const httpLink = createHttpLink({
   credentials: "include",
 });
 
-// WebSocket link for subscriptions using HMS approach with automatic cookie handling
 export const wsLink = new GraphQLWsLink(createClient({
   url: process.env.REACT_APP_GRAPHQL_WS_URL || "ws://localhost:4000/graphql",
-  // Remove connectionParams - cookies will be sent automatically with credentials: include
-  // This prevents duplicate subscription calls and relies on backend cookie parsing
+  connectionParams: () => {
+    const token = getAuthToken();
+    return {
+      authToken: token ? `Bearer ${token}` : "",
+    };
+  },
+  // Cookies will also be sent automatically with credentials: include
   retryAttempts: 5,
   shouldRetry: () => true,
   keepAlive: 30000, // Send ping every 30 seconds
@@ -258,7 +262,13 @@ export const reconnectWebSocket = () => {
   const newWsLink = new GraphQLWsLink(
     createClient({
       url: process.env.REACT_APP_GRAPHQL_WS_URL || "ws://localhost:4000/graphql",
-      // Remove connectionParams - cookies sent automatically with credentials
+      connectionParams: () => {
+        const token = getAuthToken();
+        return {
+          authToken: token ? `Bearer ${token}` : "",
+        };
+      },
+      // Cookies will also be sent automatically with credentials: include
       retryAttempts: 5,
       shouldRetry: () => true,
       keepAlive: 30000,

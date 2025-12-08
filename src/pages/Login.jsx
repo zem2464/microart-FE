@@ -26,15 +26,16 @@ const Login = () => {
   return (
     <div className="h-screen flex items-center justify-center bg-gray-50 px-4 sm:px-6 lg:px-8 overflow-hidden">
       <div className="max-w-md w-full space-y-6 max-h-full overflow-y-auto">
-        <div className="text-center">
-          <img 
-            src="/images/images.png" 
-            alt="MicroArt Logo" 
-            style={{ height: '80px', margin: '0 auto 16px' }}
+        <div className="flex items-center justify-center flex-col">
+          <img
+            src="/images/images.png"
+            alt="MicroArt Logo"
+            style={{
+              height: "120px",
+              background: "transparent",
+              textAlign: "center",
+            }}
           />
-          <Title level={2} className="text-gradient">
-            MicroArt
-          </Title>
           <Text type="secondary">Photo editing workflow management system</Text>
         </div>
 
@@ -91,7 +92,7 @@ const Login = () => {
             </Form.Item>
           </Form>
 
-          {process.env.NODE_ENV === 'development' && (
+          {process.env.NODE_ENV === "development" && (
             <div className="mt-4 text-center">
               <Text type="secondary" className="text-sm">
                 Demo accounts:

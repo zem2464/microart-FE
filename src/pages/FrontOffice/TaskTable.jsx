@@ -3,6 +3,7 @@ import {
   Table,
   Card,
   Input,
+  InputNumber,
   Select,
   Tag,
   Button,
@@ -26,7 +27,11 @@ import {
   ExclamationCircleOutlined,
   SaveOutlined,
   CloseCircleOutlined,
+  PictureOutlined,
+  SplitCellsOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
+import TaskCard from "../../components/TaskCard";
 import { useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -40,6 +45,11 @@ import { GET_AVAILABLE_USERS } from "../../graphql/projectQueries";
 import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import { GET_GRADINGS_BY_WORK_TYPE } from "../../graphql/gradingQueries";
 import { userCacheVar } from "../../cache/userCacheVar";
+import { 
+  BULK_CREATE_TASK_ASSIGNMENTS, 
+  DELETE_TASK_ASSIGNMENT,
+  UPDATE_TASK_ASSIGNMENT
+} from "../../gql/taskAssignments";
 
 dayjs.extend(relativeTime);
 
@@ -103,6 +113,10 @@ const TaskTable = () => {
   // Drawer states
   const [selectedTask, setSelectedTask] = useState(null);
   const [taskDrawerVisible, setTaskDrawerVisible] = useState(false);
+
+  // Task Detail Modal state
+  const [taskDetailVisible, setTaskDetailVisible] = useState(false);
+  const [selectedTaskForDetail, setSelectedTaskForDetail] = useState(null);
 
   // Build filters for server-side filtering
   const buildFilters = useCallback(() => {
@@ -238,6 +252,36 @@ const TaskTable = () => {
     },
   });
 
+  // Task assignment mutations
+  const [bulkCreateAssignments] = useMutation(BULK_CREATE_TASK_ASSIGNMENTS, {
+    onCompleted: () => {
+      message.success("Assignments updated successfully");
+      refetchTasks();
+    },
+    onError: (error) => {
+      message.error(`Failed to update assignments: ${error.message}`);
+    },
+  });
+
+  const [deleteAssignment] = useMutation(DELETE_TASK_ASSIGNMENT, {
+    onCompleted: () => {
+      refetchTasks();
+    },
+    onError: (error) => {
+      message.error(`Failed to delete assignment: ${error.message}`);
+    },
+  });
+
+  const [updateTaskAssignment] = useMutation(UPDATE_TASK_ASSIGNMENT, {
+    onCompleted: () => {
+      message.success("Completed quantity updated successfully");
+      refetchTasks();
+    },
+    onError: (error) => {
+      message.error(`Failed to update assignment: ${error.message}`);
+    },
+  });
+
   // Refetch tasks when filters change
   useEffect(() => {
     refetchTasks();
@@ -332,7 +376,7 @@ const TaskTable = () => {
 
     users.forEach(user => {
       const userWorkTypeIds = user.workTypes?.map(wt => wt.id.toString()) || [];
-      
+
       if (userWorkTypeIds.length === 0) {
         // User has no work types assigned
         unassignedUsers.push(user);
@@ -373,13 +417,7 @@ const TaskTable = () => {
   const groupedByWorkType = useMemo(() => {
     const grouped = {};
 
-    console.log(
-      "Grouping tasks:",
-      tasks.length,
-      "tasks",
-      "Selected worktype:",
-      selectedWorkTypeId
-    );
+
 
     tasks.forEach((task) => {
       // Since backend filters by worktype, all tasks should be for selected worktype
@@ -387,14 +425,7 @@ const TaskTable = () => {
       const workTypeId = selectedWorkTypeId;
       const projectId = task.project?.id;
 
-      console.log(
-        "Task:",
-        task.taskCode,
-        "ProjectId:",
-        projectId,
-        "TaskType:",
-        task.taskType?.name
-      );
+
 
       if (!projectId) return;
 
@@ -432,7 +463,7 @@ const TaskTable = () => {
       }
     });
 
-    console.log("Grouped by worktype:", Object.keys(grouped), grouped);
+
 
     return grouped;
   }, [tasks, selectedWorkTypeId]);
@@ -486,30 +517,19 @@ const TaskTable = () => {
 
         // Filter project gradings to only include those belonging to the selected worktype
         const allGradings = project.projectGradings || [];
-        console.log(
-          `Project ${project.projectCode} has ${allGradings.length} total gradings:`,
-          allGradings.map((pg) => ({
-            name: pg.grading?.name,
-            workTypeId: pg.grading?.workType?.id,
-            workTypeName: pg.grading?.workType?.name,
-          }))
-        );
+
 
         const gradings = allGradings.filter((pg) => {
           const gradingWorkTypeId = pg.grading?.workType?.id;
           const matches =
             gradingWorkTypeId &&
             String(gradingWorkTypeId) === String(workTypeId);
-          console.log(
-            `  Grading ${pg.grading?.name}: workTypeId=${gradingWorkTypeId}, currentTab=${workTypeId}, matches=${matches}`
-          );
+
           // Convert both to strings for comparison since workTypeId from tabs is a string
           return matches;
         });
 
-        console.log(
-          `After filtering for worktype ${workTypeId}: ${gradings.length} gradings`
-        );
+
 
         // If project has gradings for this worktype, create a row for each grading
         if (gradings.length > 0) {
@@ -577,8 +597,8 @@ const TaskTable = () => {
                 gradingProgress === 100
                   ? "COMPLETED"
                   : gradingTotalTasks > 0
-                  ? "IN_PROGRESS"
-                  : "TODO",
+                    ? "IN_PROGRESS"
+                    : "TODO",
               progress: gradingProgress,
               totalTasks: gradingTotalTasks,
               completedTasks: gradingCompletedTasks,
@@ -609,8 +629,8 @@ const TaskTable = () => {
               progress === 100
                 ? "COMPLETED"
                 : totalTasks > 0
-                ? "IN_PROGRESS"
-                : "TODO",
+                  ? "IN_PROGRESS"
+                  : "TODO",
             progress,
             totalTasks,
             completedTasks,
@@ -631,7 +651,7 @@ const TaskTable = () => {
       };
     });
 
-    console.log("Table data by worktype:", Object.keys(result), result);
+
 
     return result;
   }, [groupedByWorkType]);
@@ -643,12 +663,12 @@ const TaskTable = () => {
 
     // Get user's work type IDs from ME query
     const userWorkTypeIds = currentUser?.workTypes?.map(wt => wt.id.toString()) || [];
-    
+
     // Create tabs from all available worktypes
     worktypes.forEach((workType) => {
       if (workType.isActive) {
         const workTypeId = workType.id.toString();
-        
+
         // Filter: only show work types assigned to the user
         // If user has no work types assigned, show all (for backward compatibility/admins)
         if (userWorkTypeIds.length === 0 || userWorkTypeIds.includes(workTypeId)) {
@@ -735,6 +755,75 @@ const TaskTable = () => {
 
       if (field === "assigneeId") {
         input.assigneeId = editedData.assigneeId || null;
+      } else if (field === "assignees") {
+        // Handle multiple user assignments
+        const currentAssignments = task.taskAssignments || [];
+        const currentUserIds = currentAssignments.map(a => a.userId);
+        const newUserIds = editedData.assigneeIds || [];
+        
+        // Find users to add and remove
+        const usersToAdd = newUserIds.filter(id => !currentUserIds.includes(id));
+        const usersToRemove = currentAssignments.filter(a => !newUserIds.includes(a.userId));
+        
+        // Delete removed assignments
+        for (const assignment of usersToRemove) {
+          await deleteAssignment({
+            variables: { id: assignment.id }
+          });
+        }
+        
+        // Create new assignments
+        if (usersToAdd.length > 0) {
+          const taskImageQty = task.imageQuantity || 0;
+          const numUsers = newUserIds.length;
+          const qtyPerUser = numUsers > 0 ? Math.floor(taskImageQty / numUsers) : 0;
+          
+          const assignmentInputs = usersToAdd.map(userId => ({
+            taskId: task.id,
+            userId: userId,
+            imageQuantity: qtyPerUser,
+            notes: null
+          }));
+          
+          await bulkCreateAssignments({
+            variables: { inputs: assignmentInputs }
+          });
+        }
+        
+        message.success("Task assignments updated successfully");
+        cancelEditCell();
+        return;
+      } else if (field === "completedQty") {
+        // Update the current user's TaskAssignment completed quantity
+        const userAssignment = task.taskAssignments?.find(
+          a => a.userId === currentUser?.id
+        );
+        
+        if (!userAssignment) {
+          message.error("You are not assigned to this task");
+          cancelEditCell();
+          return;
+        }
+        
+        // Validate against user's assigned quantity
+        const userAssignedQty = userAssignment.imageQuantity || 0;
+        if (editedData.completedQty > userAssignedQty) {
+          message.error(`Cannot complete more than your assigned quantity (${userAssignedQty})`);
+          return;
+        }
+        
+        await updateTaskAssignment({
+          variables: {
+            id: userAssignment.id,
+            input: {
+              completedImageQuantity: editedData.completedQty
+            }
+          }
+        });
+        
+        message.success("Completed quantity updated successfully");
+        cancelEditCell();
+        return;
       } else if (field === "dueDate") {
         input.dueDate = editedData.dueDate
           ? dayjs(editedData.dueDate).toISOString()
@@ -775,7 +864,6 @@ const TaskTable = () => {
       const orderB = b.WorkTypeTask?.order ?? 0;
       return orderA - orderB;
     });
-    console.log("taskTypes", taskTypes);
     if (!actualData || taskTypes.length === 0) return [];
 
     const baseColumns = [
@@ -947,10 +1035,10 @@ const TaskTable = () => {
             },
           },
           {
-            title: "Assignee",
-            key: `task-${taskType.id}-assignee`,
+            title: "Assignees",
+            key: `task-${taskType.id}-assignees`,
             className: "task-type-column",
-            width: 120,
+            width: 180,
             align: "center",
             onCell: () => ({
               style: {
@@ -964,43 +1052,33 @@ const TaskTable = () => {
                 return <Text type="secondary">-</Text>;
               }
 
-              const isEditingAssignee = isEditingCell(
+              const isEditingAssignees = isEditingCell(
                 record.projectId,
                 record.gradingId,
                 taskType.id,
-                "assigneeId"
+                "assignees"
               );
 
-              // If task is unassigned OR we are explicitly editing, show the Select
-              if (!task.assignee || isEditingAssignee) {
+              const taskAssignments = task.taskAssignments || [];
+              const assignedUserIds = taskAssignments.map(a => a.userId);
+
+              // Show multi-select when editing
+              if (isEditingAssignees) {
                 return (
                   <div
                     onClick={(e) => e.stopPropagation()}
                     style={{ padding: "4px 0" }}
                   >
                     <Select
+                      mode="multiple"
                       size="small"
-                      value={
-                        isEditingAssignee
-                          ? editedData.assigneeId
-                          : task.assigneeId || undefined
-                      }
-                      onChange={(value) => {
-                        if (isEditingAssignee) {
-                          setEditedData({ ...editedData, assigneeId: value });
-                        } else {
-                          // Direct assignment for unassigned tasks
-                          updateTask({
-                            variables: {
-                              id: task.id,
-                              input: { assigneeId: value },
-                            },
-                          });
-                        }
+                      value={editedData.assigneeIds || assignedUserIds}
+                      onChange={(values) => {
+                        setEditedData({ ...editedData, assigneeIds: values });
                       }}
                       style={{ width: "100%" }}
-                      placeholder="Assign User"
-                      allowClear
+                      placeholder="Assign Users"
+                      maxTagCount="responsive"
                       showSearch
                       filterOption={(input, option) => {
                         const children = option?.children;
@@ -1010,10 +1088,6 @@ const TaskTable = () => {
                         return searchText
                           .toLowerCase()
                           .includes(input.toLowerCase());
-                      }}
-                      onDropdownVisibleChange={(open) => {
-                        // If closing without selection and it was unassigned, we don't need to do anything special
-                        // If it was editing mode, we might want to keep it open? No, standard behavior is fine.
                       }}
                     >
                       {filteredUsers.assignedUsers.length > 0 && (
@@ -1035,13 +1109,172 @@ const TaskTable = () => {
                         </Select.OptGroup>
                       )}
                     </Select>
-                    {isEditingAssignee && (
-                      <Space size="small" style={{ marginTop: 4 }}>
+                    <Space size="small" style={{ marginTop: 4 }}>
+                      <Button
+                        type="primary"
+                        size="small"
+                        icon={<SaveOutlined />}
+                        onClick={() => saveTaskCell(task, "assignees")}
+                      >
+                        Save
+                      </Button>
+                      <Button
+                        size="small"
+                        icon={<CloseCircleOutlined />}
+                        onClick={cancelEditCell}
+                      >
+                        Cancel
+                      </Button>
+                    </Space>
+                  </div>
+                );
+              }
+
+              // Display assigned users with Edit button
+              if (taskAssignments.length > 0) {
+                return (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      padding: "4px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                      {taskAssignments.map((assignment) => (
+                        <Text
+                          key={assignment.id}
+                          style={{ fontSize: 11, display: "block", textAlign: "center" }}
+                        >
+                          {assignment.user?.firstName} {assignment.user?.lastName}
+                        </Text>
+                      ))}
+                    </Space>
+                    <Button
+                      size="small"
+                      type="link"
+                      icon={<EditOutlined />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditCell(
+                          record.projectId,
+                          record.gradingId,
+                          taskType.id,
+                          "assignees",
+                          assignedUserIds,
+                          e
+                        );
+                      }}
+                      style={{ padding: "0 4px", height: "20px", fontSize: "11px" }}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                );
+              }
+
+              // No assignments - show "Assign" button
+              return (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ padding: "4px" }}
+                >
+                  <Button
+                    size="small"
+                    type="dashed"
+                    block
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      startEditCell(
+                        record.projectId,
+                        record.gradingId,
+                        taskType.id,
+                        "assignees",
+                        [],
+                        e
+                      );
+                    }}
+                    style={{ fontSize: "11px" }}
+                  >
+                    Assign Users
+                  </Button>
+                </div>
+              );
+            },
+          },
+          {
+            title: "Images",
+            key: `task-${taskType.id}-images`,
+            className: "task-type-column",
+            width: 100,
+            align: "center",
+            onCell: () => ({
+              style: {
+                backgroundColor: `${taskType.color || "#d9d9d9"}20`,
+              },
+            }),
+            render: (_, record) => {
+              const task = record.tasksByType[taskType.id];
+
+              if (!task) {
+                return <Text type="secondary">-</Text>;
+              }
+
+              // Check if current user is assigned to this task
+              const taskAssignments = task.taskAssignments || [];
+              const userAssignment = taskAssignments.find(
+                assignment => assignment.userId === currentUser?.id
+              );
+              const isAssignedUser = !!userAssignment;
+
+              // Get user's assigned quantity or total task quantity for display
+              const userAssignedQty = userAssignment?.imageQuantity || 0;
+              const totalTaskQty = task.imageQuantity ||
+                record.gradingQty ||
+                record.project?.imageQuantity ||
+                0;
+
+              // For assigned users, show their assigned quantity; otherwise show total
+              const displayTotal = isAssignedUser ? userAssignedQty : totalTaskQty;
+              const userCompleted = userAssignment?.completedImageQuantity || 0;
+
+              if (!displayTotal && !isAssignedUser) {
+                return <Text type="secondary">-</Text>;
+              }
+
+              const isEditingImages = isEditingCell(
+                record.projectId,
+                record.gradingId,
+                taskType.id,
+                "completedQty"
+              );
+
+              // If editing and user is assigned, show input
+              if (isEditingImages && isAssignedUser) {
+                return (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ padding: "4px 0" }}
+                  >
+                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                      <InputNumber
+                        size="small"
+                        min={0}
+                        max={userAssignedQty}
+                        value={editedData.completedQty}
+                        onChange={(value) => setEditedData({ ...editedData, completedQty: value })}
+                        style={{ width: "100%" }}
+                        addonAfter={`/${userAssignedQty}`}
+                      />
+                      <Space size="small">
                         <Button
                           type="primary"
                           size="small"
                           icon={<SaveOutlined />}
-                          onClick={() => saveTaskCell(task, "assigneeId")}
+                          onClick={() => saveTaskCell(task, "completedQty")}
                         >
                           Save
                         </Button>
@@ -1053,65 +1286,77 @@ const TaskTable = () => {
                           Cancel
                         </Button>
                       </Space>
-                    )}
+                    </Space>
                   </div>
                 );
               }
 
+              // Calculate totals for all assignments
+              const totalCompleted = taskAssignments.reduce(
+                (sum, a) => sum + (a.completedImageQuantity || 0), 0
+              );
+              const totalAssigned = taskAssignments.reduce(
+                (sum, a) => sum + (a.imageQuantity || 0), 0
+              );
+
+              // For display, show user's progress if assigned, otherwise show total
+              const displayCompleted = isAssignedUser ? userCompleted : totalCompleted;
+              const displayAssigned = isAssignedUser ? userAssignedQty : (totalAssigned || totalTaskQty);
+              const percentage = displayAssigned > 0 
+                ? Math.round((displayCompleted / displayAssigned) * 100) 
+                : 0;
+
+              // Only show as clickable/editable if user is assigned
+              const tooltipTitle = isAssignedUser 
+                ? `Click to update your completed quantity (${userCompleted}/${userAssignedQty})` 
+                : `Total progress: ${totalCompleted}/${totalAssigned || totalTaskQty}`;
+
               return (
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    startEditCell(
-                      record.projectId,
-                      record.gradingId,
-                      taskType.id,
-                      "assigneeId",
-                      task.assigneeId
-                    );
-                  }}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  <Tooltip
-                    title={`${task.assignee.firstName} ${task.assignee.lastName} - Click to reassign`}
+                <Tooltip title={tooltipTitle}>
+                  <div
+                    data-no-row-click="true"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      // Only allow editing if user is assigned
+                      if (isAssignedUser) {
+                        startEditCell(
+                          record.projectId,
+                          record.gradingId,
+                          taskType.id,
+                          "completedQty",
+                          userCompleted,
+                          e
+                        );
+                      }
+                    }}
+                    style={{
+                      cursor: isAssignedUser ? "pointer" : "not-allowed",
+                      padding: "4px",
+                      textAlign: "center",
+                      opacity: isAssignedUser ? 1 : 0.6,
+                    }}
                   >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px",
-                        padding: "2px 8px",
-                        background: "#f0f5ff",
-                        border: "1px solid #adc6ff",
-                        borderRadius: "4px",
-                        fontSize: "12px",
-                        color: "#1890ff",
-                        maxWidth: "100%",
-                        overflow: "hidden",
-                      }}
-                    >
-                      <UserOutlined
-                        style={{ fontSize: "12px", flexShrink: 0 }}
-                      />
-                      <span
-                        style={{
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        {task.assignee.firstName}.{" "}
-                        {task.assignee.lastName.charAt(0)}
-                      </span>
-                    </div>
-                  </Tooltip>
-                </div>
+                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                      <Text style={{ fontSize: 11, fontWeight: 500 }}>
+                        {displayCompleted}/{displayAssigned}
+                      </Text>
+                      <div style={{
+                        width: '100%',
+                        height: 4,
+                        background: '#f0f0f0',
+                        borderRadius: 2,
+                        overflow: 'hidden'
+                      }}>
+                        <div style={{
+                          width: `${percentage}%`,
+                          height: '100%',
+                          background: percentage === 100 ? '#52c41a' : '#1890ff',
+                          transition: 'width 0.3s'
+                        }} />
+                      </div>
+                    </Space>
+                  </div>
+                </Tooltip>
               );
             },
           },
@@ -1564,6 +1809,27 @@ const TaskTable = () => {
                               ? "project-group-even"
                               : "project-group-odd";
                           }}
+                          onRow={(record) => ({
+                            onClick: (e) => {
+                              // Don't open modal if clicking on interactive elements
+                              if (
+                                e.target.closest('.ant-select') ||
+                                e.target.closest('.ant-btn') ||
+                                e.target.closest('.ant-input-number') ||
+                                e.target.closest('[data-no-row-click]')
+                              ) {
+                                return;
+                              }
+
+                              // Get first available task from the row
+                              const firstTask = record.allTasks?.[0];
+                              if (firstTask) {
+                                setSelectedTaskForDetail(firstTask);
+                                setTaskDetailVisible(true);
+                              }
+                            },
+                            style: { cursor: 'pointer' }
+                          })}
                         />
                       )}
                     </div>
@@ -1574,6 +1840,25 @@ const TaskTable = () => {
           />
         </Card>
       </div>
+
+      {/* Task Detail Modal */}
+      {selectedTaskForDetail && (
+        <TaskCard
+          task={selectedTaskForDetail}
+          showModal={taskDetailVisible}
+          onModalClose={() => {
+            setTaskDetailVisible(false);
+            setSelectedTaskForDetail(null);
+          }}
+          onTaskUpdate={(updatedTask) => {
+            setSelectedTaskForDetail(updatedTask);
+            refetchTasks();
+          }}
+          availableUsers={users || []}
+          workType={selectedTaskForDetail.project?.workType}
+          grading={selectedTaskForDetail.gradingTask?.grading}
+        />
+      )}
     </div>
   );
 };

@@ -31,6 +31,7 @@ import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
 import { useAppDrawer } from "../contexts/DrawerContext";
+import ChatTrigger from "../components/Chat/ChatTrigger";
 
 // Import pages
 import TaskTable from "../pages/FrontOffice/TaskTable";
@@ -152,9 +153,9 @@ const FrontOfficeLayout = () => {
         {/* Title and Menu */}
         <div className="flex items-center w-full min-w-0">
           <div className="flex items-center mr-8">
-            <img 
-              src="/images/images.png" 
-              alt="MicroArt Logo" 
+            <img
+              src="/images/images.png"
+              alt="MicroArt Logo"
               style={{ height: '130px', marginRight: '12px' }}
             />
             <Badge
@@ -211,6 +212,7 @@ const FrontOfficeLayout = () => {
             </Tooltip>
           </Space>
 
+          <ChatTrigger />
           <ViewSwitcher size="small" />
           <Badge count={3} size="small">
             <Button type="text" icon={<BellOutlined />} />

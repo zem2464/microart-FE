@@ -28,6 +28,33 @@ export const TASK_FRAGMENT = gql`
     createdAt
     updatedAt
     
+    # Image quantity tracking fields
+    imageQuantity
+    completedImageQuantity
+    
+    # Task assignments
+    taskAssignments {
+      id
+      userId
+      imageQuantity
+      completedImageQuantity
+      notes
+      status
+      assignedDate
+      user {
+        id
+        firstName
+        lastName
+        email
+      }
+      assigner {
+        id
+        firstName
+        lastName
+        email
+      }
+    }
+    
     project {
       id
       projectCode
@@ -390,3 +417,13 @@ export const createTaskUpdateInput = ({
   clientNotes,
   internalNotes
 });
+
+// New mutations for image quantity tracking and task splitting
+export const UPDATE_TASK_IMAGE_QUANTITY = gql`
+  mutation UpdateTaskImageQuantity($id: ID!, $completedQuantity: Int!) {
+    updateTaskImageQuantity(id: $id, completedQuantity: $completedQuantity) {
+      ...TaskInfo
+    }
+  }
+  ${TASK_FRAGMENT}
+`;

@@ -12,3 +12,9 @@ export const GET_USERS = gql`
     }
   }
 `;
+
+export const SAVE_PUSH_SUBSCRIPTION = gql`
+  mutation SavePushSubscription($subscription: JSON!) {
+    savePushSubscription(subscription: $subscription)
+  }
+`;

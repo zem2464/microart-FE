@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
@@ -15,9 +15,12 @@ import { AuthProvider } from "./contexts/AuthContext";
 import { ViewModeProvider, useViewMode } from "./contexts/ViewModeContext";
 import { AppDrawerProvider } from "./contexts/DrawerContext";
 import { PaymentProvider } from "./contexts/PaymentContext";
+import { ChatProvider } from "./contexts/ChatContext";
+import ChatFooter from "./components/Chat/ChatFooter";
 import RecordPaymentModal from "./components/RecordPaymentModal";
 import { userCacheVar, isApplicationLoading } from "./cache/userCacheVar";
-import { useReactiveVar } from "@apollo/client";
+import { useReactiveVar, useApolloClient } from "@apollo/client";
+import notificationService from "./services/NotificationService";
 
 const { defaultAlgorithm } = theme;
 
@@ -26,9 +29,17 @@ function AppContent() {
   const [currentTheme] = useState("light");
   const user = useReactiveVar(userCacheVar);
   const { effectiveLayout } = useViewMode();
-  
+  const client = useApolloClient();
+
+  // Register push notifications on login
+  useEffect(() => {
+    if (user) {
+      notificationService.registerPushSubscription(client);
+    }
+  }, [user, client]);
+
   console.log(user);
-  
+
   // Determine layout based on view mode preference
   const getLayoutComponent = () => {
     if (!user) return null;
@@ -40,7 +51,7 @@ function AppContent() {
     if (effectiveLayout === 'frontoffice') {
       return FrontOfficeLayout;
     }
-    
+
     return FrontOfficeLayout;
   };
 
@@ -104,6 +115,7 @@ function AppContent() {
           }
         />
       </Routes>
+      <ChatFooter />
     </ConfigProvider>
   );
 }
@@ -115,8 +127,10 @@ function App() {
         <ViewModeProvider>
           <AppDrawerProvider>
             <PaymentProvider>
-              <AppContent />
-              <RecordPaymentModal />
+              <ChatProvider>
+                <AppContent />
+                <RecordPaymentModal />
+              </ChatProvider>
             </PaymentProvider>
           </AppDrawerProvider>
         </ViewModeProvider>
