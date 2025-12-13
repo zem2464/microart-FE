@@ -41,6 +41,7 @@ import ClientDashboard from "../pages/FrontOffice/ClientDashboard";
 import ClientList from "../pages/FrontOffice/ClientList";
 import LedgerReport from "../pages/FrontOffice/LedgerReport";
 import Transactions from "../pages/FrontOffice/Transactions";
+import UserDashboard from "../pages/FrontOffice/UserDashboard";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -104,6 +105,11 @@ const FrontOfficeLayout = () => {
       key: "/ledger",
       icon: <FileTextOutlined />,
       label: <Link to="/ledger">Ledger</Link>,
+    },
+    canManageReports && {
+      key: "/user-dashboard",
+      icon: <UserOutlined />,
+      label: <Link to="/user-dashboard">User Dashboard</Link>,
     },
     canManageClients && {
       key: "clients",
@@ -246,6 +252,7 @@ const FrontOfficeLayout = () => {
             <Route path="/projects" element={<ProjectManagement />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/ledger" element={<LedgerReport />} />
+            <Route path="/user-dashboard" element={<UserDashboard />} />
             <Route path="/clients/dashboard" element={<ClientDashboard />} />
             <Route path="/clients" element={<ClientList />} />
           </Routes>
