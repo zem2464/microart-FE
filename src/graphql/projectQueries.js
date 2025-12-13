@@ -350,7 +350,6 @@ export const VALIDATE_CLIENT_CREDIT = gql`
       message
       availableCredit
       requiredCredit
-      creditLimitEnabled
       creditLimit
       usedCredit
       rate

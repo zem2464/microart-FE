@@ -1,5 +1,42 @@
 import { gql } from '@apollo/client';
 
+// Get all clients balance summary
+export const GET_ALL_CLIENTS_BALANCE_SUMMARY = gql`
+  query GetAllClientsBalanceSummary(
+    $search: String
+    $sort: ClientBalanceSortInput
+    $filters: ClientBalanceFilterInput
+    $pagination: PaginationInput
+  ) {
+    allClientsBalanceSummary(
+      search: $search
+      sort: $sort
+      filters: $filters
+      pagination: $pagination
+    ) {
+      clients {
+        clientId
+        clientCode
+        displayName
+        companyName
+        financeManagerName
+        totalDebit
+        totalCredit
+        currentBalance
+      }
+      totalCount
+      pagination {
+        page
+        limit
+        totalItems
+        totalPages
+        hasNext
+        hasPrevious
+      }
+    }
+  }
+`;
+
 // Client Ledger Queries
 export const GET_CLIENT_LEDGER_SUMMARY = gql`
   query GetClientLedgerSummary($clientId: ID!) {

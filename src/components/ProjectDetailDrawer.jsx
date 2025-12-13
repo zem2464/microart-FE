@@ -18,6 +18,7 @@ import {
   Card,
   Tooltip,
   Progress,
+  Input,
 } from "antd";
 import {
   FolderOutlined,
@@ -41,6 +42,8 @@ import {
   GET_PROJECT_DETAIL,
   GET_AVAILABLE_USERS,
 } from "../graphql/projectQueries";
+import { UPDATE_PROJECT } from "../graphql/projectQueries";
+import { UPDATE_CLIENT } from "../gql/clients";
 import { UPDATE_TASK, GET_TASKS } from "../gql/tasks";
 import { GET_WORK_TYPES } from "../graphql/workTypeQueries";
 import {
@@ -48,6 +51,8 @@ import {
   DELETE_TASK_ASSIGNMENT,
   UPDATE_TASK_ASSIGNMENT,
 } from "../gql/taskAssignments";
+import { GET_PROJECT_AUDIT_HISTORY } from "../gql/auditLogs";
+import AuditDisplay from "./common/AuditDisplay.jsx";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -133,6 +138,32 @@ const ProjectDetailDrawer = ({ projectId }) => {
 
   // Fetch work types with task types
   const { data: workTypesData } = useQuery(GET_WORK_TYPES);
+  const [updateProject] = useMutation(UPDATE_PROJECT, {
+    onCompleted: () => {
+      message.success("Project notes updated");
+      refetch();
+    },
+    onError: (error) => message.error(error.message),
+  });
+  const [updateClient] = useMutation(UPDATE_CLIENT, {
+    onCompleted: () => {
+      message.success("Client notes updated");
+      refetch();
+    },
+    onError: (error) => message.error(error.message),
+  });
+
+
+  // Fetch combined audit logs for project and all its tasks (like Jira ticket history)
+  const {
+    data: auditData,
+    loading: auditLoading,
+    refetch: refetchAudit,
+  } = useQuery(GET_PROJECT_AUDIT_HISTORY, {
+    variables: { projectId },
+    skip: !projectId,
+    fetchPolicy: "cache-and-network",
+  });
 
   // Mutations - Using cache eviction and refetchQueries to ensure updates reflect
   const [updateTask] = useMutation(UPDATE_TASK, {
@@ -245,6 +276,35 @@ const ProjectDetailDrawer = ({ projectId }) => {
 
   const project = data?.project;
   const tasks = tasksData?.tasks?.tasks || [];
+    const [projectNotesInput, setProjectNotesInput] = useState("");
+    const [clientNotesInput, setClientNotesInput] = useState("");
+
+    React.useEffect(() => {
+      setProjectNotesInput(project?.notes || "");
+      const clientNotesFromTasks = Array.isArray(tasks) && tasks.length > 0
+        ? (tasks[0]?.project?.client?.clientNotes || tasks[0]?.clientNotes)
+        : null;
+      setClientNotesInput(clientNotesFromTasks || "");
+    }, [project?.notes, tasks]);
+
+    const handleUpdateNotes = async () => {
+      try {
+        const mutations = [];
+        if (project?.id) {
+          mutations.push(updateProject({ variables: { id: project.id, input: { notes: projectNotesInput } } }));
+        }
+        const clientId = project?.client?.id || (tasks[0]?.project?.client?.id);
+        if (clientId) {
+          mutations.push(updateClient({ variables: { id: clientId, input: { clientNotes: clientNotesInput } } }));
+        }
+        await Promise.all(mutations);
+        message.success("Notes updated successfully");
+        refetch();
+        refetchTasks();
+      } catch (e) {
+        message.error(`Failed to update notes: ${e.message}`);
+      }
+    };
   const users = usersData?.availableUsers || [];
   const allWorkTypes = workTypesData?.workTypes || [];
 
@@ -919,6 +979,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
           onClick={() => {
             refetch();
             refetchTasks();
+            refetchAudit();
           }}
           size="small"
         >
@@ -1029,6 +1090,35 @@ const ProjectDetailDrawer = ({ projectId }) => {
         </Space>
       </Card>
 
+      {/* Notes Section */}
+      <Card title={<Title level={4}>Notes</Title>} size="small" style={{ marginBottom: 16 }}>
+        <Row gutter={12}>
+          <Col span={12}>
+            <Text strong>Project Internal Notes:</Text>
+            <Input.TextArea
+              rows={4}
+              value={projectNotesInput}
+              onChange={(e) => setProjectNotesInput(e.target.value)}
+              placeholder="Enter project internal notes"
+            />
+          </Col>
+          <Col span={12}>
+            <Text strong>Client Notes:</Text>
+            <Input.TextArea
+              rows={4}
+              value={clientNotesInput}
+              onChange={(e) => setClientNotesInput(e.target.value)}
+              placeholder="Enter client notes"
+            />
+          </Col>
+        </Row>
+        <div style={{ marginTop: 12, textAlign: 'right' }}>
+          <Button type="primary" onClick={handleUpdateNotes}>
+            Update Notes
+          </Button>
+        </div>
+      </Card>
+
       {/* Work Types Tables */}
       {workTypeTabs.length === 0 ? (
         <Card
@@ -1074,6 +1164,18 @@ const ProjectDetailDrawer = ({ projectId }) => {
           );
         })
       )}
+
+      {/* Audit Logs (History) */}
+      <Card
+        title={<Title level={4}>Audit History</Title>}
+        size="small"
+        style={{ marginTop: 16 }}
+      >
+        <AuditDisplay
+          auditLogs={auditData?.projectAuditHistory || []}
+          loading={auditLoading}
+        />
+      </Card>
     </div>
   );
 };

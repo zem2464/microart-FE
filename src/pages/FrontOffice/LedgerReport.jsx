@@ -15,6 +15,7 @@ import {
   Empty,
   Tag,
   Dropdown,
+  Input,
 } from "antd";
 import {
   FilterOutlined,
@@ -24,10 +25,11 @@ import {
   FilePdfOutlined,
   WhatsAppOutlined,
   EyeOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 import { useQuery } from "@apollo/client";
 import dayjs from "dayjs";
-import { GET_CLIENTS } from "../../graphql/clientQueries";
+import { GET_ALL_CLIENTS_BALANCE_SUMMARY } from "../../gql/clientLedger";
 import { GET_CLIENT_LEDGER_RANGE } from "../../gql/clientLedger";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -45,8 +47,16 @@ const formatCurrency = (amount) =>
     currency: "INR",
   }).format(amount || 0);
 
+const formatCurrencyNoDecimal = (amount) =>
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount || 0);
+
 const LedgerReport = () => {
-  // State for filters
+  // State for selected client and filters
   const [selectedClient, setSelectedClient] = useState(null);
   const [dateFilterType, setDateFilterType] = useState("monthly");
   const [selectedMonth, setSelectedMonth] = useState(dayjs());
@@ -59,7 +69,15 @@ const LedgerReport = () => {
     dayjs().startOf("month"),
     dayjs().endOf("month"),
   ]);
-  const [showLedger, setShowLedger] = useState(false);
+
+  // Infinite scroll state for clients list
+  const [clientsPage, setClientsPage] = useState(1);
+  const [hasMoreClients, setHasMoreClients] = useState(true);
+  const [isLoadingMoreClients, setIsLoadingMoreClients] = useState(false);
+  const [allClientsData, setAllClientsData] = useState([]);
+  const [clientSearch, setClientSearch] = useState("");
+  const [sortConfig, setSortConfig] = useState(null);
+  const [financeManagerFilter, setFinanceManagerFilter] = useState(null);
 
   // Add styles for balance rows
   React.useEffect(() => {
@@ -78,6 +96,38 @@ const LedgerReport = () => {
       .ledger-closing-balance-row:hover {
         background-color: inherit !important;
       }
+      .client-row-selected {
+        background-color: #e6f7ff !important;
+      }
+      .client-row-selected:hover td {
+        background-color: #bae7ff !important;
+      }
+      .ant-table-thead > tr > th {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 10 !important;
+        background: #fafafa !important;
+      }
+      .client-list-table .ant-table {
+        font-size: 11px !important;
+      }
+      .client-list-table .ant-table-thead > tr > th {
+        padding: 4px 8px !important;
+        font-size: 11px !important;
+        font-weight: 600 !important;
+      }
+      .client-list-table .ant-table-tbody > tr > td {
+        padding: 4px 8px !important;
+        font-size: 11px !important;
+      }
+      .client-list-table .ant-btn-sm {
+        font-size: 11px !important;
+        padding: 0px 6px !important;
+        height: 22px !important;
+      }
+      .client-list-table .ant-table-tbody > tr:hover > td {
+        background-color: #d6f0ff !important;
+      }
     `;
     document.head.appendChild(style);
     return () => {
@@ -85,19 +135,69 @@ const LedgerReport = () => {
     };
   }, []);
 
-  // Fetch clients
-  const { data: clientsData, loading: clientsLoading } = useQuery(GET_CLIENTS, {
+  // Fetch all clients balance summary
+  const {
+    data: clientsBalanceData,
+    loading: clientsBalanceLoading,
+    refetch: refetchClientsBalance,
+    fetchMore: fetchMoreClients,
+  } = useQuery(GET_ALL_CLIENTS_BALANCE_SUMMARY, {
     variables: {
-      filters: { isActive: true },
-      page: 1,
-      limit: 1000,
-      sortBy: "displayName",
-      sortOrder: "ASC",
+      search: clientSearch,
+      sort: sortConfig,
+      filters: financeManagerFilter
+        ? { financeManagerName: financeManagerFilter }
+        : null,
+      pagination: {
+        page: 1,
+        limit: 50,
+      },
     },
     fetchPolicy: "cache-and-network",
+    notifyOnNetworkStatusChange: true,
   });
 
-  // Fetch ledger data only when Show Ledger is clicked
+  // Update allClientsData when new data is fetched
+  React.useEffect(() => {
+    if (clientsBalanceData?.allClientsBalanceSummary?.clients) {
+      setAllClientsData(clientsBalanceData.allClientsBalanceSummary.clients);
+    }
+  }, [clientsBalanceData]);
+
+  // Check if there are more clients to load
+  React.useEffect(() => {
+    if (clientsBalanceData?.allClientsBalanceSummary?.pagination) {
+      const { hasNext } =
+        clientsBalanceData.allClientsBalanceSummary.pagination;
+      setHasMoreClients(hasNext);
+    }
+  }, [clientsBalanceData]);
+
+  // Refetch when search, sort, or filter changes
+  React.useEffect(() => {
+    setClientsPage(1);
+    refetchClientsBalance({
+      search: clientSearch,
+      sort: sortConfig,
+      filters: financeManagerFilter
+        ? { financeManagerName: financeManagerFilter }
+        : null,
+      pagination: { page: 1, limit: 50 },
+    });
+  }, [clientSearch, sortConfig, financeManagerFilter, refetchClientsBalance]);
+
+  // Get unique finance managers for filter
+  const financeManagers = React.useMemo(() => {
+    const managers = new Set();
+    allClientsData.forEach((client) => {
+      if (client.financeManagerName) {
+        managers.add(client.financeManagerName);
+      }
+    });
+    return Array.from(managers).sort();
+  }, [allClientsData]);
+
+  // Fetch ledger data for selected client
   const {
     data: ledgerData,
     loading: ledgerLoading,
@@ -109,9 +209,74 @@ const LedgerReport = () => {
       dateTo: dateRange ? dateRange[1].format("YYYY-MM-DD") : null,
       pagination: { page: 1, limit: 10000 },
     },
-    skip: !selectedClient || !showLedger,
+    skip: !selectedClient,
     fetchPolicy: "network-only",
   });
+
+  // Handle scroll event for infinite scroll on clients table
+  const loadMoreClients = React.useCallback(async () => {
+    if (isLoadingMoreClients || !hasMoreClients || clientsBalanceLoading)
+      return;
+
+    setIsLoadingMoreClients(true);
+    try {
+      await fetchMoreClients({
+        variables: {
+          search: clientSearch,
+          sort: sortConfig,
+          filters: financeManagerFilter
+            ? { financeManagerName: financeManagerFilter }
+            : null,
+          pagination: {
+            page: clientsPage + 1,
+            limit: 50,
+          },
+        },
+        updateQuery: (prev, { fetchMoreResult }) => {
+          if (!fetchMoreResult) return prev;
+
+          const prevClients = prev?.allClientsBalanceSummary?.clients || [];
+          const newClients =
+            fetchMoreResult?.allClientsBalanceSummary?.clients || [];
+
+          return {
+            ...fetchMoreResult,
+            allClientsBalanceSummary: {
+              ...fetchMoreResult.allClientsBalanceSummary,
+              clients: [...prevClients, ...newClients],
+            },
+          };
+        },
+      });
+      setClientsPage(clientsPage + 1);
+    } catch (error) {
+      console.error("Error loading more clients:", error);
+      message.error("Failed to load more clients");
+    } finally {
+      setIsLoadingMoreClients(false);
+    }
+  }, [
+    isLoadingMoreClients,
+    hasMoreClients,
+    clientsBalanceLoading,
+    fetchMoreClients,
+    clientsPage,
+  ]);
+
+  const handleClientsScroll = React.useCallback(
+    (e) => {
+      const target = e.target;
+      const scrollTop = target.scrollTop;
+      const scrollHeight = target.scrollHeight;
+      const clientHeight = target.clientHeight;
+
+      // Trigger load more when scrolled to 80% of the content
+      if (scrollHeight - scrollTop <= clientHeight * 1.2) {
+        loadMoreClients();
+      }
+    },
+    [loadMoreClients]
+  );
 
   // Handle date filter type change
   const handleDateFilterChange = (value) => {
@@ -148,7 +313,6 @@ const LedgerReport = () => {
   // Handle month change
   const handleMonthChange = (date) => {
     setSelectedMonth(date);
-    setShowLedger(false); // Hide ledger when month changes
     if (dateFilterType === "monthly" && date) {
       setDateRange([date.startOf("month"), date.endOf("month")]);
     }
@@ -157,7 +321,6 @@ const LedgerReport = () => {
   // Handle year change
   const handleYearChange = (date) => {
     setSelectedYear(date);
-    setShowLedger(false); // Hide ledger when year changes
     if (dateFilterType === "yearly" && date) {
       setDateRange([date.startOf("year"), date.endOf("year")]);
     }
@@ -166,35 +329,19 @@ const LedgerReport = () => {
   // Handle custom date range change
   const handleCustomDateChange = (dates) => {
     setCustomDateRange(dates);
-    setShowLedger(false); // Hide ledger when custom date changes
     if (dateFilterType === "custom") {
       setDateRange(dates);
     }
   };
 
-  // Handle Show Ledger button
-  const handleShowLedger = () => {
-    if (!selectedClient) {
-      message.warning("Please select a client");
-      return;
-    }
-    if (!dateRange || !dateRange[0] || !dateRange[1]) {
-      message.warning("Please select a date range");
-      return;
-    }
-    setShowLedger(true);
-  };
-
   // Reset filters
   const handleReset = () => {
     const today = dayjs();
-    setSelectedClient(null);
     setDateFilterType("monthly");
     setDateRange([today.startOf("month"), today.endOf("month")]);
     setCustomDateRange([today.startOf("month"), today.endOf("month")]);
     setSelectedMonth(today);
     setSelectedYear(today);
-    setShowLedger(false);
   };
 
   // Prepare ledger data for table
@@ -230,7 +377,7 @@ const LedgerReport = () => {
 
   // Prepare table data with opening and closing balance rows
   const tableDataWithBalances = () => {
-    if (!showLedger || ledgerTableData.length === 0) return ledgerTableData;
+    if (!selectedClient || ledgerTableData.length === 0) return ledgerTableData;
 
     // Create opening balance row
     const openingRow = {
@@ -260,9 +407,10 @@ const LedgerReport = () => {
   };
 
   // Get selected client details
-  const selectedClientData = clientsData?.clients?.find(
-    (c) => c.id === selectedClient
-  );
+  const selectedClientData =
+    clientsBalanceData?.allClientsBalanceSummary?.clients?.find(
+      (c) => c.clientId === selectedClient
+    );
 
   // Export to Excel
   const handleExportExcel = () => {
@@ -275,9 +423,11 @@ const LedgerReport = () => {
     const excelData = [
       ["MicroArt - Client Ledger Report"],
       [
-        `Client: ${selectedClientData?.displayName || "N/A"} (${
-          selectedClientData?.clientCode || "N/A"
-        })`,
+        `Client: ${
+          selectedClientData?.displayName ||
+          selectedClientData?.companyName ||
+          "N/A"
+        } (${selectedClientData?.clientCode || "N/A"})`,
       ],
       [
         `Period: ${dateRange[0].format("DD MMM YYYY")} to ${dateRange[1].format(
@@ -307,7 +457,7 @@ const LedgerReport = () => {
     ledgerTableData.forEach((row) => {
       const project = row.invoice?.project;
       let detailsText = row.description || "-";
-      
+
       // Calculate work days
       let workDays = "-";
       if (project?.createdAt && row.invoice?.invoiceDate) {
@@ -317,18 +467,20 @@ const LedgerReport = () => {
         );
         workDays = `${days}d`;
       }
-      
+
       // Format project gradings details same as table with new lines for Excel
       if (project?.projectGradings?.length > 0) {
         const lines = project.projectGradings.map((pg) => {
           const qty = pg.imageQuantity || 0;
           const rate = pg.customRate || pg.grading?.defaultRate || 0;
           const total = qty * rate;
-          return `${pg.grading?.name || pg.grading?.shortCode} (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
+          return `${
+            pg.grading?.name || pg.grading?.shortCode
+          } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
         });
         detailsText = lines.join("\n"); // Use newline for Excel
       }
-      
+
       excelData.push([
         row.invoice?.project?.createdAt
           ? dayjs(row.invoice.project.createdAt).format("DD/MM/YYYY")
@@ -356,7 +508,9 @@ const LedgerReport = () => {
     XLSX.utils.book_append_sheet(wb, ws, "Client Ledger");
 
     const fileName = `${
-      selectedClientData?.displayName || "Client"
+      selectedClientData?.displayName ||
+      selectedClientData?.companyName ||
+      "Client"
     }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
       "DD-MMM-YYYY"
     )}.xlsx`;
@@ -405,13 +559,15 @@ const LedgerReport = () => {
     doc.setFont("NotoSans", "bold");
     doc.setTextColor(40);
     doc.text("MicroArt", 14, 30);
-    
+
     doc.setFontSize(10);
     doc.setFont("NotoSans", "normal");
     doc.text(
-      `Client: ${selectedClientData?.displayName || "N/A"} (${
-        selectedClientData?.clientCode || "N/A"
-      })`,
+      `Client: ${
+        selectedClientData?.displayName ||
+        selectedClientData?.companyName ||
+        "N/A"
+      } (${selectedClientData?.clientCode || "N/A"})`,
       pageWidth - 14,
       30,
       { align: "right" }
@@ -452,9 +608,9 @@ const LedgerReport = () => {
           const qty = pg.imageQuantity || 0;
           const rate = pg.customRate || pg.grading?.defaultRate || 0;
           const total = qty * rate;
-          return `${pg.grading?.name || pg.grading?.shortCode} (qty) ${qty} × ₹${rate.toFixed(
-            2
-          )} = ₹${total.toFixed(2)}`;
+          return `${
+            pg.grading?.name || pg.grading?.shortCode
+          } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
         });
         detailsText = lines.join("\n"); // Use newline for PDF
       }
@@ -526,7 +682,9 @@ const LedgerReport = () => {
     );
 
     const fileName = `${
-      selectedClientData?.displayName || "Client"
+      selectedClientData?.displayName ||
+      selectedClientData?.companyName ||
+      "Client"
     }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
       "DD-MMM-YYYY"
     )}.pdf`;
@@ -585,9 +743,11 @@ const LedgerReport = () => {
       doc.setFontSize(10);
       doc.setFont("NotoSans", "normal");
       doc.text(
-        `Client: ${selectedClientData?.displayName || "N/A"} (${
-          selectedClientData?.clientCode || "N/A"
-        })`,
+        `Client: ${
+          selectedClientData?.displayName ||
+          selectedClientData?.companyName ||
+          "N/A"
+        } (${selectedClientData?.clientCode || "N/A"})`,
         pageWidth - 14,
         30,
         { align: "right" }
@@ -628,9 +788,9 @@ const LedgerReport = () => {
             const qty = pg.imageQuantity || 0;
             const rate = pg.customRate || pg.grading?.defaultRate || 0;
             const total = qty * rate;
-            return `${pg.grading?.name || pg.grading?.shortCode} (qty) ${qty} × ₹${rate.toFixed(
-              2
-            )} = ₹${total.toFixed(2)}`;
+            return `${
+              pg.grading?.name || pg.grading?.shortCode
+            } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
           });
           detailsText = lines.join("\n");
         }
@@ -702,7 +862,9 @@ const LedgerReport = () => {
       );
 
       const fileName = `${
-        selectedClientData?.displayName || "Client"
+        selectedClientData?.displayName ||
+        selectedClientData?.companyName ||
+        "Client"
       }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
         "DD-MMM-YYYY"
       )}.pdf`;
@@ -713,13 +875,17 @@ const LedgerReport = () => {
       // Check if Web Share API is available (works on mobile)
       if (navigator.share && navigator.canShare) {
         const file = new File([pdfBlob], fileName, { type: "application/pdf" });
-        
+
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: "Client Ledger Report",
             text: `*Client Ledger Report*\n\nClient: ${
-              selectedClientData.displayName || "N/A"
-            }\nPeriod: ${dateRange[0].format("DD/MM/YYYY")} to ${dateRange[1].format(
+              selectedClientData?.displayName ||
+              selectedClientData?.companyName ||
+              "N/A"
+            }\nPeriod: ${dateRange[0].format(
+              "DD/MM/YYYY"
+            )} to ${dateRange[1].format(
               "DD/MM/YYYY"
             )}\nOpening Balance: ${formatCurrency(
               opening
@@ -735,10 +901,14 @@ const LedgerReport = () => {
 
       // Fallback: Download PDF and open WhatsApp with text
       doc.save(fileName);
-      
+
       const whatsappMessage = `*Client Ledger Report*%0A%0A*Client:* ${
-        selectedClientData.displayName || "N/A"
-      }%0A*Period:* ${dateRange[0].format("DD/MM/YYYY")} to ${dateRange[1].format(
+        selectedClientData?.displayName ||
+        selectedClientData?.companyName ||
+        "N/A"
+      }%0A*Period:* ${dateRange[0].format(
+        "DD/MM/YYYY"
+      )} to ${dateRange[1].format(
         "DD/MM/YYYY"
       )}%0A*Opening Balance:* ${formatCurrency(
         opening
@@ -749,12 +919,11 @@ const LedgerReport = () => {
       }%0A%0APlease find the detailed ledger report attached.`;
 
       const whatsappUrl = `https://wa.me/?text=${whatsappMessage}`;
-      
+
       setTimeout(() => {
         window.open(whatsappUrl, "_blank");
         message.info("PDF downloaded. Please attach it in WhatsApp.");
       }, 500);
-      
     } catch (error) {
       console.error("Share error:", error);
       message.error("Failed to share PDF. Please try downloading instead.");
@@ -780,6 +949,88 @@ const LedgerReport = () => {
       label: "Share on WhatsApp",
       icon: <WhatsAppOutlined />,
       onClick: handleWhatsAppShare,
+    },
+  ];
+
+  // Clients list table columns
+  const clientsColumns = [
+    {
+      title: "Client Code",
+      dataIndex: "clientCode",
+      key: "clientCode",
+      width: 70,
+      render: (text) => <Text strong>{text}</Text>,
+    },
+    {
+      title: "Client Name",
+      key: "displayName",
+      width: 150,
+      ellipsis: true,
+      render: (_, record) => (
+        <div>
+          <div style={{ fontWeight: 500, fontSize: 13 }}>
+            {record.displayName || record.companyName}
+          </div>
+          {record.displayName &&
+            record.companyName &&
+            record.displayName !== record.companyName && (
+              <div style={{ fontSize: 11, color: "#666" }}>
+                {record.companyName}
+              </div>
+            )}
+        </div>
+      ),
+    },
+    {
+      title: "Finance Manager",
+      dataIndex: "financeManagerName",
+      key: "financeManagerName",
+      width: 100,
+      ellipsis: true,
+      render: (text) => text || "-",
+      filters: financeManagers.map((manager) => ({
+        text: manager,
+        value: manager,
+      })),
+      filteredValue: financeManagerFilter ? [financeManagerFilter] : null,
+    },
+    {
+      title: "Debit",
+      dataIndex: "totalDebit",
+      key: "totalDebit",
+      width: 80,
+      align: "right",
+      render: (value) => formatCurrencyNoDecimal(value),
+      sorter: true,
+      sortOrder: sortConfig?.field === "totalDebit" ? sortConfig.order : null,
+    },
+    {
+      title: "Credit",
+      dataIndex: "totalCredit",
+      key: "totalCredit",
+      width: 80,
+      align: "right",
+      render: (value) => formatCurrencyNoDecimal(value),
+      sorter: true,
+      sortOrder: sortConfig?.field === "totalCredit" ? sortConfig.order : null,
+    },
+    {
+      title: "Balance",
+      dataIndex: "currentBalance",
+      key: "currentBalance",
+      width: 90,
+      align: "right",
+      render: (value) => {
+        const color = value > 0 ? "#f5222d" : value < 0 ? "#52c41a" : "#1890ff";
+        return (
+          <Text strong style={{ color }}>
+            {formatCurrencyNoDecimal(value)}
+          </Text>
+        );
+      },
+      sorter: true,
+      sortOrder:
+        sortConfig?.field === "currentBalance" ? sortConfig.order : null,
     },
   ];
 
@@ -938,280 +1189,341 @@ const LedgerReport = () => {
   return (
     <div className="ledger-report">
       <Card>
-        <Title level={3}>
-          <FilterOutlined /> Client Ledger Report
-        </Title>
-        <Text type="secondary">
-          Select a client and date range to view ledger transactions
-        </Text>
-
-        {/* Filters */}
-        <Card style={{ marginTop: 16 }} size="small">
-          <Row gutter={16}>
-            <Col span={6}>
-              <div style={{ marginBottom: 8 }}>
-                <Text strong>Client</Text>
-              </div>
-              <Select
-                showSearch
-                placeholder="Select Client"
-                value={selectedClient}
-                onChange={(value) => {
-                  setSelectedClient(value);
-                  setShowLedger(false); // Hide ledger when client changes
-                }}
-                style={{ width: "100%" }}
-                loading={clientsLoading}
-                optionFilterProp="children"
-                filterOption={(input, option) =>
-                  (option?.label ?? "")
-                    .toLowerCase()
-                    .includes(input.toLowerCase())
-                }
-                labelRender={(props) => {
-                  const client = clientsData?.clients?.find(
-                    (c) => c.id === props.value
-                  );
-                  if (!client) return props.label;
-                  return (
-                    <span>
-                      <strong>{client.clientCode}</strong> (
-                      {client.displayName || client.companyName})
-                    </span>
-                  );
-                }}
-              >
-                {clientsData?.clients?.map((client) => (
-                  <Option
-                    key={client.id}
-                    value={client.id}
-                    label={`${client.clientCode} ${
-                      client.displayName || client.companyName
-                    }`}
-                  >
-                    <div>
-                      <div title={client.companyName}>
-                        <strong>{client.clientCode}</strong> (
-                        {client.displayName || client.companyName})
-                        {client.companyName &&
-                          client.displayName !== client.companyName && (
-                            <span style={{ color: "#8c8c8c", fontSize: 12 }}>
-                              {" "}
-                              - {client.companyName}
-                            </span>
-                          )}
-                      </div>
-                    </div>
-                  </Option>
-                ))}
-              </Select>
-            </Col>
-
-            <Col span={5}>
-              <div style={{ marginBottom: 8 }}>
-                <Text strong>Date Filter</Text>
-              </div>
-              <Select
-                value={dateFilterType}
-                onChange={handleDateFilterChange}
-                style={{ width: "100%" }}
-              >
-                <Option value="monthly">Current Month</Option>
-                <Option value="fy">Financial Year</Option>
-                <Option value="yearly">Calendar Year</Option>
-                <Option value="custom">Custom Range</Option>
-              </Select>
-            </Col>
-
-            <Col span={7}>
-              <div style={{ marginBottom: 8 }}>
-                <Text strong>Date Range</Text>
-              </div>
-              {dateFilterType === "monthly" && (
-                <DatePicker
-                  picker="month"
-                  value={selectedMonth}
-                  onChange={handleMonthChange}
-                  style={{ width: "100%" }}
-                  format="MMMM YYYY"
-                  placeholder="Select Month"
-                />
-              )}
-              {dateFilterType === "yearly" && (
-                <DatePicker
-                  picker="year"
-                  value={selectedYear}
-                  onChange={handleYearChange}
-                  style={{ width: "100%" }}
-                  format="YYYY"
-                  placeholder="Select Year"
-                />
-              )}
-              {(dateFilterType === "custom" || dateFilterType === "fy") && (
-                <RangePicker
-                  value={
-                    dateFilterType === "custom" ? customDateRange : dateRange
-                  }
-                  onChange={handleCustomDateChange}
-                  disabled={dateFilterType === "fy"}
-                  style={{ width: "100%" }}
-                  format="DD/MM/YYYY"
-                />
-              )}
-            </Col>
-
-            <Col span={6}>
-              <div style={{ marginBottom: 8 }}>&nbsp;</div>
-              <Space>
-                <Button
-                  type="primary"
-                  icon={<EyeOutlined />}
-                  onClick={handleShowLedger}
-                  disabled={!selectedClient}
+        {/* Two Column Layout */}
+        <Row gutter={16} style={{ marginTop: 16 }}>
+          {/* Left Column - All Clients List */}
+          <Col span={8}>
+            <Card
+              title="All Clients Summary"
+              size="small"
+              style={{ height: "calc(100vh - 200px)", position: "relative" }}
+            >
+              <Input
+                placeholder="Search by client code, name, or company..."
+                prefix={<SearchOutlined />}
+                value={clientSearch}
+                onChange={(e) => setClientSearch(e.target.value)}
+                style={{ marginBottom: 16 }}
+                allowClear
+              />
+              {clientsBalanceLoading && allClientsData.length > 0 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: 60,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: "rgba(255, 255, 255, 0.8)",
+                    display: "flex",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    zIndex: 1000,
+                  }}
                 >
-                  Show Ledger
-                </Button>
-                <Button icon={<ReloadOutlined />} onClick={handleReset}>
-                  Reset
-                </Button>
-              </Space>
-            </Col>
-          </Row>
-        </Card>
-
-        {/* Summary Statistics */}
-        {showLedger && ledgerData && (
-          <>
-            <Row gutter={16} style={{ marginTop: 16 }}>
-              <Col span={6}>
-                <Card>
-                  <Statistic
-                    title="Opening Balance"
-                    value={opening}
-                    precision={2}
-                    prefix="₹"
-                    valueStyle={{
-                      color:
-                        opening > 0
-                          ? "#f5222d"
-                          : opening < 0
-                          ? "#52c41a"
-                          : "#1890ff",
-                    }}
-                  />
-                </Card>
-              </Col>
-              <Col span={6}>
-                <Card>
-                  <Statistic
-                    title="Closing Balance"
-                    value={closing}
-                    precision={2}
-                    prefix="₹"
-                    valueStyle={{
-                      color:
-                        closing > 0
-                          ? "#f5222d"
-                          : closing < 0
-                          ? "#52c41a"
-                          : "#1890ff",
-                    }}
-                  />
-                </Card>
-              </Col>
-              <Col span={6}>
-                <Card>
-                  <Statistic
-                    title="Total Transactions"
-                    value={ledgerTableData.length}
-                    valueStyle={{ color: "#1890ff" }}
-                  />
-                </Card>
-              </Col>
-              <Col span={6}>
-                <Card>
-                  <Statistic
-                    title="Net Movement"
-                    value={closing - opening}
-                    precision={2}
-                    prefix="₹"
-                    valueStyle={{
-                      color:
-                        closing - opening > 0
-                          ? "#f5222d"
-                          : closing - opening < 0
-                          ? "#52c41a"
-                          : "#1890ff",
-                    }}
-                  />
-                </Card>
-              </Col>
-            </Row>
-
-            {/* Export Actions */}
-            <Row justify="end" style={{ marginTop: 16 }}>
-              <Space>
-                <Dropdown menu={{ items: exportMenuItems }}>
-                  <Button icon={<DownloadOutlined />}>
-                    Export <DownloadOutlined />
-                  </Button>
-                </Dropdown>
-              </Space>
-            </Row>
-
-            {/* Ledger Table */}
-            <Card style={{ marginTop: 16 }} title="Ledger Transactions">
-              {ledgerLoading ? (
+                  <Spin size="large" tip="Loading clients..." />
+                </div>
+              )}
+              {clientsBalanceLoading && allClientsData.length === 0 ? (
                 <div style={{ textAlign: "center", padding: 40 }}>
                   <Spin size="large" />
                 </div>
-              ) : ledgerTableData.length === 0 ? (
-                <Empty description="No transactions found for the selected period" />
               ) : (
-                <Table
-                  dataSource={tableDataWithBalances()}
-                  columns={columns}
-                  rowKey="id"
-                  size="small"
-                  rowClassName={(record) => {
-                    if (record.isOpeningBalance)
-                      return "ledger-opening-balance-row";
-                    if (record.isClosingBalance)
-                      return "ledger-closing-balance-row";
-                    return "";
+                <div
+                  className="client-list-table"
+                  style={{
+                    height: "calc(100vh - 300px)",
+                    overflow: "auto",
                   }}
-                  pagination={{
-                    pageSize: 50,
-                    showSizeChanger: true,
-                    showTotal: (total) => `Total ${total - 2} transactions`,
-                  }}
-                  scroll={{ x: 1400 }}
-                />
+                  onScroll={handleClientsScroll}
+                >
+                  <Table
+                    dataSource={allClientsData || []}
+                    columns={clientsColumns}
+                    rowKey="clientId"
+                    size="small"
+                    sticky
+                    rowClassName={(record) =>
+                      record.clientId === selectedClient
+                        ? "client-row-selected"
+                        : ""
+                    }
+                    pagination={false}
+                    onRow={(record) => ({
+                      onClick: () => setSelectedClient(record.clientId),
+                      style: { cursor: "pointer" },
+                    })}
+                    // scroll={{ y: null }}
+                    onChange={(pagination, filters, sorter) => {
+                      // Handle filter changes
+                      if (filters.financeManagerName !== undefined) {
+                        setFinanceManagerFilter(
+                          filters.financeManagerName?.[0] || null
+                        );
+                      }
+
+                      // Handle sort changes
+                      if (sorter.field) {
+                        setSortConfig({
+                          field: sorter.field,
+                          order: sorter.order || "ascend",
+                        });
+                      } else {
+                        setSortConfig(null);
+                      }
+                    }}
+                  />
+                  {isLoadingMoreClients && (
+                    <div style={{ textAlign: "center", padding: 16 }}>
+                      <Spin />
+                      <div style={{ marginTop: 8, color: "#999" }}>
+                        Loading more clients...
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </Card>
-          </>
-        )}
+          </Col>
 
-        {/* Empty state when ledger not shown */}
-        {!showLedger && (
-          <Card style={{ marginTop: 16, textAlign: "center", padding: "60px 20px" }}>
-            <Empty
-              image={Empty.PRESENTED_IMAGE_SIMPLE}
-              description={
-                <div>
-                  <Typography.Title level={4} style={{ marginBottom: 8 }}>
-                    Ready to Generate Ledger Report? 📊
-                  </Typography.Title>
-                  <Typography.Text type="secondary">
-                    {selectedClient
-                      ? "Hit the 'Show Ledger' button to view detailed transactions and balances"
-                      : "Select a client and date range, then click 'Show Ledger' to begin"}
-                  </Typography.Text>
-                </div>
+          {/* Right Column - Selected Client Detail Ledger */}
+          <Col span={16}>
+            <Card
+              title={
+                selectedClientData
+                  ? `${selectedClientData.clientCode} - ${
+                      selectedClientData.displayName ||
+                      selectedClientData.companyName
+                    }`
+                  : "Client Detail Ledger"
               }
-            />
-          </Card>
-        )}
+              size="small"
+              style={{ height: "calc(100vh - 200px)", overflow: "auto", position: "relative" }}
+            >
+              {!selectedClient ? (
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description={
+                    <div>
+                      <Typography.Title level={5} style={{ marginBottom: 8 }}>
+                        Select a Client
+                      </Typography.Title>
+                      <Typography.Text type="secondary">
+                        Click on "View" button from the clients list to see
+                        detailed ledger
+                      </Typography.Text>
+                    </div>
+                  }
+                  style={{ marginTop: 60 }}
+                />
+              ) : (
+                <>
+                  {ledgerLoading && (
+                    <div
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: "rgba(255, 255, 255, 0.8)",
+                        display: "flex",
+                        justifyContent: "center",
+                        alignItems: "center",
+                        zIndex: 1000,
+                      }}
+                    >
+                      <Spin size="large" tip="Loading ledger data..." />
+                    </div>
+                  )}
+                  {/* Date Filters */}
+                  <Card style={{ marginBottom: 16 }} size="small">
+                    <Row gutter={16}>
+                      <Col span={8}>
+                        <div style={{ marginBottom: 8 }}>
+                          <Text strong>Date Filter</Text>
+                        </div>
+                        <Select
+                          value={dateFilterType}
+                          onChange={handleDateFilterChange}
+                          style={{ width: "100%" }}
+                        >
+                          <Option value="monthly">Current Month</Option>
+                          <Option value="fy">Financial Year</Option>
+                          <Option value="yearly">Calendar Year</Option>
+                          <Option value="custom">Custom Range</Option>
+                        </Select>
+                      </Col>
+
+                      <Col span={12}>
+                        <div style={{ marginBottom: 8 }}>
+                          <Text strong>Date Range</Text>
+                        </div>
+                        {dateFilterType === "monthly" && (
+                          <DatePicker
+                            picker="month"
+                            value={selectedMonth}
+                            onChange={handleMonthChange}
+                            style={{ width: "100%" }}
+                            format="MMMM YYYY"
+                            placeholder="Select Month"
+                          />
+                        )}
+                        {dateFilterType === "yearly" && (
+                          <DatePicker
+                            picker="year"
+                            value={selectedYear}
+                            onChange={handleYearChange}
+                            style={{ width: "100%" }}
+                            format="YYYY"
+                            placeholder="Select Year"
+                          />
+                        )}
+                        {(dateFilterType === "custom" ||
+                          dateFilterType === "fy") && (
+                          <RangePicker
+                            value={
+                              dateFilterType === "custom"
+                                ? customDateRange
+                                : dateRange
+                            }
+                            onChange={handleCustomDateChange}
+                            disabled={dateFilterType === "fy"}
+                            style={{ width: "100%" }}
+                            format="DD/MM/YYYY"
+                          />
+                        )}
+                      </Col>
+
+                      <Col span={4}>
+                        <div style={{ marginBottom: 8 }}>&nbsp;</div>
+                        <Button
+                          icon={<ReloadOutlined />}
+                          onClick={handleReset}
+                          style={{ width: "100%" }}
+                        >
+                          Reset
+                        </Button>
+                      </Col>
+                    </Row>
+                  </Card>
+
+                  {/* Summary Statistics */}
+                  {ledgerData && (
+                    <>
+                      <Row gutter={8} style={{ marginBottom: 16 }}>
+                        <Col span={6}>
+                          <Card size="small">
+                            <Statistic
+                              title="Opening"
+                              value={opening}
+                              precision={2}
+                              prefix="₹"
+                              valueStyle={{
+                                fontSize: 16,
+                                color:
+                                  opening > 0
+                                    ? "#f5222d"
+                                    : opening < 0
+                                    ? "#52c41a"
+                                    : "#1890ff",
+                              }}
+                            />
+                          </Card>
+                        </Col>
+                        <Col span={6}>
+                          <Card size="small">
+                            <Statistic
+                              title="Closing"
+                              value={closing}
+                              precision={2}
+                              prefix="₹"
+                              valueStyle={{
+                                fontSize: 16,
+                                color:
+                                  closing > 0
+                                    ? "#f5222d"
+                                    : closing < 0
+                                    ? "#52c41a"
+                                    : "#1890ff",
+                              }}
+                            />
+                          </Card>
+                        </Col>
+                        <Col span={6}>
+                          <Card size="small">
+                            <Statistic
+                              title="Transactions"
+                              value={ledgerTableData.length}
+                              valueStyle={{ fontSize: 16, color: "#1890ff" }}
+                            />
+                          </Card>
+                        </Col>
+                        <Col span={6}>
+                          <Card size="small">
+                            <Statistic
+                              title="Net"
+                              value={closing - opening}
+                              precision={2}
+                              prefix="₹"
+                              valueStyle={{
+                                fontSize: 16,
+                                color:
+                                  closing - opening > 0
+                                    ? "#f5222d"
+                                    : closing - opening < 0
+                                    ? "#52c41a"
+                                    : "#1890ff",
+                              }}
+                            />
+                          </Card>
+                        </Col>
+                      </Row>
+
+                      {/* Export Actions */}
+                      <Row justify="end" style={{ marginBottom: 16 }}>
+                        <Space>
+                          <Dropdown menu={{ items: exportMenuItems }}>
+                            <Button icon={<DownloadOutlined />}>
+                              Export <DownloadOutlined />
+                            </Button>
+                          </Dropdown>
+                        </Space>
+                      </Row>
+
+                      {/* Ledger Table */}
+                      {ledgerTableData.length === 0 ? (
+                        <Empty description="No transactions found for the selected period" />
+                      ) : (
+                        <Table
+                          dataSource={tableDataWithBalances()}
+                          columns={columns}
+                          rowKey="id"
+                          size="xs"
+                          sticky
+                          rowClassName={(record) => {
+                            if (record.isOpeningBalance)
+                              return "ledger-opening-balance-row";
+                            if (record.isClosingBalance)
+                              return "ledger-closing-balance-row";
+                            return "";
+                          }}
+                          pagination={{
+                            pageSize: 20,
+                            showSizeChanger: true,
+                            showTotal: (total) =>
+                              `Total ${total - 2} transactions`,
+                          }}
+                          scroll={{ x: 1200, y: "calc(100vh - 620px)" }}
+                        />
+                      )}
+                    </>
+                  )}
+                </>
+              )}
+            </Card>
+          </Col>
+        </Row>
       </Card>
     </div>
   );

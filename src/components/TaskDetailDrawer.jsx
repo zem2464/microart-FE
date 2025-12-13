@@ -44,6 +44,8 @@ import {
   UPDATE_TASK,
   UPDATE_TASK_IMAGE_QUANTITY,
 } from '../gql/tasks';
+import { UPDATE_CLIENT } from '../gql/clients';
+import { UPDATE_PROJECT } from '../graphql/projectQueries';
 import {
   GET_TASK_COMMENTS,
   CREATE_TASK_COMMENT,
@@ -78,9 +80,46 @@ const TaskDetailDrawer = ({ taskId }) => {
   const [updateTask] = useMutation(UPDATE_TASK);
   const [updateTaskImageQuantity] = useMutation(UPDATE_TASK_IMAGE_QUANTITY);
   const [createComment] = useMutation(CREATE_TASK_COMMENT);
+  const [updateClientMutation] = useMutation(UPDATE_CLIENT);
+  const [updateProjectMutation] = useMutation(UPDATE_PROJECT);
 
   const task = data?.task;
   const comments = commentsData?.taskComments || [];
+
+  const [projectNotesInput, setProjectNotesInput] = useState(task?.project?.notes || '');
+  const [clientNotesInput, setClientNotesInput] = useState(task?.project?.client?.clientNotes || task?.clientNotes || '');
+
+  // keep inputs in sync when task loads/refetches
+  React.useEffect(() => {
+    setProjectNotesInput(task?.project?.notes || '');
+    setClientNotesInput(task?.project?.client?.clientNotes || task?.clientNotes || '');
+  }, [task?.project?.notes, task?.project?.client?.clientNotes, task?.clientNotes]);
+
+  const handleUpdateNotes = async () => {
+    try {
+      const updates = [];
+      if (task?.project?.id) {
+        updates.push(
+          updateProjectMutation({
+            variables: { id: task.project.id, input: { notes: projectNotesInput } },
+          })
+        );
+      }
+      const clientId = task?.project?.client?.id || task?.clientId;
+      if (clientId) {
+        updates.push(
+          updateClientMutation({
+            variables: { id: clientId, input: { clientNotes: clientNotesInput } },
+          })
+        );
+      }
+      await Promise.all(updates);
+      message.success('Notes updated successfully');
+      refetch();
+    } catch (err) {
+      message.error(`Failed to update notes: ${err.message}`);
+    }
+  };
 
   // Status options
   const taskStatusOptions = [
@@ -319,6 +358,16 @@ const TaskDetailDrawer = ({ taskId }) => {
             <Descriptions.Item label="Project Name">
               {task.project.name || '-'}
             </Descriptions.Item>
+            {task.project.description && (
+              <Descriptions.Item label="Project Description" span={2}>
+                <Paragraph>{task.project.description}</Paragraph>
+              </Descriptions.Item>
+            )}
+            {task.project.notes && (
+              <Descriptions.Item label="Project Internal Notes" span={2}>
+                <Paragraph>{task.project.notes}</Paragraph>
+              </Descriptions.Item>
+            )}
             {task.project.client && (
               <>
                 <Descriptions.Item label="Client Code">
@@ -327,6 +376,11 @@ const TaskDetailDrawer = ({ taskId }) => {
                 <Descriptions.Item label="Client Name">
                   {task.project.client.displayName || task.project.client.companyName}
                 </Descriptions.Item>
+                {task.project.client.clientNotes && (
+                  <Descriptions.Item label="Client Note" span={2}>
+                    <Paragraph>{task.project.client.clientNotes}</Paragraph>
+                  </Descriptions.Item>
+                )}
               </>
             )}
             {task.project.workType && (
@@ -506,7 +560,7 @@ const TaskDetailDrawer = ({ taskId }) => {
       </Card>
 
       {/* Notes Section */}
-      {(task.notes || task.clientNotes || task.internalNotes) && (
+      {(task.notes || task.project?.client?.clientNotes || task.internalNotes) && (
         <Card title={<Title level={4}>Notes</Title>} size="small" style={{ marginTop: 16 }}>
           {task.notes && (
             <>
@@ -515,10 +569,10 @@ const TaskDetailDrawer = ({ taskId }) => {
               <Divider style={{ margin: '12px 0' }} />
             </>
           )}
-          {task.clientNotes && (
+          {task.project?.client?.clientNotes && (
             <>
               <Text strong>Client Notes:</Text>
-              <Paragraph>{task.clientNotes}</Paragraph>
+              <Paragraph>{task.project.client.clientNotes}</Paragraph>
               <Divider style={{ margin: '12px 0' }} />
             </>
           )}

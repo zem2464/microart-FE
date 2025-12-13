@@ -153,7 +153,25 @@ const AuditDisplay = ({ auditLogs, loading = false }) => {
       ];
 
       // Get changed fields or all fields from newValues
-      const changedFields = log.changedFields || Object.keys(newValues);
+      // Parse changedFields if it's a JSON string
+      let changedFields = [];
+      if (log.changedFields) {
+        try {
+          const parsed = parseJsonValue(log.changedFields);
+          if (Array.isArray(parsed)) {
+            // If it's an array of change objects [{field, from, to}]
+            changedFields = parsed.map(change => change.field);
+          } else {
+            // If it's just an array of field names
+            changedFields = parsed;
+          }
+        } catch (error) {
+          console.error('Error parsing changedFields:', error);
+          changedFields = Object.keys(newValues);
+        }
+      } else {
+        changedFields = Object.keys(newValues);
+      }
       
       const data = changedFields.map((field, index) => ({
         key: index,
@@ -260,20 +278,38 @@ const AuditDisplay = ({ auditLogs, loading = false }) => {
                 </div>
 
                 {/* Changed Fields Summary */}
-                {log.changedFields && log.changedFields.length > 0 && (
-                  <div className="mb-3">
-                    <Text className="text-sm font-medium text-gray-600">
-                      Changed Fields: 
-                    </Text>
-                    <Space wrap className="ml-2">
-                      {log.changedFields.map((field, index) => (
-                        <Tag key={index} size="small" color="processing">
-                          {formatFieldName(field)}
-                        </Tag>
-                      ))}
-                    </Space>
-                  </div>
-                )}
+                {(() => {
+                  // Parse changedFields safely
+                  let changedFieldsList = [];
+                  if (log.changedFields) {
+                    try {
+                      const parsed = parseJsonValue(log.changedFields);
+                      if (Array.isArray(parsed)) {
+                        // If it's an array of change objects [{field, from, to}]
+                        changedFieldsList = parsed.map(change => 
+                          change.field || change
+                        );
+                      }
+                    } catch (error) {
+                      console.error('Error parsing changedFields:', error);
+                    }
+                  }
+                  
+                  return changedFieldsList.length > 0 && (
+                    <div className="mb-3">
+                      <Text className="text-sm font-medium text-gray-600">
+                        Changed Fields: 
+                      </Text>
+                      <Space wrap className="ml-2">
+                        {changedFieldsList.map((field, index) => (
+                          <Tag key={index} size="small" color="processing">
+                            {formatFieldName(field)}
+                          </Tag>
+                        ))}
+                      </Space>
+                    </div>
+                  );
+                })()}
 
                 {/* Value Changes Table */}
                 <Collapse ghost>

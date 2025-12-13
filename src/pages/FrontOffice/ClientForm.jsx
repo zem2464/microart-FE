@@ -610,6 +610,27 @@ const ClientForm = ({
         isActive: values.isActive !== false,
       };
 
+      // Transform serviceProviders - extract only IDs if full objects are present
+      if (input.serviceProviders && Array.isArray(input.serviceProviders)) {
+        input.serviceProviders = input.serviceProviders
+          .map((sp) => {
+            // Handle nested structure: { serviceProvider: { id: ... } }
+            if (sp.serviceProvider && sp.serviceProvider.id) {
+              return sp.serviceProvider.id;
+            }
+            // Handle direct ID structure: { id: ... }
+            if (sp.id) {
+              return sp.id;
+            }
+            // Handle string ID
+            if (typeof sp === "string") {
+              return sp;
+            }
+            return null;
+          })
+          .filter((id) => id !== null);
+      }
+
       // Transform gradings - support both single ID (string) and multiple IDs (array)
       if (input.gradings) {
         if (typeof input.gradings === "string") {

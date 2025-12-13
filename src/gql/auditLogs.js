@@ -87,3 +87,31 @@ export const GET_AUDIT_LOG = gql`
     }
   }
 `;
+
+export const GET_PROJECT_AUDIT_HISTORY = gql`
+  query GetProjectAuditHistory($projectId: ID!) {
+    projectAuditHistory(projectId: $projectId) {
+      id
+      action
+      tableName
+      recordId
+      userId
+      userEmail
+      userRole
+      oldValues
+      newValues
+      changedFields
+      description
+      metadata
+      status
+      errorMessage
+      timestamp
+      user {
+        id
+        firstName
+        lastName
+        email
+      }
+    }
+  }
+`;

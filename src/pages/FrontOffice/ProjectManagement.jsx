@@ -92,8 +92,11 @@ const getClientDisplayName = (client) => {
 };
 
 const ProjectManagement = () => {
-  const { showProjectFormDrawer, showProjectDetailDrawer } =
-    useContext(AppDrawerContext);
+  const {
+    showProjectFormDrawer,
+    showProjectDetailDrawer,
+    showProjectDetailDrawerV2,
+  } = useContext(AppDrawerContext);
   const user = useReactiveVar(userCacheVar);
 
   // Check if user has limited permissions
@@ -395,7 +398,13 @@ const ProjectManagement = () => {
       sortOrder: "DESC",
     });
     setPage(1); // Reset page on filter change
-  }, [statusFilter, clientFilter, workTypeFilter, buildFilters, refetchProjects]);
+  }, [
+    statusFilter,
+    clientFilter,
+    workTypeFilter,
+    buildFilters,
+    refetchProjects,
+  ]);
 
   // Check if there are more items to load
   useEffect(() => {
@@ -663,8 +672,14 @@ const ProjectManagement = () => {
 
   // Handle project actions
   const handleViewProject = (project) => {
-    // Open project details in the shared drawer
-    showProjectDetailDrawer(project);
+    // Open redesigned Project Detail Drawer by projectId for full context
+    try {
+      showProjectDetailDrawerV2(project.id);
+      return;
+    } catch (e) {
+      // Fallback to legacy project detail drawer
+      showProjectDetailDrawer(project);
+    }
   };
 
   const handleEditProject = (project) => {
@@ -1116,15 +1131,15 @@ const ProjectManagement = () => {
           )}
           {(record.status || "").toString().toUpperCase() === "REQUESTED" &&
             (canApproveProjects || canRejectProjects) && (
-            <Tooltip title="Approve Credit Request">
-              <Button
-                type="text"
-                icon={<CheckCircleOutlined />}
-                style={{ color: "#722ed1" }}
-                onClick={() => handleShowCreditApproval(record)}
-              />
-            </Tooltip>
-          )}
+              <Tooltip title="Approve Credit Request">
+                <Button
+                  type="text"
+                  icon={<CheckCircleOutlined />}
+                  style={{ color: "#722ed1" }}
+                  onClick={() => handleShowCreditApproval(record)}
+                />
+              </Tooltip>
+            )}
           {(record.status || "").toString().toUpperCase() === "ACTIVE" &&
             ((record.taskCount &&
               record.completedTaskCount &&
@@ -1141,7 +1156,7 @@ const ProjectManagement = () => {
               record.invoice?.id ||
               invoicedProjectIds.has(record.id)
             ) &&
-            (canCreateFinance || (record.client?.leaderId === user?.id)) && (
+            (canCreateFinance || record.client?.leaderId === user?.id) && (
               <Tooltip title="Complete & Generate Invoice">
                 <Button
                   type="text"
@@ -1159,7 +1174,7 @@ const ProjectManagement = () => {
               record.invoice?.id ||
               invoicedProjectIds.has(record.id)
             ) &&
-            (canCreateFinance || (record.client?.leaderId === user?.id)) && (
+            (canCreateFinance || record.client?.leaderId === user?.id) && (
               <Tooltip title="Generate Invoice">
                 <Button
                   type="text"
@@ -1189,15 +1204,15 @@ const ProjectManagement = () => {
 
           {(record.status || "").toString().toUpperCase() !== "COMPLETED" &&
             canDeleteProjects && (
-            <Tooltip title="Delete">
-              <Button
-                type="text"
-                danger
-                icon={<DeleteOutlined />}
-                onClick={() => handleDeleteProject(record)}
-              />
-            </Tooltip>
-          )}
+              <Tooltip title="Delete">
+                <Button
+                  type="text"
+                  danger
+                  icon={<DeleteOutlined />}
+                  onClick={() => handleDeleteProject(record)}
+                />
+              </Tooltip>
+            )}
         </Space>
       ),
     },
@@ -1398,7 +1413,9 @@ const ProjectManagement = () => {
               <Col flex="auto">
                 <Space size={16}>
                   <Space size={4}>
-                    <DollarOutlined style={{ fontSize: 16, color: "#52c41a" }} />
+                    <DollarOutlined
+                      style={{ fontSize: 16, color: "#52c41a" }}
+                    />
                     <Text strong style={{ fontSize: 14 }}>
                       Total Estimated:
                     </Text>
@@ -1407,7 +1424,9 @@ const ProjectManagement = () => {
                     </Text>
                   </Space>
                   <Space size={4}>
-                    <DollarOutlined style={{ fontSize: 16, color: "#1890ff" }} />
+                    <DollarOutlined
+                      style={{ fontSize: 16, color: "#1890ff" }}
+                    />
                     <Text strong style={{ fontSize: 14 }}>
                       Total Actual:
                     </Text>
@@ -1467,11 +1486,48 @@ const ProjectManagement = () => {
                 value={clientFilter}
                 onChange={setClientFilter}
                 style={{ width: "100%" }}
+                showSearch
+                allowClear
+                optionFilterProp="children"
+                filterOption={(input, option) => {
+                  if (!input) return true;
+                  const client = clientsData?.clients?.find(
+                    (c) => c.id === option.value
+                  );
+                  if (!client) return false;
+                  const searchText = [
+                    client.clientCode,
+                    client.displayName,
+                    client.companyName,
+                    client.firstName,
+                    client.lastName,
+                  ]
+                    .filter(Boolean)
+                    .join(" ")
+                    .toLowerCase();
+                  return searchText.includes(input.toLowerCase());
+                }}
+                labelRender={(props) => {
+                  if (props.value === "all") return "All Clients";
+                  const client = clientsData?.clients?.find(
+                    (c) => c.id === props.value
+                  );
+                  if (!client) return props.label;
+                  return (
+                    <span>
+                      <strong>{client.clientCode}</strong> ({client.displayName}
+                      )
+                    </span>
+                  );
+                }}
               >
                 <Option value="all">All Clients</Option>
-                {clientsData?.clients?.data?.map((client) => (
+                {clientsData?.clients?.map((client) => (
                   <Option key={client.id} value={client.id}>
-                    {getClientDisplayName(client)}
+                    <div>
+                      <strong>{client.clientCode}</strong> ({client.displayName}
+                      )
+                    </div>
                   </Option>
                 ))}
               </Select>
