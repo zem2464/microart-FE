@@ -146,19 +146,19 @@ const TaskAssignmentManager = ({ task, availableUsers, readOnly = false }) => {
     try {
       const newCompletedQty = Math.max(0, assignment.completedImageQuantity + delta);
       
-      // Validate: completed quantity cannot exceed assigned quantity
-      if (newCompletedQty > assignment.imageQuantity) {
-        message.warning(`Cannot exceed assigned quantity of ${assignment.imageQuantity} images`);
-        return;
-      }
-
       // Validate: total completed across all assignments cannot exceed task quantity
       const otherAssignmentsCompleted = taskAssignments
         .filter(a => a.id !== assignment.id)
-        .reduce((sum, a) => sum + a.completedImageQuantity, 0);
+        .reduce((sum, a) => sum + (a.completedImageQuantity || 0), 0);
       
-      if (otherAssignmentsCompleted + newCompletedQty > task.imageQuantity) {
-        message.warning(`Total completed images cannot exceed task quantity of ${task.imageQuantity}`);
+      const newTotalCompleted = otherAssignmentsCompleted + newCompletedQty;
+      
+      if (task.imageQuantity && newTotalCompleted > task.imageQuantity) {
+        message.warning(
+          `Cannot exceed task total of ${task.imageQuantity} images. ` +
+          `Other users have completed ${otherAssignmentsCompleted} images. ` +
+          `You can complete up to ${task.imageQuantity - otherAssignmentsCompleted} images.`
+        );
         return;
       }
 
@@ -446,16 +446,35 @@ const TaskAssignmentManager = ({ task, availableUsers, readOnly = false }) => {
             <>
               <Form.Item
                 name="completedImageQuantity"
-                label="Completed Images"
+                label="Add Completed Images"
+                extra={
+                  <Text type="secondary" style={{ fontSize: '12px' }}>
+                    Current completed: {editingAssignment.completedImageQuantity || 0}. 
+                    Enter the number of NEW images completed (will be added to current total).
+                  </Text>
+                }
                 rules={[
                   {
                     validator: (_, value) => {
-                      const assignedQty = form.getFieldValue('imageQuantity');
-                      if (value > assignedQty) {
+                      const currentCompleted = editingAssignment.completedImageQuantity || 0;
+                      const otherAssignmentsCompleted = taskAssignments
+                        .filter((a) => a.id !== editingAssignment.id)
+                        .reduce((sum, a) => sum + (a.completedImageQuantity || 0), 0);
+                      
+                      const incrementToAdd = value || 0;
+                      const newTotal = currentCompleted + incrementToAdd + otherAssignmentsCompleted;
+                      
+                      if (task.imageQuantity && newTotal > task.imageQuantity) {
+                        const maxCanAdd = task.imageQuantity - currentCompleted - otherAssignmentsCompleted;
                         return Promise.reject(
-                          new Error(`Cannot exceed assigned quantity (${assignedQty})`)
+                          new Error(
+                            `Cannot add ${incrementToAdd} images. ` +
+                            `You've completed ${currentCompleted}, others completed ${otherAssignmentsCompleted}. ` +
+                            `You can add up to ${maxCanAdd} more images.`
+                          )
                         );
                       }
+                      
                       return Promise.resolve();
                     }
                   }
@@ -464,7 +483,8 @@ const TaskAssignmentManager = ({ task, availableUsers, readOnly = false }) => {
                 <InputNumber
                   min={0}
                   style={{ width: '100%' }}
-                  placeholder="Enter completed images"
+                  placeholder="Enter number to add"
+                  addonBefore="+"
                 />
               </Form.Item>
 

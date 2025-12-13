@@ -799,7 +799,7 @@ const TaskTable = () => {
         cancelEditCell();
         return;
       } else if (field === "completedQty") {
-        // Update the current user's TaskAssignment completed quantity
+        // Update the current user's TaskAssignment completed quantity (incremental addition)
         const userAssignment = task.taskAssignments?.find(
           (a) => a.userId === currentUser?.id
         );
@@ -810,8 +810,29 @@ const TaskTable = () => {
           return;
         }
 
-        // No validation against assigned quantity - users can complete more than assigned if needed
+        // Validate: the increment being added shouldn't cause total to exceed task quantity
+        if (task.imageQuantity) {
+          const currentUserCompleted = userAssignment.completedImageQuantity || 0;
+          const otherAssignmentsCompleted = task.taskAssignments
+            ?.filter((a) => a.id !== userAssignment.id)
+            .reduce((sum, a) => sum + (a.completedImageQuantity || 0), 0) || 0;
 
+          const incrementToAdd = editedData.completedQty;
+          const newTotalCompleted = currentUserCompleted + incrementToAdd + otherAssignmentsCompleted;
+
+          if (newTotalCompleted > task.imageQuantity) {
+            const maxCanAdd = task.imageQuantity - currentUserCompleted - otherAssignmentsCompleted;
+            message.error(
+              `Cannot add ${incrementToAdd} images. ` +
+              `You've completed ${currentUserCompleted}, others completed ${otherAssignmentsCompleted}. ` +
+              `You can add up to ${maxCanAdd} more images.`
+            );
+            cancelEditCell();
+            return;
+          }
+        }
+
+        // Send the increment value - backend will add it to existing total
         await updateTaskAssignment({
           variables: {
             id: userAssignment.id,
@@ -1269,6 +1290,13 @@ const TaskTable = () => {
 
               // If editing and user is assigned, show input
               if (isEditingImages && isAssignedUser) {
+                // Calculate available quantity for additions
+                const currentUserCompleted = userAssignment?.completedImageQuantity || 0;
+                const otherUsersCompleted = taskAssignments
+                  .filter((a) => a.id !== userAssignment.id)
+                  .reduce((sum, a) => sum + (a.completedImageQuantity || 0), 0);
+                const maxCanAdd = totalTaskQty - currentUserCompleted - otherUsersCompleted;
+
                 return (
                   <div
                     onClick={(e) => e.stopPropagation()}
@@ -1279,17 +1307,29 @@ const TaskTable = () => {
                       size={4}
                       style={{ width: "100%" }}
                     >
-                      <InputNumber
-                        size="small"
-                        min={0}
-                        max={totalTaskQty}
-                        value={editedData.completedQty}
-                        onChange={(value) =>
-                          setEditedData({ ...editedData, completedQty: value })
+                      <Text type="secondary" style={{ fontSize: '11px' }}>
+                        Your current: {currentUserCompleted}
+                      </Text>
+                      <Tooltip
+                        title={
+                          `Enter the number of images you completed today. ` +
+                          `Your current total: ${currentUserCompleted}. ` +
+                          `You can add up to ${maxCanAdd} more images.`
                         }
-                        style={{ width: "100%" }}
-                        addonAfter={`/${totalTaskQty}`}
-                      />
+                      >
+                        <InputNumber
+                          size="small"
+                          min={0}
+                          max={maxCanAdd}
+                          value={editedData.completedQty}
+                          onChange={(value) =>
+                            setEditedData({ ...editedData, completedQty: value })
+                          }
+                          style={{ width: "100%" }}
+                          addonBefore="+"
+                          placeholder={`Add (max: ${maxCanAdd})`}
+                        />
+                      </Tooltip>
                       <Space size="small">
                         <Button
                           type="primary"
@@ -1862,27 +1902,6 @@ const TaskTable = () => {
                               ? "project-group-even"
                               : "project-group-odd";
                           }}
-                          onRow={(record) => ({
-                            onClick: (e) => {
-                              // Don't open modal if clicking on interactive elements
-                              if (
-                                e.target.closest(".ant-select") ||
-                                e.target.closest(".ant-btn") ||
-                                e.target.closest(".ant-input-number") ||
-                                e.target.closest("[data-no-row-click]")
-                              ) {
-                                return;
-                              }
-
-                              // Get first available task from the row
-                              const firstTask = record.allTasks?.[0];
-                              if (firstTask) {
-                                // Use new task detail drawer
-                                showTaskDetailDrawerV2(firstTask.id);
-                              }
-                            },
-                            style: { cursor: "pointer" },
-                          })}
                         />
                       )}
                     </div>

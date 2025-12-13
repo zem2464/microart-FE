@@ -154,6 +154,9 @@ const TaskImageActions = ({
             <Text strong style={{ display: 'block', marginBottom: 8 }}>
               Update Completed Images
             </Text>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16, fontSize: 12 }}>
+              💡 Enter your cumulative total completed images (not just today's additions)
+            </Text>
             <Space size="large">
               <Button 
                 size="large"
@@ -162,14 +165,16 @@ const TaskImageActions = ({
               >
                 -
               </Button>
-              <InputNumber
-                size="large"
-                min={0}
-                max={imageQuantity}
-                value={completedQty}
-                onChange={(value) => setCompletedQty(value || 0)}
-                style={{ width: 120 }}
-              />
+              <Tooltip title="Enter total completed images including previously completed">
+                <InputNumber
+                  size="large"
+                  min={0}
+                  max={imageQuantity}
+                  value={completedQty}
+                  onChange={(value) => setCompletedQty(value || 0)}
+                  style={{ width: 120 }}
+                />
+              </Tooltip>
               <Button
                 size="large"
                 onClick={handleIncrement}

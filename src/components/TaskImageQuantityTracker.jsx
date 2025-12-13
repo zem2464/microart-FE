@@ -122,29 +122,36 @@ const TaskImageQuantityTracker = ({ task, onUpdate, readOnly = false }) => {
                   )}
                 </>
               ) : (
-                <Space size="middle" style={{ width: '100%' }}>
-                  <Button
-                    icon={<MinusOutlined />}
-                    size="small"
-                    onClick={handleDecrement}
-                    disabled={loading || localCompletedQty === 0}
-                  />
-                  <InputNumber
-                    min={0}
-                    max={totalImages}
-                    value={localCompletedQty}
-                    onChange={setLocalCompletedQty}
-                    disabled={loading}
-                    style={{ width: '80px' }}
-                    size="large"
-                  />
-                  <Button
-                    icon={<PlusOutlined />}
-                    size="small"
-                    onClick={handleIncrement}
-                    disabled={loading || localCompletedQty === totalImages}
-                  />
-                  <Text type="secondary">/ {totalImages}</Text>
+                <Space direction="vertical" size="small" style={{ width: '100%' }}>
+                  <Space size="middle" style={{ width: '100%' }}>
+                    <Button
+                      icon={<MinusOutlined />}
+                      size="small"
+                      onClick={handleDecrement}
+                      disabled={loading || localCompletedQty === 0}
+                    />
+                    <Tooltip title="Enter your total completed images (current + newly completed today)">
+                      <InputNumber
+                        min={0}
+                        max={totalImages}
+                        value={localCompletedQty}
+                        onChange={setLocalCompletedQty}
+                        disabled={loading}
+                        style={{ width: '80px' }}
+                        size="large"
+                      />
+                    </Tooltip>
+                    <Button
+                      icon={<PlusOutlined />}
+                      size="small"
+                      onClick={handleIncrement}
+                      disabled={loading || localCompletedQty === totalImages}
+                    />
+                    <Text type="secondary">/ {totalImages}</Text>
+                  </Space>
+                  <Text type="secondary" style={{ fontSize: '11px', fontStyle: 'italic' }}>
+                    💡 Update with your cumulative total, not just today's additions
+                  </Text>
                 </Space>
               )}
             </Space>

@@ -446,7 +446,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
         cancelEditCell();
         return;
       } else if (field === "completedQty") {
-        // Update task assignment completed quantity
+        // Update task assignment completed quantity (incremental addition)
         const userAssignment = task.taskAssignments?.[0];
         if (!userAssignment) {
           message.error("No assignment found");
@@ -454,6 +454,29 @@ const ProjectDetailDrawer = ({ projectId }) => {
           return;
         }
 
+        // Validate: the increment being added shouldn't cause total to exceed task quantity
+        if (task.imageQuantity) {
+          const currentUserCompleted = userAssignment.completedImageQuantity || 0;
+          const otherAssignmentsCompleted = task.taskAssignments
+            ?.filter((a) => a.id !== userAssignment.id)
+            .reduce((sum, a) => sum + (a.completedImageQuantity || 0), 0) || 0;
+
+          const incrementToAdd = editedData.completedQty;
+          const newTotalCompleted = currentUserCompleted + incrementToAdd + otherAssignmentsCompleted;
+
+          if (newTotalCompleted > task.imageQuantity) {
+            const maxCanAdd = task.imageQuantity - currentUserCompleted - otherAssignmentsCompleted;
+            message.error(
+              `Cannot add ${incrementToAdd} images. ` +
+              `You've completed ${currentUserCompleted}, others completed ${otherAssignmentsCompleted}. ` +
+              `You can add up to ${maxCanAdd} more images.`
+            );
+            cancelEditCell();
+            return;
+          }
+        }
+
+        // Send the increment value - backend will add it to existing total
         await updateTaskAssignment({
           variables: {
             id: userAssignment.id,
@@ -835,6 +858,13 @@ const ProjectDetailDrawer = ({ projectId }) => {
 
               // If editing and user is assigned, show input
               if (isEditingImages && isAssignedUser) {
+                // Calculate available quantity for additions
+                const currentUserCompleted = userAssignment?.completedImageQuantity || 0;
+                const otherUsersCompleted = taskAssignments
+                  .filter((a) => a.id !== userAssignment.id)
+                  .reduce((sum, a) => sum + (a.completedImageQuantity || 0), 0);
+                const maxCanAdd = totalTaskQty - currentUserCompleted - otherUsersCompleted;
+
                 return (
                   <div
                     onClick={(e) => e.stopPropagation()}
@@ -845,17 +875,29 @@ const ProjectDetailDrawer = ({ projectId }) => {
                       size={4}
                       style={{ width: "100%" }}
                     >
-                      <InputNumber
-                        size="small"
-                        min={0}
-                        max={totalTaskQty}
-                        value={editedData.completedQty}
-                        onChange={(value) =>
-                          setEditedData({ ...editedData, completedQty: value })
+                      <Text type="secondary" style={{ fontSize: '11px' }}>
+                        Your current: {currentUserCompleted}
+                      </Text>
+                      <Tooltip
+                        title={
+                          `Enter the number of images you completed today. ` +
+                          `Your current total: ${currentUserCompleted}. ` +
+                          `You can add up to ${maxCanAdd} more images.`
                         }
-                        style={{ width: "100%" }}
-                        addonAfter={`/${totalTaskQty}`}
-                      />
+                      >
+                        <InputNumber
+                          size="small"
+                          min={0}
+                          max={maxCanAdd}
+                          value={editedData.completedQty}
+                          onChange={(value) =>
+                            setEditedData({ ...editedData, completedQty: value })
+                          }
+                          style={{ width: "100%" }}
+                          addonBefore="+"
+                          placeholder={`Add (max: ${maxCanAdd})`}
+                        />
+                      </Tooltip>
                       <Space size="small">
                         <Button
                           type="primary"
