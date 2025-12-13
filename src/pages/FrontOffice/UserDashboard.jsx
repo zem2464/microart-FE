@@ -44,18 +44,30 @@ const UserDashboard = () => {
     dayjs().endOf("month"),
   ]);
   const [selectedUser, setSelectedUser] = useState(null);
+  const [allUsers, setAllUsers] = useState([]);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Fetch user work dashboard data
   const {
     data: dashboardData,
     loading: dashboardLoading,
     refetch: refetchDashboard,
+    fetchMore,
   } = useQuery(GET_USER_WORK_DASHBOARD, {
     variables: {
       dateFrom: dateRange ? dateRange[0].format("YYYY-MM-DD") : null,
       dateTo: dateRange ? dateRange[1].format("YYYY-MM-DD") : null,
+      limit: 20,
+      offset: 0,
     },
     fetchPolicy: "network-only",
+    onCompleted: (data) => {
+      if (data?.userWorkDashboard) {
+        setAllUsers(data.userWorkDashboard.users);
+        setHasMore(data.userWorkDashboard.hasMore);
+      }
+    },
   });
 
   // Handle date filter type change
@@ -114,6 +126,40 @@ const UserDashboard = () => {
     }
   };
 
+  // Load more users for infinite scroll
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+
+    setLoadingMore(true);
+    try {
+      await fetchMore({
+        variables: {
+          offset: allUsers.length,
+          limit: 20,
+        },
+        updateQuery: (prev, { fetchMoreResult }) => {
+          if (!fetchMoreResult) return prev;
+
+          const newUsers = fetchMoreResult.userWorkDashboard.users;
+          setAllUsers([...allUsers, ...newUsers]);
+          setHasMore(fetchMoreResult.userWorkDashboard.hasMore);
+
+          return {
+            userWorkDashboard: {
+              ...fetchMoreResult.userWorkDashboard,
+              users: [...prev.userWorkDashboard.users, ...newUsers],
+            },
+          };
+        },
+      });
+    } catch (error) {
+      message.error("Failed to load more users");
+      console.error("Load more error:", error);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   // Reset filters
   const handleReset = () => {
     const today = dayjs();
@@ -122,6 +168,8 @@ const UserDashboard = () => {
     setCustomDateRange([today.startOf("month"), today.endOf("month")]);
     setSelectedMonth(today);
     setSelectedYear(today);
+    setAllUsers([]);
+    setHasMore(true);
   };
 
   // Export to Excel
@@ -420,7 +468,11 @@ const UserDashboard = () => {
                 <Space style={{ marginTop: 24 }}>
                   <Button
                     icon={<FilterOutlined />}
-                    onClick={() => refetchDashboard()}
+                    onClick={() => {
+                      setAllUsers([]);
+                      setHasMore(true);
+                      refetchDashboard();
+                    }}
                   >
                     Apply
                   </Button>
@@ -456,7 +508,7 @@ const UserDashboard = () => {
                 <Spin spinning={dashboardLoading}>
                   <Table
                     columns={mainColumns}
-                    dataSource={users}
+                    dataSource={allUsers}
                     rowKey="userId"
                     onRow={(record) => ({
                       onClick: () => setSelectedUser(record),
@@ -465,14 +517,26 @@ const UserDashboard = () => {
                         backgroundColor: selectedUser?.userId === record.userId ? '#e6f7ff' : undefined
                       }
                     })}
-                    pagination={{
-                      pageSize: 15,
-                      showSizeChanger: true,
-                      showTotal: (total) => `Total ${total} users`,
-                      size: "small"
-                    }}
-                    scroll={{ x: 800 }}
+                    pagination={false}
+                    scroll={{ x: 800, y: 600 }}
                     size="small"
+                    footer={() => (
+                      hasMore ? (
+                        <div style={{ textAlign: 'center', padding: '12px 0' }}>
+                          <Button
+                            type="link"
+                            loading={loadingMore}
+                            onClick={handleLoadMore}
+                          >
+                            {loadingMore ? 'Loading...' : 'Load More Users'}
+                          </Button>
+                        </div>
+                      ) : allUsers.length > 0 ? (
+                        <div style={{ textAlign: 'center', padding: '8px 0', color: '#999' }}>
+                          All {allUsers.length} users loaded
+                        </div>
+                      ) : null
+                    )}
                   />
                 </Spin>
               </Card>

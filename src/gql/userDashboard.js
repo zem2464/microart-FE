@@ -1,9 +1,21 @@
 import { gql } from '@apollo/client';
 
-// User Work Dashboard Query
+// User Work Dashboard Query with Pagination
 export const GET_USER_WORK_DASHBOARD = gql`
-  query GetUserWorkDashboard($dateFrom: String, $dateTo: String, $userId: ID) {
-    userWorkDashboard(dateFrom: $dateFrom, dateTo: $dateTo, userId: $userId) {
+  query GetUserWorkDashboard(
+    $dateFrom: String
+    $dateTo: String
+    $userId: ID
+    $limit: Int
+    $offset: Int
+  ) {
+    userWorkDashboard(
+      dateFrom: $dateFrom
+      dateTo: $dateTo
+      userId: $userId
+      limit: $limit
+      offset: $offset
+    ) {
       users {
         userId
         userName
@@ -37,6 +49,8 @@ export const GET_USER_WORK_DASHBOARD = gql`
         totalUsers
         totalCompletedImages
       }
+      hasMore
+      totalCount
     }
   }
 `;

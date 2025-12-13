@@ -1247,6 +1247,28 @@ const ProjectManagement = () => {
                     transition: "background-color 0.3s",
                   }}
                   className="hover:bg-gray-100"
+                  onClick={() => setStatusFilter("DRAFT")}
+                >
+                  <EditOutlined style={{ fontSize: 16, color: "#faad14" }} />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Draft:
+                  </Text>
+                  <Tag
+                    color="orange"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.draft}
+                  </Tag>
+                </Space>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
+                  }}
+                  className="hover:bg-gray-100"
                   onClick={() => setStatusFilter("all")}
                 >
                   <ProjectOutlined style={{ fontSize: 16, color: "#1890ff" }} />
@@ -1293,17 +1315,19 @@ const ProjectManagement = () => {
                     transition: "background-color 0.3s",
                   }}
                   className="hover:bg-gray-100"
-                  onClick={() => setStatusFilter("DRAFT")}
+                  onClick={() => setStatusFilter("IN_PROGRESS")}
                 >
-                  <EditOutlined style={{ fontSize: 16, color: "#faad14" }} />
+                  <ClockCircleOutlined
+                    style={{ fontSize: 16, color: "#1890ff" }}
+                  />
                   <Text strong style={{ fontSize: 14 }}>
-                    Draft:
+                    In Progress:
                   </Text>
                   <Tag
-                    color="orange"
+                    color="blue"
                     style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                   >
-                    {stats.draft}
+                    {stats.inProgress}
                   </Tag>
                 </Space>
                 <Space
@@ -1330,30 +1354,7 @@ const ProjectManagement = () => {
                     {stats.completed}
                   </Tag>
                 </Space>
-                <Space
-                  size={4}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
-                  }}
-                  className="hover:bg-gray-100"
-                  onClick={() => setStatusFilter("IN_PROGRESS")}
-                >
-                  <ClockCircleOutlined
-                    style={{ fontSize: 16, color: "#1890ff" }}
-                  />
-                  <Text strong style={{ fontSize: 14 }}>
-                    In Progress:
-                  </Text>
-                  <Tag
-                    color="blue"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
-                  >
-                    {stats.inProgress}
-                  </Tag>
-                </Space>
+
                 <Space
                   size={4}
                   style={{
