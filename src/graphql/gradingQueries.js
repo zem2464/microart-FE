@@ -55,6 +55,7 @@ export const GET_GRADINGS_BY_WORK_TYPE = gql`
     gradingsByWorkType(workTypeIds: $workTypeIds) {
       id
       name
+      shortCode
       description
       defaultRate
       workType {

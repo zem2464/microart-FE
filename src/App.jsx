@@ -43,12 +43,12 @@ function AppContent() {
   // Determine layout based on view mode preference
   const getLayoutComponent = () => {
     if (!user) return null;
-    console.log('Effective Layout:', effectiveLayout);
+    console.log("Effective Layout:", effectiveLayout);
     // Use the effective layout from ViewModeContext
-    if (effectiveLayout === 'backoffice') {
+    if (effectiveLayout === "backoffice") {
       return BackOfficeLayout;
     }
-    if (effectiveLayout === 'frontoffice') {
+    if (effectiveLayout === "frontoffice") {
       return FrontOfficeLayout;
     }
 
@@ -95,20 +95,20 @@ function AppContent() {
             user && LayoutComponent ? (
               <LayoutComponent />
             ) : user ? (
-              <div className="flex items-center justify-center min-h-screen">
-                <div className="text-center">
-                  <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-                  <p className="text-gray-600 mb-4">
-                    You don't have permission to access this system.
-                  </p>
-                  <button
-                    onClick={() => (window.location.href = "/login")}
-                    className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-                  >
-                    Return to Login
-                  </button>
+                <div className="flex items-center justify-center min-h-screen">
+                  <div className="text-center">
+                    <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
+                    <p className="text-gray-600 mb-4">
+                      You don't have permission to access this system.
+                    </p>
+                    <button
+                      onClick={() => (window.location.href = "/login")}
+                      className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+                    >
+                      Return to Login
+                    </button>
+                  </div>
                 </div>
-              </div>
             ) : (
               <Navigate to="/login" />
             )

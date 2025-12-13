@@ -45,10 +45,11 @@ import { GET_AVAILABLE_USERS } from "../../graphql/projectQueries";
 import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import { GET_GRADINGS_BY_WORK_TYPE } from "../../graphql/gradingQueries";
 import { userCacheVar } from "../../cache/userCacheVar";
-import { 
-  BULK_CREATE_TASK_ASSIGNMENTS, 
+import { useAppDrawer } from "../../contexts/DrawerContext";
+import {
+  BULK_CREATE_TASK_ASSIGNMENTS,
   DELETE_TASK_ASSIGNMENT,
-  UPDATE_TASK_ASSIGNMENT
+  UPDATE_TASK_ASSIGNMENT,
 } from "../../gql/taskAssignments";
 
 dayjs.extend(relativeTime);
@@ -75,6 +76,11 @@ const TASK_STATUS = {
     color: "green",
     icon: <CheckCircleOutlined />,
   },
+  REVISION: {
+    label: "Re-Open",
+    color: "orange",
+    icon: <ExclamationCircleOutlined />,
+  },
 };
 
 // Priority colors - A=High(Red), B=Medium(Orange), C=Low(Green)
@@ -85,6 +91,9 @@ const PRIORITY_COLORS = {
 };
 
 const TaskTable = () => {
+  // Drawer context
+  const { showProjectDetailDrawerV2, showTaskDetailDrawerV2 } = useAppDrawer();
+
   const currentUser = useReactiveVar(userCacheVar);
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // Show all tasks including completed
@@ -113,10 +122,6 @@ const TaskTable = () => {
   // Drawer states
   const [selectedTask, setSelectedTask] = useState(null);
   const [taskDrawerVisible, setTaskDrawerVisible] = useState(false);
-
-  // Task Detail Modal state
-  const [taskDetailVisible, setTaskDetailVisible] = useState(false);
-  const [selectedTaskForDetail, setSelectedTaskForDetail] = useState(null);
 
   // Build filters for server-side filtering
   const buildFilters = useCallback(() => {
@@ -374,8 +379,9 @@ const TaskTable = () => {
     const assignedUsers = [];
     const unassignedUsers = [];
 
-    users.forEach(user => {
-      const userWorkTypeIds = user.workTypes?.map(wt => wt.id.toString()) || [];
+    users.forEach((user) => {
+      const userWorkTypeIds =
+        user.workTypes?.map((wt) => wt.id.toString()) || [];
 
       if (userWorkTypeIds.length === 0) {
         // User has no work types assigned
@@ -417,15 +423,11 @@ const TaskTable = () => {
   const groupedByWorkType = useMemo(() => {
     const grouped = {};
 
-
-
     tasks.forEach((task) => {
       // Since backend filters by worktype, all tasks should be for selected worktype
       // Use selectedWorkTypeId directly
       const workTypeId = selectedWorkTypeId;
       const projectId = task.project?.id;
-
-
 
       if (!projectId) return;
 
@@ -462,8 +464,6 @@ const TaskTable = () => {
         grouped[workTypeId].taskTypes[taskTypeId] = task.taskType;
       }
     });
-
-
 
     return grouped;
   }, [tasks, selectedWorkTypeId]);
@@ -518,7 +518,6 @@ const TaskTable = () => {
         // Filter project gradings to only include those belonging to the selected worktype
         const allGradings = project.projectGradings || [];
 
-
         const gradings = allGradings.filter((pg) => {
           const gradingWorkTypeId = pg.grading?.workType?.id;
           const matches =
@@ -528,8 +527,6 @@ const TaskTable = () => {
           // Convert both to strings for comparison since workTypeId from tabs is a string
           return matches;
         });
-
-
 
         // If project has gradings for this worktype, create a row for each grading
         if (gradings.length > 0) {
@@ -589,6 +586,7 @@ const TaskTable = () => {
               clientName: project.client?.displayName,
               grading: grading, // Single grading for this row
               gradingName: grading.grading?.name || grading.grading?.shortCode,
+              shortCode: grading.grading?.shortCode,
               gradingQty: grading.imageQuantity || 0,
               orderDate: project.createdAt,
               dueDate: earliestDueDate,
@@ -597,8 +595,8 @@ const TaskTable = () => {
                 gradingProgress === 100
                   ? "COMPLETED"
                   : gradingTotalTasks > 0
-                    ? "IN_PROGRESS"
-                    : "TODO",
+                  ? "IN_PROGRESS"
+                  : "TODO",
               progress: gradingProgress,
               totalTasks: gradingTotalTasks,
               completedTasks: gradingCompletedTasks,
@@ -629,8 +627,8 @@ const TaskTable = () => {
               progress === 100
                 ? "COMPLETED"
                 : totalTasks > 0
-                  ? "IN_PROGRESS"
-                  : "TODO",
+                ? "IN_PROGRESS"
+                : "TODO",
             progress,
             totalTasks,
             completedTasks,
@@ -651,8 +649,6 @@ const TaskTable = () => {
       };
     });
 
-
-
     return result;
   }, [groupedByWorkType]);
 
@@ -662,7 +658,8 @@ const TaskTable = () => {
     const result = {};
 
     // Get user's work type IDs from ME query
-    const userWorkTypeIds = currentUser?.workTypes?.map(wt => wt.id.toString()) || [];
+    const userWorkTypeIds =
+      currentUser?.workTypes?.map((wt) => wt.id.toString()) || [];
 
     // Create tabs from all available worktypes
     worktypes.forEach((workType) => {
@@ -671,7 +668,10 @@ const TaskTable = () => {
 
         // Filter: only show work types assigned to the user
         // If user has no work types assigned, show all (for backward compatibility/admins)
-        if (userWorkTypeIds.length === 0 || userWorkTypeIds.includes(workTypeId)) {
+        if (
+          userWorkTypeIds.length === 0 ||
+          userWorkTypeIds.includes(workTypeId)
+        ) {
           result[workTypeId] = {
             workTypeId,
             workTypeName: workType.name,
@@ -758,69 +758,69 @@ const TaskTable = () => {
       } else if (field === "assignees") {
         // Handle multiple user assignments
         const currentAssignments = task.taskAssignments || [];
-        const currentUserIds = currentAssignments.map(a => a.userId);
+        const currentUserIds = currentAssignments.map((a) => a.userId);
         const newUserIds = editedData.assigneeIds || [];
-        
+
         // Find users to add and remove
-        const usersToAdd = newUserIds.filter(id => !currentUserIds.includes(id));
-        const usersToRemove = currentAssignments.filter(a => !newUserIds.includes(a.userId));
-        
+        const usersToAdd = newUserIds.filter(
+          (id) => !currentUserIds.includes(id)
+        );
+        const usersToRemove = currentAssignments.filter(
+          (a) => !newUserIds.includes(a.userId)
+        );
+
         // Delete removed assignments
         for (const assignment of usersToRemove) {
           await deleteAssignment({
-            variables: { id: assignment.id }
+            variables: { id: assignment.id },
           });
         }
-        
+
         // Create new assignments
         if (usersToAdd.length > 0) {
           const taskImageQty = task.imageQuantity || 0;
           const numUsers = newUserIds.length;
-          const qtyPerUser = numUsers > 0 ? Math.floor(taskImageQty / numUsers) : 0;
-          
-          const assignmentInputs = usersToAdd.map(userId => ({
+          const qtyPerUser =
+            numUsers > 0 ? Math.floor(taskImageQty / numUsers) : 0;
+
+          const assignmentInputs = usersToAdd.map((userId) => ({
             taskId: task.id,
             userId: userId,
             imageQuantity: qtyPerUser,
-            notes: null
+            notes: null,
           }));
-          
+
           await bulkCreateAssignments({
-            variables: { inputs: assignmentInputs }
+            variables: { inputs: assignmentInputs },
           });
         }
-        
+
         message.success("Task assignments updated successfully");
         cancelEditCell();
         return;
       } else if (field === "completedQty") {
         // Update the current user's TaskAssignment completed quantity
         const userAssignment = task.taskAssignments?.find(
-          a => a.userId === currentUser?.id
+          (a) => a.userId === currentUser?.id
         );
-        
+
         if (!userAssignment) {
           message.error("You are not assigned to this task");
           cancelEditCell();
           return;
         }
-        
-        // Validate against user's assigned quantity
-        const userAssignedQty = userAssignment.imageQuantity || 0;
-        if (editedData.completedQty > userAssignedQty) {
-          message.error(`Cannot complete more than your assigned quantity (${userAssignedQty})`);
-          return;
-        }
-        
+
+        // No validation against assigned quantity - users can complete more than assigned if needed
+
         await updateTaskAssignment({
           variables: {
             id: userAssignment.id,
             input: {
-              completedImageQuantity: editedData.completedQty
-            }
-          }
+              completedImageQuantity: editedData.completedQty,
+            },
+          },
         });
-        
+
         message.success("Completed quantity updated successfully");
         cancelEditCell();
         return;
@@ -877,10 +877,17 @@ const TaskTable = () => {
         render: (text, record) => (
           <div style={{ fontSize: 12 }}>
             <div style={{ color: "#262626", fontWeight: 600, marginBottom: 2 }}>
-              {text}
-              {record.projectName ? ` - ${record.projectName}` : ""}
+              <Button
+                type="link"
+                size="small"
+                style={{ padding: 0, height: "auto", fontWeight: 600 }}
+                onClick={() => showProjectDetailDrawerV2(record.projectId)}
+              >
+                {text}
+                {record.projectName ? ` - ${record.projectName}` : ""}
+              </Button>
             </div>
-            <div style={{ color: "#8c8c8c", fontSize: 11 }}>
+            <div style={{ color: "#66666", fontSize: 11 }}>
               {record.clientCode}
               {record.clientName ? ` - ${record.clientName}` : ""}
             </div>
@@ -898,7 +905,7 @@ const TaskTable = () => {
           }
           return (
             <div style={{ fontSize: 12 }}>
-              <Text style={{ fontWeight: 500 }}>{record.gradingName}</Text>
+              <Text style={{ fontWeight: 500 }}>{record.shortCode}</Text>
               <Text type="secondary"> ({record.gradingQty})</Text>
             </div>
           );
@@ -909,7 +916,7 @@ const TaskTable = () => {
         dataIndex: "orderDate",
         key: "orderDate",
         width: 100,
-        render: (date) => (date ? dayjs(date).format("MMM D, YYYY") : "-"),
+        render: (date) => (date ? dayjs(date).format("DD-MM-YY") : "-"),
       },
     ];
 
@@ -962,7 +969,9 @@ const TaskTable = () => {
                     >
                       <Select
                         size="small"
-                        value={editedData.status || task.status}
+                        value={
+                          TASK_STATUS[editedData.status || task.status]?.label
+                        }
                         onChange={(value) =>
                           setEditedData({ ...editedData, status: value })
                         }
@@ -1060,7 +1069,7 @@ const TaskTable = () => {
               );
 
               const taskAssignments = task.taskAssignments || [];
-              const assignedUserIds = taskAssignments.map(a => a.userId);
+              const assignedUserIds = taskAssignments.map((a) => a.userId);
 
               // Show multi-select when editing
               if (isEditingAssignees) {
@@ -1143,13 +1152,22 @@ const TaskTable = () => {
                       alignItems: "center",
                     }}
                   >
-                    <Space direction="vertical" size={2} style={{ width: "100%" }}>
+                    <Space
+                      direction="vertical"
+                      size={2}
+                      style={{ width: "100%" }}
+                    >
                       {taskAssignments.map((assignment) => (
                         <Text
                           key={assignment.id}
-                          style={{ fontSize: 11, display: "block", textAlign: "center" }}
+                          style={{
+                            fontSize: 11,
+                            display: "block",
+                            textAlign: "center",
+                          }}
                         >
-                          {assignment.user?.firstName} {assignment.user?.lastName}
+                          {assignment.user?.firstName}{" "}
+                          {assignment.user?.lastName}
                         </Text>
                       ))}
                     </Space>
@@ -1168,7 +1186,11 @@ const TaskTable = () => {
                           e
                         );
                       }}
-                      style={{ padding: "0 4px", height: "20px", fontSize: "11px" }}
+                      style={{
+                        padding: "0 4px",
+                        height: "20px",
+                        fontSize: "11px",
+                      }}
                     >
                       Edit
                     </Button>
@@ -1226,22 +1248,15 @@ const TaskTable = () => {
               // Check if current user is assigned to this task
               const taskAssignments = task.taskAssignments || [];
               const userAssignment = taskAssignments.find(
-                assignment => assignment.userId === currentUser?.id
+                (assignment) => assignment.userId === currentUser?.id
               );
               const isAssignedUser = !!userAssignment;
 
-              // Get user's assigned quantity or total task quantity for display
-              const userAssignedQty = userAssignment?.imageQuantity || 0;
-              const totalTaskQty = task.imageQuantity ||
-                record.gradingQty ||
-                record.project?.imageQuantity ||
-                0;
-
-              // For assigned users, show their assigned quantity; otherwise show total
-              const displayTotal = isAssignedUser ? userAssignedQty : totalTaskQty;
+              // Get total task quantity for display
+              const totalTaskQty = record.gradingQty || task.imageQuantity || 0;
               const userCompleted = userAssignment?.completedImageQuantity || 0;
 
-              if (!displayTotal && !isAssignedUser) {
+              if (!totalTaskQty && !isAssignedUser) {
                 return <Text type="secondary">-</Text>;
               }
 
@@ -1259,15 +1274,21 @@ const TaskTable = () => {
                     onClick={(e) => e.stopPropagation()}
                     style={{ padding: "4px 0" }}
                   >
-                    <Space direction="vertical" size={4} style={{ width: '100%' }}>
+                    <Space
+                      direction="vertical"
+                      size={4}
+                      style={{ width: "100%" }}
+                    >
                       <InputNumber
                         size="small"
                         min={0}
-                        max={userAssignedQty}
+                        max={totalTaskQty}
                         value={editedData.completedQty}
-                        onChange={(value) => setEditedData({ ...editedData, completedQty: value })}
+                        onChange={(value) =>
+                          setEditedData({ ...editedData, completedQty: value })
+                        }
                         style={{ width: "100%" }}
-                        addonAfter={`/${userAssignedQty}`}
+                        addonAfter={`/${totalTaskQty}`}
                       />
                       <Space size="small">
                         <Button
@@ -1293,23 +1314,21 @@ const TaskTable = () => {
 
               // Calculate totals for all assignments
               const totalCompleted = taskAssignments.reduce(
-                (sum, a) => sum + (a.completedImageQuantity || 0), 0
-              );
-              const totalAssigned = taskAssignments.reduce(
-                (sum, a) => sum + (a.imageQuantity || 0), 0
+                (sum, a) => sum + (a.completedImageQuantity || 0),
+                0
               );
 
               // For display, show user's progress if assigned, otherwise show total
-              const displayCompleted = isAssignedUser ? userCompleted : totalCompleted;
-              const displayAssigned = isAssignedUser ? userAssignedQty : (totalAssigned || totalTaskQty);
-              const percentage = displayAssigned > 0 
-                ? Math.round((displayCompleted / displayAssigned) * 100) 
-                : 0;
+              const displayCompleted = totalCompleted;
+              const percentage =
+                totalTaskQty > 0
+                  ? Math.round((displayCompleted / totalTaskQty) * 100)
+                  : 0;
 
               // Only show as clickable/editable if user is assigned
-              const tooltipTitle = isAssignedUser 
-                ? `Click to update your completed quantity (${userCompleted}/${userAssignedQty})` 
-                : `Total progress: ${totalCompleted}/${totalAssigned || totalTaskQty}`;
+              const tooltipTitle = isAssignedUser
+                ? `Click to update your completed quantity (${userCompleted}/${totalTaskQty})`
+                : `Total progress: ${totalCompleted}/${totalTaskQty}`;
 
               return (
                 <Tooltip title={tooltipTitle}>
@@ -1336,23 +1355,32 @@ const TaskTable = () => {
                       opacity: isAssignedUser ? 1 : 0.6,
                     }}
                   >
-                    <Space direction="vertical" size={2} style={{ width: '100%' }}>
+                    <Space
+                      direction="vertical"
+                      size={2}
+                      style={{ width: "100%" }}
+                    >
                       <Text style={{ fontSize: 11, fontWeight: 500 }}>
-                        {displayCompleted}/{displayAssigned}
+                        {displayCompleted}/{totalTaskQty}
                       </Text>
-                      <div style={{
-                        width: '100%',
-                        height: 4,
-                        background: '#f0f0f0',
-                        borderRadius: 2,
-                        overflow: 'hidden'
-                      }}>
-                        <div style={{
-                          width: `${percentage}%`,
-                          height: '100%',
-                          background: percentage === 100 ? '#52c41a' : '#1890ff',
-                          transition: 'width 0.3s'
-                        }} />
+                      <div
+                        style={{
+                          width: "100%",
+                          height: 4,
+                          background: "#f0f0f0",
+                          borderRadius: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: `${percentage}%`,
+                            height: "100%",
+                            background:
+                              percentage === 100 ? "#52c41a" : "#1890ff",
+                            transition: "width 0.3s",
+                          }}
+                        />
                       </div>
                     </Space>
                   </div>
@@ -1439,7 +1467,7 @@ const TaskTable = () => {
               <Tooltip title="Click to edit due date">
                 {date ? (
                   <span>
-                    {dayjs(date).format("MMM D, YYYY")}
+                    {dayjs(date).format("DD-MM-YY")}
                     {dayjs(date).isBefore(dayjs(), "day") && (
                       <Tag color="red" style={{ marginLeft: 4 }}>
                         Overdue
@@ -1491,7 +1519,7 @@ const TaskTable = () => {
                     {dashboardData?.tasksDashboard?.totalProjects || 0}
                   </Tag>
                 </Space>
-                <Space size={4}>
+                {/* <Space size={4}>
                   <ClockCircleOutlined
                     style={{ fontSize: 16, color: "#faad14" }}
                   />
@@ -1504,7 +1532,7 @@ const TaskTable = () => {
                   >
                     {dashboardData?.tasksDashboard?.totalTasks || tasks.length}
                   </Tag>
-                </Space>
+                </Space> */}
                 <Space size={4}>
                   <ClockCircleOutlined
                     style={{ fontSize: 16, color: "#d9d9d9" }}
@@ -1545,6 +1573,7 @@ const TaskTable = () => {
                     {dashboardData?.tasksDashboard?.reviewTasks || 0}
                   </Tag>
                 </Space>
+
                 <Space size={4}>
                   <CheckCircleOutlined
                     style={{ fontSize: 16, color: "#52c41a" }}
@@ -1557,6 +1586,20 @@ const TaskTable = () => {
                     style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                   >
                     {dashboardData?.tasksDashboard?.completedTasks || 0}
+                  </Tag>
+                </Space>
+                <Space size={4}>
+                  <ExclamationCircleOutlined
+                    style={{ fontSize: 16, color: "#fa8c16" }}
+                  />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Re-Open:
+                  </Text>
+                  <Tag
+                    color="orange"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {dashboardData?.tasksDashboard?.reopenedTasks || 0}
                   </Tag>
                 </Space>
                 <Space size={4}>
@@ -1712,15 +1755,25 @@ const TaskTable = () => {
                 };
                 const rowCount = actualData.rows.length;
 
+                // Calculate total images for this worktype
+                const totalImages = actualData.rows.reduce((sum, row) => {
+                  return sum + (row.gradingQty || 0);
+                }, 0);
+
                 return {
                   key: workTypeId,
                   label: (
                     <span>
                       {workTypeData.workTypeName}
                       {selectedWorkTypeId === workTypeId && (
-                        <Tag color="blue" style={{ marginLeft: 8 }}>
-                          {rowCount}
-                        </Tag>
+                        <>
+                          <Tag color="blue" style={{ marginLeft: 8 }}>
+                            {rowCount} Projects
+                          </Tag>
+                          <Tag color="green" style={{ marginLeft: 4 }}>
+                            {totalImages} Images
+                          </Tag>
+                        </>
                       )}
                     </span>
                   ),
@@ -1813,10 +1866,10 @@ const TaskTable = () => {
                             onClick: (e) => {
                               // Don't open modal if clicking on interactive elements
                               if (
-                                e.target.closest('.ant-select') ||
-                                e.target.closest('.ant-btn') ||
-                                e.target.closest('.ant-input-number') ||
-                                e.target.closest('[data-no-row-click]')
+                                e.target.closest(".ant-select") ||
+                                e.target.closest(".ant-btn") ||
+                                e.target.closest(".ant-input-number") ||
+                                e.target.closest("[data-no-row-click]")
                               ) {
                                 return;
                               }
@@ -1824,11 +1877,11 @@ const TaskTable = () => {
                               // Get first available task from the row
                               const firstTask = record.allTasks?.[0];
                               if (firstTask) {
-                                setSelectedTaskForDetail(firstTask);
-                                setTaskDetailVisible(true);
+                                // Use new task detail drawer
+                                showTaskDetailDrawerV2(firstTask.id);
                               }
                             },
-                            style: { cursor: 'pointer' }
+                            style: { cursor: "pointer" },
                           })}
                         />
                       )}
@@ -1840,25 +1893,6 @@ const TaskTable = () => {
           />
         </Card>
       </div>
-
-      {/* Task Detail Modal */}
-      {selectedTaskForDetail && (
-        <TaskCard
-          task={selectedTaskForDetail}
-          showModal={taskDetailVisible}
-          onModalClose={() => {
-            setTaskDetailVisible(false);
-            setSelectedTaskForDetail(null);
-          }}
-          onTaskUpdate={(updatedTask) => {
-            setSelectedTaskForDetail(updatedTask);
-            refetchTasks();
-          }}
-          availableUsers={users || []}
-          workType={selectedTaskForDetail.project?.workType}
-          grading={selectedTaskForDetail.gradingTask?.grading}
-        />
-      )}
     </div>
   );
 };

@@ -44,7 +44,7 @@ const STATUS_COLUMNS = [
   },
   {
     id: "revision",
-    title: "In Review",
+    title: "Re-Open",
     color: "#fff4e6",
     borderColor: "#ffab00",
     icon: <EditOutlined />,

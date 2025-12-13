@@ -17,6 +17,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
+import { hasPermission, MODULES, ACTIONS, generatePermission } from "../config/permissions";
 
 // Page Components
 import Dashboard from "../pages/BackOffice/Dashboard";
@@ -38,23 +39,33 @@ const BackOfficeLayout = () => {
   const { logout } = useAuth();
   const location = useLocation();
 
-  const menuItems = [
+  // Check permissions for menu items (using MANAGE to show/hide menu)
+  const canManageUsers = hasPermission(user, generatePermission(MODULES.USERS, ACTIONS.MANAGE));
+  const canManageRoles = hasPermission(user, generatePermission(MODULES.ROLES, ACTIONS.MANAGE));
+  const canManageTaskTypes = hasPermission(user, generatePermission(MODULES.TASK_TYPES, ACTIONS.MANAGE));
+  const canManageWorkTypes = hasPermission(user, generatePermission(MODULES.WORK_TYPES, ACTIONS.MANAGE));
+  const canManageGradings = hasPermission(user, generatePermission(MODULES.GRADINGS, ACTIONS.MANAGE));
+  const canManageReports = hasPermission(user, generatePermission(MODULES.REPORTS, ACTIONS.MANAGE));
+  const canManageAuditLogs = hasPermission(user, generatePermission(MODULES.AUDIT_LOGS, ACTIONS.MANAGE));
+
+  // Build menu items based on permissions
+  const allMenuItems = [
     {
       key: "/",
       icon: <DashboardOutlined />,
       label: <Link to="/">Dashboard</Link>,
     },
-    {
+    canManageTaskTypes && {
       key: "/task-types",
       icon: <TagsOutlined />,
       label: <Link to="/task-types">Task Types</Link>,
     },
-    {
+    canManageWorkTypes && {
       key: "/work-types",
       icon: <DollarOutlined />,
       label: <Link to="/work-types">Work Types</Link>,
     },
-    {
+    canManageGradings && {
       key: "/gradings",
       icon: <DollarOutlined />,
       label: <Link to="/gradings">Gradings</Link>,
@@ -64,22 +75,22 @@ const BackOfficeLayout = () => {
       icon: <WalletOutlined />,
       label: <Link to="/payment-types">Payment Types</Link>,
     },
-    {
+    canManageUsers && {
       key: "/users",
       icon: <UserOutlined />,
       label: <Link to="/users">Users</Link>,
     },
-    {
+    canManageReports && {
       key: "/reports",
       icon: <BarChartOutlined />,
       label: <Link to="/reports">Reports</Link>,
     },
-    {
+    canManageRoles && {
       key: "/roles",
       icon: <UserOutlined />, // You can use a different icon if desired
       label: <Link to="/roles">Roles</Link>,
     },
-    {
+    canManageAuditLogs && {
       key: "/audit-logs",
       icon: <SecurityScanOutlined />,
       label: <Link to="/audit-logs">Audit Logs</Link>,
@@ -89,7 +100,9 @@ const BackOfficeLayout = () => {
       icon: <SettingOutlined />, 
       label: <Link to="/settings">Settings</Link>,
     },
-  ];
+  ].filter(Boolean); // Remove null/false items
+
+  const menuItems = allMenuItems;
 
   const userMenuItems = [
     {

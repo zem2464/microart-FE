@@ -379,6 +379,7 @@ export const GET_TASKS_DASHBOARD = gql`
       todoTasks
       inProgressTasks
       reviewTasks
+      reopenedTasks
       completedTasks
       overdueTasks
     }

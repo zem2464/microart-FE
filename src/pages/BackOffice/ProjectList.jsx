@@ -39,6 +39,7 @@ import {
 import { GET_CLIENTS } from "../../graphql/clientQueries";
 import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import { GET_GRADINGS } from "../../graphql/gradingQueries";
+import { useAppDrawer } from "../../contexts/DrawerContext";
 import dayjs from "dayjs";
 
 const { Title, Text } = Typography;
@@ -46,6 +47,9 @@ const { Option } = Select;
 const { TextArea } = Input;
 
 const ProjectList = () => {
+  // Drawer context
+  const { showProjectDetailDrawerV2 } = useAppDrawer();
+  
   // State management
   const [projects, setProjects] = useState([]);
   const [filters, setFilters] = useState({});
@@ -368,9 +372,8 @@ const ProjectList = () => {
   };
 
   const handleView = (project) => {
-    setModalType("view");
-    setSelectedProject(project);
-    setModalVisible(true);
+    // Use new project detail drawer instead of modal
+    showProjectDetailDrawerV2(project.id);
   };
 
   const handleEdit = (project) => {

@@ -32,6 +32,7 @@ import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
 import { useAppDrawer } from "../contexts/DrawerContext";
 import ChatTrigger from "../components/Chat/ChatTrigger";
+import { hasPermission, MODULES, ACTIONS, generatePermission } from "../config/permissions";
 
 // Import pages
 import TaskTable from "../pages/FrontOffice/TaskTable";
@@ -51,16 +52,28 @@ const FrontOfficeLayout = () => {
   const { showClientFormDrawer, showProjectFormDrawer } = useAppDrawer();
   const { openPaymentModal } = usePayment();
 
+  // Check permissions for menu items (using MANAGE to show/hide menu)
+  const canManageTasks = hasPermission(user, generatePermission(MODULES.TASKS, ACTIONS.MANAGE));
+  const canManageProjects = hasPermission(user, generatePermission(MODULES.PROJECTS, ACTIONS.MANAGE));
+  const canManageTransactions = hasPermission(user, generatePermission(MODULES.CLIENT_TRANSACTIONS, ACTIONS.MANAGE));
+  const canManageReports = hasPermission(user, generatePermission(MODULES.REPORTS, ACTIONS.MANAGE));
+  const canManageClients = hasPermission(user, generatePermission(MODULES.CLIENTS, ACTIONS.MANAGE));
+  
+  // Check permissions for actions
+  const canCreateClient = hasPermission(user, generatePermission(MODULES.CLIENTS, ACTIONS.CREATE));
+  const canCreateProject = hasPermission(user, generatePermission(MODULES.PROJECTS, ACTIONS.CREATE));
+  const canCreateTransaction = hasPermission(user, generatePermission(MODULES.CLIENT_TRANSACTIONS, ACTIONS.CREATE));
+
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
       // Alt+C for Add Client
-      if (e.altKey && e.key === "c") {
+      if (e.altKey && e.key === "c" && canCreateClient) {
         e.preventDefault();
         showClientFormDrawer(null, "create");
       }
       // Alt+P for Add Project
-      if (e.altKey && e.key === "p") {
+      if (e.altKey && e.key === "p" && canCreateProject) {
         e.preventDefault();
         showProjectFormDrawer(null, "create");
       }
@@ -68,50 +81,31 @@ const FrontOfficeLayout = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showClientFormDrawer, showProjectFormDrawer]);
+  }, [showClientFormDrawer, showProjectFormDrawer, canCreateClient, canCreateProject]);
 
-  // Allow employees and admin users (when they choose employee view)
-  const role = user?.role?.roleType?.toLowerCase();
-  if (role !== "employee" && role !== "admin" && role !== "manager") {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-          <p className="text-gray-600">
-            You don't have permission to access this area.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const menuItems = [
-    {
+  // Build menu items based on permissions
+  const allMenuItems = [
+    canManageTasks && {
       key: "/",
       icon: <CheckSquareOutlined />,
       label: <Link to="/">Task Board</Link>,
     },
-    {
+    canManageProjects && {
       key: "/projects",
       icon: <ProjectOutlined />,
       label: <Link to="/projects">Projects</Link>,
     },
-    {
+    canManageTransactions && {
       key: "/transactions",
       icon: <TransactionOutlined />,
       label: <Link to="/transactions">Transactions</Link>,
     },
-    {
+    canManageReports && {
       key: "/ledger",
       icon: <FileTextOutlined />,
       label: <Link to="/ledger">Ledger</Link>,
     },
-    {
-      key: "/clients",
-      icon: <TeamOutlined />,
-      label: <Link to="/clients">Clients</Link>,
-    },
-    {
+    canManageClients && {
       key: "clients",
       icon: <TeamOutlined />,
       label: "Client Management",
@@ -128,7 +122,9 @@ const FrontOfficeLayout = () => {
         },
       ],
     },
-  ];
+  ].filter(Boolean); // Remove null/false items
+
+  const menuItems = allMenuItems;
 
   const userMenuItems = [
     {
@@ -156,7 +152,7 @@ const FrontOfficeLayout = () => {
             <img
               src="/images/images.png"
               alt="MicroArt Logo"
-              style={{ height: '130px', marginRight: '12px' }}
+              style={{ height: "130px", marginRight: "12px" }}
             />
             <Badge
               count="Employee"
@@ -184,32 +180,38 @@ const FrontOfficeLayout = () => {
         <div className="flex items-center space-x-4 ml-8">
           {/* Quick Action Buttons */}
           <Space size="small">
-            <Tooltip title="Add New Client (Alt+C)" placement="bottom">
-              <Button
-                type="primary"
-                shape="circle"
-                icon={<UserAddOutlined />}
-                onClick={() => showClientFormDrawer(null, "create")}
-                className="bg-green-500 hover:bg-green-600 border-green-500"
-              />
-            </Tooltip>
-            <Tooltip title="Add New Project (Alt+P)" placement="bottom">
-              <Button
-                type="primary"
-                shape="circle"
-                icon={<PlusOutlined />}
-                onClick={() => showProjectFormDrawer(null, "create")}
-              />
-            </Tooltip>
-            <Tooltip title="Record Payment" placement="bottom">
-              <Button
-                type="primary"
-                shape="circle"
-                icon={<DollarOutlined />}
-                onClick={() => openPaymentModal()}
-                className="bg-blue-500 hover:bg-blue-600 border-blue-500"
-              />
-            </Tooltip>
+            {canCreateClient && (
+              <Tooltip title="Add New Client (Alt+C)" placement="bottom">
+                <Button
+                  type="primary"
+                  shape="circle"
+                  icon={<UserAddOutlined />}
+                  onClick={() => showClientFormDrawer(null, "create")}
+                  className="bg-green-500 hover:bg-green-600 border-green-500"
+                />
+              </Tooltip>
+            )}
+            {canCreateProject && (
+              <Tooltip title="Add New Project (Alt+P)" placement="bottom">
+                <Button
+                  type="primary"
+                  shape="circle"
+                  icon={<PlusOutlined />}
+                  onClick={() => showProjectFormDrawer(null, "create")}
+                />
+              </Tooltip>
+            )}
+            {canCreateTransaction && (
+              <Tooltip title="Record Payment" placement="bottom">
+                <Button
+                  type="primary"
+                  shape="circle"
+                  icon={<DollarOutlined />}
+                  onClick={() => openPaymentModal()}
+                  className="bg-blue-500 hover:bg-blue-600 border-blue-500"
+                />
+              </Tooltip>
+            )}
           </Space>
 
           <ChatTrigger />

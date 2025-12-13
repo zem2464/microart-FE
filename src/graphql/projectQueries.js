@@ -114,12 +114,7 @@ export const GET_PROJECT = gql`
       client {
         id
         clientCode
-        firstName
-        lastName
         displayName
-        companyName
-        email
-        contactNoWork
       }
       projectWorkTypes {
         id
@@ -618,6 +613,114 @@ export const GET_PROJECT_STATS = gql`
       noInvoiceCount
       noInvoiceEstimatedCost
       noInvoiceActualCost
+    }
+  }
+`;
+
+// Comprehensive Project Detail Query for Drawer
+export const GET_PROJECT_DETAIL = gql`
+  query GetProjectDetail($id: ID!) {
+    project(id: $id) {
+      id
+      projectCode
+      name
+      description
+      status
+      priority
+      deadlineDate
+      notes
+      clientNotes
+      customFields
+      isActive
+      createdAt
+      updatedAt
+      
+      # Quantities and costs
+      imageQuantity
+      estimatedCost
+      actualCost
+      totalImageQuantity
+      totalEstimatedCost
+      totalActualCost
+      
+      # Client information
+      client {
+        id
+        clientCode
+        displayName
+      }
+      
+      # Work Types
+      projectWorkTypes {
+        id
+        workTypeId
+        sequence
+        workType {
+          id
+          name
+          description
+        }
+      }
+      
+      workTypes {
+        id
+        name
+        description
+      }
+      
+      # Gradings with full details
+      projectGradings {
+        id
+        gradingId
+        imageQuantity
+        estimatedCost
+        actualCost
+        customRate
+        sequence
+        grading {
+          id
+          name
+          shortCode
+          defaultRate
+          description
+          workType {
+            id
+            name
+          }
+        }
+      }
+      
+      # Invoice and Payment Information
+      invoiceId
+      invoice {
+        id
+        invoiceNumber
+        invoiceDate
+        dueDate
+        totalAmount
+        taxAmount
+        discountAmount
+        paidAmount
+        balanceAmount
+        status
+        createdAt
+        updatedAt
+      }
+      
+      # Creator and Updater
+      creator {
+        id
+        firstName
+        lastName
+        email
+      }
+      
+      updater {
+        id
+        firstName
+        lastName
+        email
+      }
     }
   }
 `;

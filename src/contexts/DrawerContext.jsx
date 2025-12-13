@@ -17,6 +17,8 @@ import ProjectFormFooter from '../components/ProjectFormFooter';
 import ClientForm from '../pages/FrontOffice/ClientForm';
 import ClientDetail from '../components/ClientDetail';
 import ProjectDetail from '../components/ProjectDetail';
+import ProjectDetailDrawer from '../components/ProjectDetailDrawer';
+import TaskDetailDrawer from '../components/TaskDetailDrawer';
 
 const AppDrawerContext = createContext();
 
@@ -48,6 +50,13 @@ export const AppDrawerProvider = ({ children }) => {
 	const [projectCreditExceeded, setProjectCreditExceeded] = useState(false);
 	const [projectFooterData, setProjectFooterData] = useState({ totalImageQuantity: 0, totalCalculatedBudget: 0 });
 	const [projectDetailDrawer, setProjectDetailDrawer] = useState({ open: false, project: null });
+	
+	// New Project Detail Drawer (accepts projectId only)
+	const [projectDetailDrawerV2, setProjectDetailDrawerV2] = useState({ open: false, projectId: null });
+	
+	// Task Detail Drawer (accepts taskId only)
+	const [taskDetailDrawerV2, setTaskDetailDrawerV2] = useState({ open: false, taskId: null });
+	
 	const showProjectFormDrawer = (project = null, mode = 'create', onSuccess = null) => {
 		setProjectFormDrawer({ open: true, project, mode, onSuccess });
 		setProjectCreditExceeded(false); // Reset on open
@@ -59,6 +68,14 @@ export const AppDrawerProvider = ({ children }) => {
 	};
 	const showProjectDetailDrawer = (project) => setProjectDetailDrawer({ open: true, project });
 	const closeProjectDetailDrawer = () => setProjectDetailDrawer({ open: false, project: null });
+	
+	// New V2 functions for redesigned drawer
+	const showProjectDetailDrawerV2 = (projectId) => setProjectDetailDrawerV2({ open: true, projectId });
+	const closeProjectDetailDrawerV2 = () => setProjectDetailDrawerV2({ open: false, projectId: null });
+	
+	// Task Detail Drawer V2 functions
+	const showTaskDetailDrawerV2 = (taskId) => setTaskDetailDrawerV2({ open: true, taskId });
+	const closeTaskDetailDrawerV2 = () => setTaskDetailDrawerV2({ open: false, taskId: null });
 
 	// User Drawers
 	const [userFormDrawer, setUserFormDrawer] = useState({ open: false, user: null, mode: 'create', onSuccess: null });
@@ -114,6 +131,12 @@ export const AppDrawerProvider = ({ children }) => {
 		closeProjectFormDrawer,
 		showProjectDetailDrawer,
 		closeProjectDetailDrawer,
+		// New Project Detail V2
+		showProjectDetailDrawerV2,
+		closeProjectDetailDrawerV2,
+		// New Task Detail V2
+		showTaskDetailDrawerV2,
+		closeTaskDetailDrawerV2,
 		// User
 		showUserFormDrawer,
 		closeUserFormDrawer,
@@ -258,6 +281,7 @@ export const AppDrawerProvider = ({ children }) => {
 								<ProjectFormFooter 
 									totalImageQuantity={projectFooterData.totalImageQuantity}
 									totalCalculatedBudget={projectFooterData.totalCalculatedBudget}
+									shouldHidePrices={projectFooterData.shouldHidePrices}
 								/>
 							</Space>
 							<Space>
@@ -507,6 +531,36 @@ export const AppDrawerProvider = ({ children }) => {
 						}}
 						onClose={closeClientDetailDrawer} 
 					/>
+				</ModuleDrawer>
+			)}
+
+			{/* New Project Detail Drawer V2 - Redesigned with projectId only */}
+			{projectDetailDrawerV2.open && (
+				<ModuleDrawer
+					open={projectDetailDrawerV2.open}
+					title="Project Details"
+					width={1400}
+					placement="right"
+					onClose={closeProjectDetailDrawerV2}
+					destroyOnClose
+					maskClosable
+				>
+					<ProjectDetailDrawer projectId={projectDetailDrawerV2.projectId} />
+				</ModuleDrawer>
+			)}
+
+			{/* New Task Detail Drawer V2 - Redesigned with taskId only */}
+			{taskDetailDrawerV2.open && (
+				<ModuleDrawer
+					open={taskDetailDrawerV2.open}
+					title="Task Details"
+					width={1200}
+					placement="right"
+					onClose={closeTaskDetailDrawerV2}
+					destroyOnClose
+					maskClosable
+				>
+					<TaskDetailDrawer taskId={taskDetailDrawerV2.taskId} />
 				</ModuleDrawer>
 			)}
 		</AppDrawerContext.Provider>

@@ -54,10 +54,19 @@ import {
   GET_PROJECT_STATS,
 } from "../../graphql/projectQueries";
 import { GET_CLIENTS } from "../../graphql/clientQueries";
+import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import { GENERATE_PROJECT_INVOICE } from "../../gql/clientLedger";
 // tasks are loaded in ProjectDetail drawer when needed
 import { AppDrawerContext } from "../../contexts/DrawerContext";
 import dayjs from "dayjs";
+import { useReactiveVar } from "@apollo/client";
+import { userCacheVar } from "../../cache/userCacheVar";
+import {
+  hasPermission,
+  MODULES,
+  ACTIONS,
+  generatePermission,
+} from "../../config/permissions";
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -85,9 +94,45 @@ const getClientDisplayName = (client) => {
 const ProjectManagement = () => {
   const { showProjectFormDrawer, showProjectDetailDrawer } =
     useContext(AppDrawerContext);
+  const user = useReactiveVar(userCacheVar);
+
+  // Check if user has limited permissions
+  const hasLimitedRead = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.LIMTEREAD)
+  );
+  const hasLimitedEdit = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.LIMITEDIT)
+  );
+  const hasFullRead = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.READ)
+  );
+  const canApproveProjects = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE)
+  );
+  const canRejectProjects = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.REJECT)
+  );
+  const canDeleteProjects = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.DELETE)
+  );
+  const canCreateFinance = hasPermission(
+    user,
+    generatePermission(MODULES.FINANCE, ACTIONS.CREATE)
+  );
+
+  // Hide prices if user has limitedRead or limitedEdit (but not full read)
+  const shouldHidePrices = hasLimitedRead || hasLimitedEdit;
+
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("all");
+  const [workTypeFilter, setWorkTypeFilter] = useState("all");
 
   // Infinite scroll state
   const [page, setPage] = useState(1);
@@ -129,8 +174,12 @@ const ProjectManagement = () => {
       filters.clientId = clientFilter;
     }
 
+    if (workTypeFilter !== "all") {
+      filters.workTypeId = workTypeFilter;
+    }
+
     return filters;
-  }, [statusFilter, clientFilter]);
+  }, [statusFilter, clientFilter, workTypeFilter]);
 
   // GraphQL Queries
   const {
@@ -159,6 +208,10 @@ const ProjectManagement = () => {
       sortBy: "name",
       sortOrder: "ASC",
     },
+    fetchPolicy: "cache-and-network",
+  });
+
+  const { data: workTypesData } = useQuery(GET_WORK_TYPES, {
     fetchPolicy: "cache-and-network",
   });
 
@@ -342,7 +395,7 @@ const ProjectManagement = () => {
       sortOrder: "DESC",
     });
     setPage(1); // Reset page on filter change
-  }, [statusFilter, clientFilter, buildFilters, refetchProjects]);
+  }, [statusFilter, clientFilter, workTypeFilter, buildFilters, refetchProjects]);
 
   // Check if there are more items to load
   useEffect(() => {
@@ -393,7 +446,7 @@ const ProjectManagement = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMore, projectsLoading, fetchMore, page]);
+  }, [isLoadingMore, hasMore, projectsLoading, fetchMore, page, buildFilters]);
 
   // Handle scroll event for infinite scroll (window-level)
   const handleScroll = useCallback(() => {
@@ -945,8 +998,9 @@ const ProjectManagement = () => {
                     color="gold"
                     style={{ marginBottom: 2, fontSize: "11px" }}
                   >
-                    {pg.grading?.name || pg.grading?.shortCode || "N/A"} - ₹
-                    {pg.customRate || pg.grading?.defaultRate || 0}
+                    {pg.grading?.name || pg.grading?.shortCode || "N/A"}
+                    {!shouldHidePrices &&
+                      ` - ₹${pg.customRate || pg.grading?.defaultRate || 0}`}
                   </Tag>
                 ))
               ) : (
@@ -1020,7 +1074,7 @@ const ProjectManagement = () => {
       render: (date) =>
         date ? dayjs(date).format("MMM DD, YYYY") : "No deadline",
     },
-    {
+    !shouldHidePrices && {
       title: "Budget",
       key: "estimatedCost",
       width: 110,
@@ -1060,7 +1114,8 @@ const ProjectManagement = () => {
               />
             </Tooltip>
           )}
-          {(record.status || "").toString().toUpperCase() === "REQUESTED" && (
+          {(record.status || "").toString().toUpperCase() === "REQUESTED" &&
+            (canApproveProjects || canRejectProjects) && (
             <Tooltip title="Approve Credit Request">
               <Button
                 type="text"
@@ -1085,7 +1140,8 @@ const ProjectManagement = () => {
               record.invoiceId ||
               record.invoice?.id ||
               invoicedProjectIds.has(record.id)
-            ) && (
+            ) &&
+            (canCreateFinance || (record.client?.leaderId === user?.id)) && (
               <Tooltip title="Complete & Generate Invoice">
                 <Button
                   type="text"
@@ -1102,7 +1158,8 @@ const ProjectManagement = () => {
               record.invoiceId ||
               record.invoice?.id ||
               invoicedProjectIds.has(record.id)
-            ) && (
+            ) &&
+            (canCreateFinance || (record.client?.leaderId === user?.id)) && (
               <Tooltip title="Generate Invoice">
                 <Button
                   type="text"
@@ -1130,7 +1187,8 @@ const ProjectManagement = () => {
             </Tooltip>
           )}
 
-          {(record.status || "").toString().toUpperCase() !== "COMPLETED" && (
+          {(record.status || "").toString().toUpperCase() !== "COMPLETED" &&
+            canDeleteProjects && (
             <Tooltip title="Delete">
               <Button
                 type="text"
@@ -1335,30 +1393,32 @@ const ProjectManagement = () => {
               </Space>
             </Col>
           </Row>
-          <Row gutter={16} align="middle" style={{ marginTop: 12 }}>
-            <Col flex="auto">
-              <Space size={16}>
-                <Space size={4}>
-                  <DollarOutlined style={{ fontSize: 16, color: "#52c41a" }} />
-                  <Text strong style={{ fontSize: 14 }}>
-                    Total Estimated:
-                  </Text>
-                  <Text type="success" style={{ fontSize: 14 }}>
-                    ₹{stats.totalEstimatedCost?.toLocaleString() || 0}
-                  </Text>
+          {!shouldHidePrices && (
+            <Row gutter={16} align="middle" style={{ marginTop: 12 }}>
+              <Col flex="auto">
+                <Space size={16}>
+                  <Space size={4}>
+                    <DollarOutlined style={{ fontSize: 16, color: "#52c41a" }} />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Total Estimated:
+                    </Text>
+                    <Text type="success" style={{ fontSize: 14 }}>
+                      ₹{stats.totalEstimatedCost?.toLocaleString() || 0}
+                    </Text>
+                  </Space>
+                  <Space size={4}>
+                    <DollarOutlined style={{ fontSize: 16, color: "#1890ff" }} />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Total Actual:
+                    </Text>
+                    <Text style={{ fontSize: 14, color: "#1890ff" }}>
+                      ₹{stats.totalActualCost?.toLocaleString() || 0}
+                    </Text>
+                  </Space>
                 </Space>
-                <Space size={4}>
-                  <DollarOutlined style={{ fontSize: 16, color: "#1890ff" }} />
-                  <Text strong style={{ fontSize: 14 }}>
-                    Total Actual:
-                  </Text>
-                  <Text style={{ fontSize: 14, color: "#1890ff" }}>
-                    ₹{stats.totalActualCost?.toLocaleString() || 0}
-                  </Text>
-                </Space>
-              </Space>
-            </Col>
-          </Row>
+              </Col>
+            </Row>
+          )}
           <Row gutter={16} align="middle">
             <Col span={8}>
               <Input
@@ -1387,6 +1447,22 @@ const ProjectManagement = () => {
             </Col>
             <Col span={4}>
               <Select
+                placeholder="Work Type"
+                value={workTypeFilter}
+                onChange={setWorkTypeFilter}
+                style={{ width: "100%" }}
+                allowClear={false}
+              >
+                <Option value="all">All Work Types</Option>
+                {workTypesData?.workTypes?.map((workType) => (
+                  <Option key={workType.id} value={workType.id}>
+                    {workType.name}
+                  </Option>
+                ))}
+              </Select>
+            </Col>
+            <Col span={4}>
+              <Select
                 placeholder="Client"
                 value={clientFilter}
                 onChange={setClientFilter}
@@ -1400,7 +1476,7 @@ const ProjectManagement = () => {
                 ))}
               </Select>
             </Col>
-            <Col span={8} style={{ textAlign: "right" }}>
+            <Col span={4} style={{ textAlign: "right" }}>
               <Button
                 type="primary"
                 icon={<PlusOutlined />}
@@ -1417,7 +1493,7 @@ const ProjectManagement = () => {
         {/* Projects Table */}
         <Card>
           <Table
-            columns={columns}
+            columns={columns.filter(Boolean)}
             dataSource={filteredProjects}
             rowKey="id"
             loading={(projectsLoading || statsLoading) && !isLoadingMore}

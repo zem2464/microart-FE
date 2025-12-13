@@ -50,7 +50,7 @@ const ClientForm = ({
   const { data: workTypesData } = useQuery(GET_WORK_TYPES, {
     fetchPolicy: "network-and-cache",
   });
-  const { data: usersData } = useQuery(GET_USERS, {
+  const { data: usersData, loading: usersLoading } = useQuery(GET_USERS, {
     fetchPolicy: "network-and-cache",
   });
   const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
@@ -275,7 +275,53 @@ const ClientForm = ({
     fullClientData,
     clientLoading,
     hasTaskPreferences: fullClientData?.client?.taskPreferences?.length || 0,
+    serviceProviders: fullClientData?.client?.serviceProviders,
+    serviceProvidersWithNestedData: fullClientData?.client?.serviceProviders?.map(sp => ({
+      id: sp.id,
+      serviceProviderId: sp.serviceProviderId,
+      hasServiceProviderObject: !!sp.serviceProvider,
+      serviceProviderData: sp.serviceProvider
+    }))
   });
+
+  // Merge users from API with service providers from client data to ensure all users are available as options
+  const userOptions = useMemo(() => {
+    const users = usersData?.users || [];
+    const serviceProviders = fullClientData?.client?.serviceProviders || [];
+    
+    console.log("Computing userOptions:", {
+      usersCount: users.length,
+      serviceProvidersCount: serviceProviders.length,
+      hasUsersData: !!usersData,
+      hasFullClientData: !!fullClientData,
+      rawServiceProviders: serviceProviders
+    });
+    
+    // Create a map to avoid duplicates
+    const userMap = new Map();
+    
+    // Add all users from the API
+    users.forEach(user => {
+      userMap.set(user.id, user);
+    });
+    
+    // Add service providers from client (if they're not already in the list)
+    serviceProviders.forEach(sp => {
+      if (sp.serviceProvider && sp.serviceProvider.id) {
+        const user = sp.serviceProvider;
+        console.log("Adding service provider user to options:", {
+          userId: user.id,
+          userName: `${user.firstName} ${user.lastName}`,
+          wasAlreadyInList: userMap.has(user.id)
+        });
+        userMap.set(user.id, user);
+      }
+    });
+    
+    const result = Array.from(userMap.values());
+    console.log("Computed userOptions count:", result.length, "IDs:", result.map(u => u.id));
+    return result;
+  }, [usersData, fullClientData]);
 
   const [createClient] = useMutation(CREATE_CLIENT, {
     onCompleted: () => {
@@ -378,6 +424,23 @@ const ClientForm = ({
         length: serviceProviderIds.length,
       });
 
+      // Check if all service provider IDs have corresponding user options
+      const allServiceProvidersInOptions = serviceProviderIds.length === 0 || serviceProviderIds.every(id =>
+        userOptions.some(user => user.id === id)
+      );
+      
+      console.log("Service Provider Availability Check:", {
+        serviceProviderIds,
+        userOptionsIds: userOptions.map(u => u.id),
+        allServiceProvidersInOptions,
+        usersLoading,
+        comparison: serviceProviderIds.map(spId => ({
+          serviceProviderId: spId,
+          foundInOptions: userOptions.some(u => u.id === spId),
+          matchingUser: userOptions.find(u => u.id === spId)
+        }))
+      });
+
       // Build complete form data object
       const formData = {
         ...clientData,
@@ -388,7 +451,9 @@ const ClientForm = ({
         phone: clientData.phone || clientData.contactNoWork,
         workTypes: workTypeIds,
         gradings: gradingIds,
-        serviceProviders: serviceProviderIds,
+        // Only set service providers if all users are available in options
+        // This prevents showing IDs instead of names
+        ...(allServiceProvidersInOptions && { serviceProviders: serviceProviderIds }),
         leader: clientData.leader?.id,
         notes: clientData.clientNotes,
         isCreditEnabled: clientData.isCreditEnabled,
@@ -451,8 +516,9 @@ const ClientForm = ({
     }
     // Removed 'form' from dependencies to prevent infinite loops
     // Form instance is stable and accessed within the effect
+    // Added userOptions and usersLoading to ensure form waits for user data
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [client, fullClientData]);
+  }, [client, fullClientData, userOptions, usersLoading]);
 
   // Separate effect to handle grading population after work types are loaded
   // This ensures gradings query has completed before we try to set grading values
@@ -1500,8 +1566,51 @@ const ClientForm = ({
                     mode="multiple"
                     placeholder="Select employees"
                     size="middle"
+                    loading={usersLoading}
+                    showSearch
+                    optionFilterProp="children"
+                    filterOption={(input, option) =>
+                      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                    }
+                    tagRender={(props) => {
+                      const { label, value, closable, onClose } = props;
+                      const user = userOptions.find(u => u.id === value);
+                      const displayName = user ? `${user.firstName} ${user.lastName}` : value;
+                      
+                      return (
+                        <span
+                          style={{
+                            marginRight: 3,
+                            padding: '0 7px',
+                            border: '1px solid #d9d9d9',
+                            borderRadius: '2px',
+                            background: '#fafafa',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            fontSize: '14px',
+                            lineHeight: '22px',
+                            height: '24px',
+                          }}
+                        >
+                          {displayName}
+                          {closable && (
+                            <span
+                              onClick={onClose}
+                              style={{
+                                marginLeft: 5,
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                color: '#00000073',
+                              }}
+                            >
+                              ✕
+                            </span>
+                          )}
+                        </span>
+                      );
+                    }}
                   >
-                    {usersData?.users?.map((user) => (
+                    {userOptions.map((user) => (
                       <Option key={user.id} value={user.id}>
                         {user.firstName} {user.lastName}
                       </Option>
@@ -1558,12 +1667,22 @@ const ClientForm = ({
                   label="Leader"
                   tooltip="Person in charge of this client"
                 >
-                  <Input 
-                    placeholder="Enter leader name" 
-                    size="middle" 
-                    autoComplete="new-password"
-                    data-form-type="other"
-                  />
+                  <Select
+                    placeholder="Select a leader"
+                    size="middle"
+                    showSearch
+                    optionFilterProp="children"
+                    loading={usersLoading}
+                    filterOption={(input, option) =>
+                      (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
+                    }
+                  >
+                    {usersData?.users?.map((user) => (
+                      <Option key={user.id} value={user.id}>
+                        {user.firstName} {user.lastName}
+                      </Option>
+                    ))}
+                  </Select>
                 </Form.Item>
               </Col>
             </Row>

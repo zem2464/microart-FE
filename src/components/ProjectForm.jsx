@@ -1,5 +1,17 @@
-import { useQuery, useMutation, useLazyQuery } from "@apollo/client";
+import {
+  useQuery,
+  useMutation,
+  useLazyQuery,
+  useReactiveVar,
+} from "@apollo/client";
 import { GET_CLIENTS } from "../graphql/clientQueries";
+import { userCacheVar } from "../cache/userCacheVar";
+import {
+  hasPermission,
+  MODULES,
+  ACTIONS,
+  generatePermission,
+} from "../config/permissions";
 import {
   GET_WORK_TYPES,
   GET_WORK_TYPE_FIELDS,
@@ -59,6 +71,25 @@ const ProjectForm = ({
   onFooterDataChange,
 }) => {
   const [form] = Form.useForm();
+  const user = useReactiveVar(userCacheVar);
+
+  // Check if user has limited permissions
+  const hasLimitedRead = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.LIMTEREAD)
+  );
+  const hasLimitedEdit = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.LIMITEDIT)
+  );
+  const hasFullRead = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.READ)
+  );
+
+  // Hide prices if user has limitedRead or limitedEdit (but not full read)
+  const shouldHidePrices = hasLimitedRead || hasLimitedEdit;
+
   const [loading, setLoading] = useState(false);
   const [selectedClientId, setSelectedClientId] = useState(null);
   const [creditExceeded, setCreditExceeded] = useState(false);
@@ -136,9 +167,18 @@ const ProjectForm = ({
   // Update parent with footer data whenever totals change
   useEffect(() => {
     if (onFooterDataChange) {
-      onFooterDataChange({ totalImageQuantity, totalCalculatedBudget });
+      onFooterDataChange({
+        totalImageQuantity,
+        totalCalculatedBudget,
+        shouldHidePrices,
+      });
     }
-  }, [totalImageQuantity, totalCalculatedBudget, onFooterDataChange]);
+  }, [
+    totalImageQuantity,
+    totalCalculatedBudget,
+    shouldHidePrices,
+    onFooterDataChange,
+  ]);
 
   // Fields that can be edited in active projects (basic details only)
   const isFieldEditableInActive = (fieldName) => {
@@ -1991,7 +2031,8 @@ const ProjectForm = ({
       {/* Credit Validation Alert */}
       {projectCreditValidation &&
         projectCreditValidation.creditLimitEnabled &&
-        !projectCreditValidation.canCreateProject && (
+        !projectCreditValidation.canCreateProject &&
+        !shouldHidePrices && (
           <Alert
             message="Credit Limit Exceeded"
             description={projectCreditValidation.message}
@@ -2007,7 +2048,7 @@ const ProjectForm = ({
         )}
 
       {/* Fly-on-Credit Cost Change Warning */}
-      {isFlyOnCredit && costChanged && (
+      {isFlyOnCredit && costChanged && !shouldHidePrices && (
         <Alert
           message="Cost Changed - Cannot Save"
           description={
@@ -2049,15 +2090,17 @@ const ProjectForm = ({
           description={
             <div>
               <p style={{ marginBottom: 0 }}>
-                This project has an approved credit request for{" "}
-                <strong>
-                  ₹
-                  {(
-                    project?.creditRequest?.requestedAmount || 0
-                  ).toLocaleString()}
-                </strong>
-                . You can edit project details, but the total cost must remain
-                unchanged.
+                This project has an approved credit request
+                {shouldHidePrices
+                  ? ""
+                  : ` for <strong>₹${(
+                      project?.creditRequest?.requestedAmount || 0
+                    ).toLocaleString()}</strong>`}
+                . You can edit project details
+                {shouldHidePrices
+                  ? ""
+                  : ", but the total cost must remain unchanged"}
+                .
               </p>
             </div>
           }
@@ -2516,9 +2559,8 @@ const ProjectForm = ({
                     const shortCodeDisplay = grading.shortCode
                       ? `[${grading.shortCode}] `
                       : "";
-                    const label = `${shortCodeDisplay}${
-                      grading.name
-                    } - ₹${Number(displayRate || 0).toLocaleString()}`;
+                    const priceDisplay = shouldHidePrices ? '' : ` - ₹${Number(displayRate || 0).toLocaleString()}`;
+                    const label = `${shortCodeDisplay}${grading.name}${priceDisplay}`;
                     return (
                       <Option key={grading.id} value={grading.id} label={label}>
                         <div
@@ -2540,8 +2582,13 @@ const ProjectForm = ({
                                 [{grading.shortCode}]
                               </span>
                             )}
-                            {grading.name} - ₹
-                            {Number(displayRate || 0).toLocaleString()}
+                            {grading.name}
+                            {!shouldHidePrices && (
+                              <>
+                                {' - ₹'}
+                                {Number(displayRate || 0).toLocaleString()}
+                              </>
+                            )}
                           </span>
                           {clientPref && (
                             <span style={{ color: "#52c41a", marginLeft: 8 }}>
@@ -2571,9 +2618,8 @@ const ProjectForm = ({
                       const shortCodeDisplay = grading.shortCode
                         ? `[${grading.shortCode}] `
                         : "";
-                      const label = `${shortCodeDisplay}${
-                        grading.name
-                      } - ₹${Number(displayRate || 0).toLocaleString()}`;
+                      const priceDisplay = shouldHidePrices ? '' : ` - ₹${Number(displayRate || 0).toLocaleString()}`;
+                      const label = `${shortCodeDisplay}${grading.name}${priceDisplay}`;
                       return (
                         <Option
                           key={grading.id}
@@ -2599,8 +2645,13 @@ const ProjectForm = ({
                                   [{grading.shortCode}]
                                 </span>
                               )}
-                              {grading.name} - ₹
-                              {Number(displayRate || 0).toLocaleString()}
+                              {grading.name}
+                              {!shouldHidePrices && (
+                                <>
+                                  {' - ₹'}
+                                  {Number(displayRate || 0).toLocaleString()}
+                                </>
+                              )}
                             </span>
                             {clientPref && (
                               <span style={{ color: "#52c41a", marginLeft: 8 }}>
@@ -2692,20 +2743,22 @@ const ProjectForm = ({
                         </span>
                       )}
                       {grading?.name || "Unknown Grading"}
-                      <div
-                        style={{
-                          fontSize: 12,
-                          color: "#8c8c8c",
-                          fontWeight: "normal",
-                          marginTop: 2,
-                        }}
-                      >
-                        Default: ₹{Number(defaultRate).toLocaleString()}/image
-                      </div>
+                      {!shouldHidePrices && (
+                        <div
+                          style={{
+                            fontSize: 12,
+                            color: "#8c8c8c",
+                            fontWeight: "normal",
+                            marginTop: 2,
+                          }}
+                        >
+                          Default: ₹{Number(defaultRate).toLocaleString()}/image
+                        </div>
+                      )}
                     </div>
 
                     <Row gutter={8}>
-                      <Col span={12}>
+                      <Col span={shouldHidePrices ? 24 : 12}>
                         <div
                           style={{
                             marginBottom: 4,
@@ -2734,88 +2787,92 @@ const ProjectForm = ({
                           size="small"
                         />
                       </Col>
-                      <Col span={12}>
-                        <div
-                          style={{
-                            marginBottom: 4,
-                            fontSize: 12,
-                            fontWeight: 500,
-                          }}
-                        >
-                          Custom Rate
-                          <span
-                            style={{ color: "#8c8c8c", fontWeight: "normal" }}
+                      {!shouldHidePrices && (
+                        <Col span={12}>
+                          <div
+                            style={{
+                              marginBottom: 4,
+                              fontSize: 12,
+                              fontWeight: 500,
+                            }}
                           >
-                            {" "}
-                            (₹/image)
-                          </span>
-                          {isUsingClientRate && (
+                            Custom Rate
                             <span
-                              style={{
-                                color: "#52c41a",
-                                fontSize: 10,
-                                marginLeft: 4,
-                              }}
+                              style={{ color: "#8c8c8c", fontWeight: "normal" }}
                             >
-                              ★ Client Rate
+                              {" "}
+                              (₹/image)
                             </span>
-                          )}
-                        </div>
-                        <InputNumber
-                          placeholder={
-                            clientCustomRate
-                              ? `Client: ${clientCustomRate}`
-                              : `Default: ${defaultRate}`
-                          }
-                          value={selectedGrading.customRate}
-                          min={0}
-                          // precision={2}
-                          onChange={(value) =>
-                            updateGradingCustomRate(index, value)
-                          }
-                          disabled={
-                            isActiveProject && !canEditFlyOnCreditProject
-                          }
-                          style={{
-                            width: "100%",
-                            backgroundColor: hasCustomRate
-                              ? "#e6f7ff"
-                              : isUsingClientRate
-                              ? "#f6ffed"
-                              : undefined,
-                          }}
-                          size="small"
-                        />
-                      </Col>
+                            {isUsingClientRate && (
+                              <span
+                                style={{
+                                  color: "#52c41a",
+                                  fontSize: 10,
+                                  marginLeft: 4,
+                                }}
+                              >
+                                ★ Client Rate
+                              </span>
+                            )}
+                          </div>
+                          <InputNumber
+                            placeholder={
+                              clientCustomRate
+                                ? `Client: ${clientCustomRate}`
+                                : `Default: ${defaultRate}`
+                            }
+                            value={selectedGrading.customRate}
+                            min={0}
+                            // precision={2}
+                            onChange={(value) =>
+                              updateGradingCustomRate(index, value)
+                            }
+                            disabled={
+                              isActiveProject && !canEditFlyOnCreditProject
+                            }
+                            style={{
+                              width: "100%",
+                              backgroundColor: hasCustomRate
+                                ? "#e6f7ff"
+                                : isUsingClientRate
+                                ? "#f6ffed"
+                                : undefined,
+                            }}
+                            size="small"
+                          />
+                        </Col>
+                      )}
                     </Row>
 
-                    <div
-                      style={{
-                        marginTop: 12,
-                        padding: "8px 12px",
-                        backgroundColor: "#f0f0f0",
-                        borderRadius: 4,
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <span style={{ fontSize: 12, color: "#595959" }}>
-                        Estimated Cost:
-                      </span>
-                      <span
+                    {!shouldHidePrices && (
+                      <div
                         style={{
-                          fontSize: 14,
-                          fontWeight: 600,
-                          color: "#1890ff",
+                          marginTop: 12,
+                          padding: "8px 12px",
+                          backgroundColor: "#f0f0f0",
+                          borderRadius: 4,
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
                         }}
                       >
-                        ₹
-                        {(
-                          (selectedGrading.imageQuantity || 0) * effectiveRate
-                        ).toLocaleString()}
-                      </span>
-                    </div>
+                        <span style={{ fontSize: 12, color: "#595959" }}>
+                          Estimated Cost:
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 14,
+                            fontWeight: 600,
+                            color: "#1890ff",
+                          }}
+                        >
+                          ₹
+                          {(
+                            (selectedGrading.imageQuantity || 0) * effectiveRate
+                          ).toLocaleString()}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </Col>
               );
