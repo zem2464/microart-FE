@@ -77,6 +77,7 @@ const STATUS_MAP = {
   ACTIVE: { label: "Active", color: "green" },
   IN_PROGRESS: { label: "In Progress", color: "processing" },
   REVIEW: { label: "Review", color: "cyan" },
+  DELIVERED: { label: "Delivered", color: "purple" },
   COMPLETED: { label: "Completed", color: "success" },
   CANCELLED: { label: "Cancelled", color: "error" },
   ON_HOLD: { label: "On Hold", color: "warning" },
@@ -659,7 +660,8 @@ const ProjectManagement = () => {
     cancelled: statsMap.cancelled?.count || 0,
     onHold: statsMap.on_hold?.count || 0,
     flyOnCredit: projectStatsResponse.flyOnCreditCount || 0, // Use dedicated fly-on-credit count from response
-    noInvoice: projectStatsResponse.noInvoiceCount || 0, // Use server-side count for completed projects without invoices
+    noInvoice: projectStatsResponse.noInvoiceCount || 0, // Completed projects without invoices
+    notDelivered: projectStatsResponse.notDeliveredCount || 0, // Completed projects with invoice but not delivered
     totalEstimatedCost: projectStats.reduce(
       (sum, s) => sum + (s.totalEstimatedCost || 0),
       0
@@ -854,6 +856,44 @@ const ProjectManagement = () => {
 
   const handleSaveStatusEdit = async (projectId) => {
     const newStatus = tempValues[`status_${projectId}`];
+    
+    // Find the project to validate
+    const project = allProjects.find(p => p.id === projectId);
+    
+    // Validate DELIVERED status change
+    if (newStatus?.toLowerCase() === 'delivered') {
+      if (!project) {
+        message.error('Project not found');
+        return;
+      }
+
+      // Invoice is REQUIRED for all client types before marking as delivered
+      if (!project.invoice && !project.invoiceId) {
+        message.error('Cannot mark as delivered: Invoice must be generated first');
+        return;
+      }
+
+      // Additional validation based on client type
+      const clientType = project.client?.clientType;
+      const hasApprovePermission = hasPermission(user, generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE));
+      const isPaid = project.invoice?.status === 'fully_paid' || project.invoice?.balanceAmount <= 0;
+      
+      if (clientType === 'walkIn') {
+        // Walk-in clients: Need permission AND payment (in addition to invoice)
+        if (!hasApprovePermission) {
+          message.error('You do not have permission to mark walk-in projects as delivered. Only users with project approval permission can do this.');
+          return;
+        }
+        
+        if (!isPaid) {
+          const balance = project.invoice?.balanceAmount || 0;
+          message.error(`Cannot mark walk-in project as delivered: Invoice must be paid first. Current balance: ₹${balance.toFixed(2)}.`);
+          return;
+        }
+      }
+      // Permanent clients: Invoice is sufficient (no additional checks)
+    }
+    
     try {
       await updateProjectStatus({
         variables: {
@@ -868,7 +908,7 @@ const ProjectManagement = () => {
       delete newValues[`status_${projectId}`];
       setTempValues(newValues);
     } catch (error) {
-      message.error("Failed to update project status");
+      message.error(error.message || "Failed to update project status");
     }
   };
 
@@ -925,6 +965,18 @@ const ProjectManagement = () => {
           })
         );
 
+        // Check if user can select DELIVERED status
+        const hasApprovePermission = hasPermission(user, generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE));
+        const hasInvoice = record.invoice || record.invoiceId;
+        const clientType = record.client?.clientType;
+        const isPaid = record.invoice?.status === 'fully_paid' || record.invoice?.balanceAmount <= 0;
+        const isCompleted = record.status?.toLowerCase() === 'completed';
+        
+        // If project is completed AND has invoice, show ONLY delivered option
+        const filteredStatusOptions = (isCompleted && hasInvoice) 
+          ? statusOptions.filter(opt => opt.value === 'delivered')
+          : statusOptions;
+
         if (isEditing) {
           return (
             <div className="flex items-center space-x-2">
@@ -939,11 +991,35 @@ const ProjectManagement = () => {
                 size="small"
                 style={{ width: 140 }}
               >
-                {statusOptions.map((option) => (
-                  <Option key={option.value} value={option.value}>
-                    <Tag color={option.color}>{option.label}</Tag>
-                  </Option>
-                ))}
+                {filteredStatusOptions.map((option) => {
+                  // Disable DELIVERED option based on permissions
+                  let disabled = false;
+                  let title = '';
+                  
+                  if (option.value === 'delivered') {
+                    if (!hasInvoice) {
+                      disabled = true;
+                      title = 'Invoice must be generated first';
+                    } else if (clientType === 'walkIn') {
+                      // Walk-in: Need permission AND payment
+                      if (!hasApprovePermission) {
+                        disabled = true;
+                        title = 'Permission required to deliver walk-in projects';
+                      } else if (!isPaid) {
+                        disabled = true;
+                        title = 'Invoice must be paid for walk-in projects';
+                      }
+                    }
+                    // Permanent: No restrictions
+                  }
+                  
+                  return (
+                    <Option key={option.value} value={option.value} disabled={disabled} title={title}>
+                      <Tag color={option.color}>{option.label}</Tag>
+                      {disabled && <Text type="secondary" style={{ fontSize: '10px', marginLeft: '4px' }}>🔒</Text>}
+                    </Option>
+                  );
+                })}
               </Select>
               <Button
                 type="primary"
@@ -1337,24 +1413,53 @@ const ProjectManagement = () => {
                     padding: "4px 8px",
                     borderRadius: "4px",
                     transition: "background-color 0.3s",
+                    backgroundColor:
+                      stats.noInvoice > 0 ? "#fff7e6" : "transparent",
+                    border: stats.noInvoice > 0 ? "1px solid #ffa940" : "none",
                   }}
-                  className="hover:bg-gray-100"
+                  className="hover:bg-orange-100"
+                  onClick={() => setStatusFilter("NO_INVOICE")}
+                >
+                  <ExclamationCircleOutlined
+                    style={{ fontSize: 16, color: "#fa8c16" }}
+                  />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Completed (No Invoice):
+                  </Text>
+                  <Tag
+                    color="orange"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.noInvoice}
+                  </Tag>
+                </Space>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
+                    backgroundColor:
+                      stats.notDelivered > 0 ? "#e6f7ff" : "transparent",
+                    border: stats.notDelivered > 0 ? "1px solid #1890ff" : "none",
+                  }}
+                  className="hover:bg-blue-100"
                   onClick={() => setStatusFilter("COMPLETED")}
                 >
                   <CheckCircleOutlined
                     style={{ fontSize: 16, color: "#1890ff" }}
                   />
                   <Text strong style={{ fontSize: 14 }}>
-                    Completed:
+                    Not Delivered:
                   </Text>
                   <Tag
                     color="cyan"
                     style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                   >
-                    {stats.completed}
+                    {stats.notDelivered}
                   </Tag>
                 </Space>
-
                 <Space
                   size={4}
                   style={{
@@ -1377,33 +1482,6 @@ const ProjectManagement = () => {
                     style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                   >
                     {stats.flyOnCredit}
-                  </Tag>
-                </Space>
-                <Space
-                  size={4}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
-                    backgroundColor:
-                      stats.noInvoice > 0 ? "#fff7e6" : "transparent",
-                    border: stats.noInvoice > 0 ? "1px solid #ffa940" : "none",
-                  }}
-                  className="hover:bg-orange-100"
-                  onClick={() => setStatusFilter("NO_INVOICE")}
-                >
-                  <ExclamationCircleOutlined
-                    style={{ fontSize: 16, color: "#fa8c16" }}
-                  />
-                  <Text strong style={{ fontSize: 14 }}>
-                    No Invoice:
-                  </Text>
-                  <Tag
-                    color="orange"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
-                  >
-                    {stats.noInvoice}
                   </Tag>
                 </Space>
               </Space>

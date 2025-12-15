@@ -27,6 +27,7 @@ export const GET_PROJECTS = gql`
           id
           clientCode
           displayName
+          clientType
         }
         projectWorkTypes {
           id
@@ -61,6 +62,7 @@ export const GET_PROJECTS = gql`
           id
           invoiceNumber
           totalAmount
+          balanceAmount
           status
         }
         # Backward compatibility fields
@@ -115,6 +117,7 @@ export const GET_PROJECT = gql`
         id
         clientCode
         displayName
+        clientType
       }
       projectWorkTypes {
         id
@@ -194,6 +197,7 @@ export const GET_PROJECT = gql`
         id
         invoiceNumber
         totalAmount
+        balanceAmount
         status
       }
     }
@@ -612,6 +616,9 @@ export const GET_PROJECT_STATS = gql`
       noInvoiceCount
       noInvoiceEstimatedCost
       noInvoiceActualCost
+      notDeliveredCount
+      notDeliveredEstimatedCost
+      notDeliveredActualCost
     }
   }
 `;
@@ -647,6 +654,7 @@ export const GET_PROJECT_DETAIL = gql`
         id
         clientCode
         displayName
+        clientType
       }
       
       # Work Types

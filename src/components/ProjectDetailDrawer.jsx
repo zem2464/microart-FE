@@ -66,6 +66,7 @@ const STATUS_MAP = {
   COMPLETED: { label: "Completed", color: "success" },
   CANCELLED: { label: "Cancelled", color: "error" },
   ON_HOLD: { label: "On Hold", color: "warning" },
+  DELIVERED: { label: "Delivered", color: "purple" },
   REQUESTED: { label: "Pending Approval", color: "purple" },
 };
 
