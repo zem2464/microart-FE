@@ -7,14 +7,20 @@ import {
   Card, 
   Space, 
   Tooltip,
-  Collapse
+  Collapse,
+  Badge
 } from 'antd';
 import { 
   UserOutlined, 
   EditOutlined, 
   PlusOutlined, 
   DeleteOutlined,
-  HistoryOutlined 
+  HistoryOutlined,
+  SwapOutlined,
+  CheckCircleOutlined,
+  FileImageOutlined,
+  TeamOutlined,
+  SyncOutlined
 } from '@ant-design/icons';
 
 const { Text } = Typography;
@@ -61,9 +67,171 @@ const AuditDisplay = ({ auditLogs, loading = false }) => {
         return { icon: <EditOutlined />, color: 'blue', text: 'Updated' };
       case 'DELETE':
         return { icon: <DeleteOutlined />, color: 'red', text: 'Deleted' };
+      case 'AUTO_UPDATE':
+        return { icon: <SyncOutlined />, color: 'cyan', text: 'Auto Updated' };
       default:
         return { icon: <HistoryOutlined />, color: 'default', text: action };
     }
+  };
+
+  // Helper function to parse metadata and extract task-specific information
+  const extractTaskInfo = (log) => {
+    if (!log.metadata) return null;
+    
+    try {
+      const metadata = typeof log.metadata === 'string' 
+        ? JSON.parse(log.metadata) 
+        : log.metadata;
+      
+      return {
+        operationType: metadata.operationType,
+        taskCode: metadata.taskCode,
+        taskTypeId: metadata.taskTypeId,
+        taskTypeName: metadata.taskTypeName,
+        gradingId: metadata.gradingId,
+        gradingName: metadata.gradingName,
+        projectId: metadata.projectId,
+        assigneeName: metadata.assigneeName,
+        assignedByName: metadata.assignedByName,
+        oldAssigneeName: metadata.oldAssigneeName,
+        oldStatus: metadata.oldStatus,
+        newStatus: metadata.newStatus,
+        userName: metadata.userName,
+        notes: metadata.notes,
+        oldQuantity: metadata.oldQuantity,
+        newQuantity: metadata.newQuantity,
+        entityType: metadata.entityType,
+        entityCode: metadata.entityCode,
+        assignedQuantity: metadata.assignedQuantity
+      };
+    } catch (error) {
+      console.error('Error parsing metadata:', error);
+      return null;
+    }
+  };
+
+  // Helper function to render task-specific summary badge
+  const renderTaskSummary = (log, taskInfo) => {
+    if (!taskInfo) return null;
+
+    const { operationType } = taskInfo;
+
+    // Task Status Change
+    if (operationType === 'TASK_STATUS_CHANGE') {
+      return (
+        <div className="mb-3 p-3 bg-blue-50 border-l-4 border-blue-500 rounded">
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <Space>
+              <SwapOutlined className="text-blue-600" />
+              <Text strong className="text-blue-800">Task Status Changed</Text>
+            </Space>
+            <Space wrap size="small">
+              <Tag color="default">{taskInfo.taskCode}</Tag>
+              {taskInfo.taskTypeName && (
+                <Tag color="cyan" icon={<FileImageOutlined />}>{taskInfo.taskTypeName}</Tag>
+              )}
+              {taskInfo.gradingName && (
+                <Tag color="blue">{taskInfo.gradingName}</Tag>
+              )}
+            </Space>
+            <Space split="→" size="small">
+              <Tag color="orange">{taskInfo.oldStatus}</Tag>
+              <Tag color="green">{taskInfo.newStatus}</Tag>
+            </Space>
+            {taskInfo.notes && (
+              <Text type="secondary" className="text-xs">Note: {taskInfo.notes}</Text>
+            )}
+          </Space>
+        </div>
+      );
+    }
+
+    // Task Assignment
+    if (operationType === 'TASK_ASSIGNMENT') {
+      return (
+        <div className="mb-3 p-3 bg-purple-50 border-l-4 border-purple-500 rounded">
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <Space>
+              <TeamOutlined className="text-purple-600" />
+              <Text strong className="text-purple-800">Task Assignment</Text>
+            </Space>
+            <Space wrap size="small">
+              <Tag color="default">{taskInfo.taskCode}</Tag>
+              {taskInfo.taskTypeName && (
+                <Tag color="cyan" icon={<FileImageOutlined />}>{taskInfo.taskTypeName}</Tag>
+              )}
+              {taskInfo.gradingName && (
+                <Tag color="blue">{taskInfo.gradingName}</Tag>
+              )}
+            </Space>
+            <Space wrap>
+              {taskInfo.oldAssigneeName && (
+                <>
+                  <Tag color="red" icon={<UserOutlined />}>{taskInfo.oldAssigneeName}</Tag>
+                  <Text type="secondary">→</Text>
+                </>
+              )}
+              <Tag color="green" icon={<UserOutlined />}>{taskInfo.assigneeName}</Tag>
+              {taskInfo.assignedQuantity && (
+                <Tag color="geekblue" icon={<FileImageOutlined />}>
+                  {taskInfo.assignedQuantity} images
+                </Tag>
+              )}
+            </Space>
+            {taskInfo.assignedByName && (
+              <Text type="secondary" className="text-xs">Assigned by: {taskInfo.assignedByName}</Text>
+            )}
+          </Space>
+        </div>
+      );
+    }
+
+    // Quantity Change (Image completion tracking)
+    if (operationType === 'QUANTITY_CHANGE') {
+      const quantityDiff = (taskInfo.newQuantity || 0) - (taskInfo.oldQuantity || 0);
+      const isIncrease = quantityDiff > 0;
+      
+      return (
+        <div className="mb-3 p-3 bg-green-50 border-l-4 border-green-500 rounded">
+          <Space direction="vertical" size="small" style={{ width: '100%' }}>
+            <Space>
+              <FileImageOutlined className="text-green-600" />
+              <Text strong className="text-green-800">Image Quantity Updated</Text>
+            </Space>
+            <Space wrap size="small">
+              <Tag color="default">{taskInfo.entityCode || taskInfo.taskCode}</Tag>
+              {taskInfo.taskTypeName && (
+                <Tag color="cyan" icon={<FileImageOutlined />}>{taskInfo.taskTypeName}</Tag>
+              )}
+              {taskInfo.gradingName && (
+                <Tag color="blue">{taskInfo.gradingName}</Tag>
+              )}
+            </Space>
+            <Space>
+              <Badge 
+                count={taskInfo.oldQuantity || 0} 
+                style={{ backgroundColor: '#d9d9d9' }}
+                showZero
+              />
+              <Text type="secondary">→</Text>
+              <Badge 
+                count={taskInfo.newQuantity || 0} 
+                style={{ backgroundColor: isIncrease ? '#52c41a' : '#faad14' }}
+                showZero
+              />
+              <Tag color={isIncrease ? 'success' : 'warning'}>
+                {isIncrease ? '+' : ''}{quantityDiff} images
+              </Tag>
+            </Space>
+            {taskInfo.assigneeName && (
+              <Text type="secondary" className="text-xs">By: {taskInfo.assigneeName}</Text>
+            )}
+          </Space>
+        </div>
+      );
+    }
+
+    return null;
   };
 
   // Helper function to parse JSON values safely
@@ -78,6 +246,7 @@ const AuditDisplay = ({ auditLogs, loading = false }) => {
 
   // Helper function to format field names nicely
   const formatFieldName = (field) => {
+    if (!field || typeof field !== 'string') return 'Unknown Field';
     return field
       .replace(/([A-Z])/g, ' $1')
       .replace(/^./, str => str.toUpperCase())
@@ -160,7 +329,13 @@ const AuditDisplay = ({ auditLogs, loading = false }) => {
           const parsed = parseJsonValue(log.changedFields);
           if (Array.isArray(parsed)) {
             // If it's an array of change objects [{field, from, to}]
-            changedFields = parsed.map(change => change.field);
+            changedFields = parsed.map(change => {
+              if (typeof change === 'object' && change !== null && change.field) {
+                return change.field;
+              }
+              // If it's already a string (field name)
+              return change;
+            }).filter(field => field && typeof field === 'string');
           } else {
             // If it's just an array of field names
             changedFields = parsed;
@@ -172,6 +347,9 @@ const AuditDisplay = ({ auditLogs, loading = false }) => {
       } else {
         changedFields = Object.keys(newValues);
       }
+      
+      // Filter out any invalid field names
+      changedFields = changedFields.filter(field => field && typeof field === 'string');
       
       const data = changedFields.map((field, index) => ({
         key: index,
@@ -217,6 +395,7 @@ const AuditDisplay = ({ auditLogs, loading = false }) => {
       <Timeline mode="left" className="mt-4">
         {auditLogs.map((log) => {
           const actionInfo = getActionInfo(log.action);
+          const taskInfo = extractTaskInfo(log);
           
           return (
             <Timeline.Item
@@ -251,10 +430,16 @@ const AuditDisplay = ({ auditLogs, loading = false }) => {
                       {actionInfo.text}
                     </Tag>
                     <Tag color="default">
+                      {log.tableName}
+                    </Tag>
+                    <Tag color="default">
                       {log.status}
                     </Tag>
                   </Space>
                 </div>
+
+                {/* Task-Specific Summary (NEW) */}
+                {renderTaskSummary(log, taskInfo)}
 
                 {/* Description */}
                 {log.description && (

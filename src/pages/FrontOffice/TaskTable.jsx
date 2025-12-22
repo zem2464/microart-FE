@@ -96,6 +96,8 @@ const TaskTable = () => {
 
   const currentUser = useReactiveVar(userCacheVar);
   const [searchText, setSearchText] = useState("");
+  const [clientSearch, setClientSearch] = useState("");
+  const [projectSearch, setProjectSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // Show all tasks including completed
   const [userFilter, setUserFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
@@ -108,6 +110,22 @@ const TaskTable = () => {
   const scrollContainerRef = useRef(null);
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState("DESC");
+
+  // Reset filters to default values
+  const handleResetFilters = useCallback(() => {
+    setSearchText("");
+    setClientSearch("");
+    setProjectSearch("");
+    setStatusFilter("all");
+    setUserFilter("all");
+    setPriorityFilter("all");
+    setSelectedWorkTypeId("all");
+    setGradingFilter("all");
+    setSortBy("createdAt");
+    setSortOrder("DESC");
+    setPage(1);
+    message.success("Filters reset to default values");
+  }, []);
 
   // Editing states for inline editing
   const [editingCell, setEditingCell] = useState({
@@ -232,12 +250,25 @@ const TaskTable = () => {
   const [updateTask, { loading: updateTaskLoading }] = useMutation(
     UPDATE_TASK,
     {
-      onCompleted: async () => {
+      // Automatically refetch GET_TASKS query after mutation
+      refetchQueries: [
+        {
+          query: GET_TASKS,
+          variables: {
+            filters: buildFilters(),
+            page: 1,
+            limit: 50,
+            sortBy: sortBy,
+            sortOrder: sortOrder,
+            search: searchText || undefined,
+          },
+        },
+      ],
+      awaitRefetchQueries: true, // Wait for refetch before completing
+      onCompleted: async (data) => {
         message.success("Task updated successfully");
-        setIsInlineUpdating(true);
-        await refetchTasks();
-        setIsInlineUpdating(false);
         setEditedData({});
+        cancelEditCell();
       },
       onError: (error) => {
         message.error(`Failed to update task: ${error.message}`);
@@ -423,7 +454,38 @@ const TaskTable = () => {
   const groupedByWorkType = useMemo(() => {
     const grouped = {};
 
-    tasks.forEach((task) => {
+    // Apply client and project search filters
+    const clientSearchTerm = clientSearch.trim().toLowerCase();
+    const projectSearchTerm = projectSearch.trim().toLowerCase();
+
+    const filteredTasks = tasks.filter((task) => {
+      // Client search filter
+      if (clientSearchTerm) {
+        const client = task?.project?.client;
+        const clientMatches = [
+          client?.clientCode,
+          client?.displayName,
+          client?.companyName,
+        ].some((value) => value?.toLowerCase().includes(clientSearchTerm));
+        
+        if (!clientMatches) return false;
+      }
+
+      // Project search filter
+      if (projectSearchTerm) {
+        const project = task?.project;
+        const projectMatches = [
+          project?.name,
+          project?.projectCode,
+        ].some((value) => value?.toLowerCase().includes(projectSearchTerm));
+        
+        if (!projectMatches) return false;
+      }
+
+      return true;
+    });
+
+    filteredTasks.forEach((task) => {
       // Since backend filters by worktype, all tasks should be for selected worktype
       // Use selectedWorkTypeId directly
       const workTypeId = selectedWorkTypeId;
@@ -466,7 +528,7 @@ const TaskTable = () => {
     });
 
     return grouped;
-  }, [tasks, selectedWorkTypeId]);
+  }, [tasks, selectedWorkTypeId, clientSearch, projectSearch]);
 
   // Convert grouped data to table format for each worktype
   const tableDataByWorkType = useMemo(() => {
@@ -661,6 +723,13 @@ const TaskTable = () => {
     const userWorkTypeIds =
       currentUser?.workTypes?.map((wt) => wt.id.toString()) || [];
 
+    console.log('[WorkType Filter] User work types:', {
+      userId: currentUser?.id,
+      userEmail: currentUser?.email,
+      userWorkTypeIds,
+      userWorkTypeNames: currentUser?.workTypes?.map(wt => wt.name) || []
+    });
+
     // Create tabs from all available worktypes
     worktypes.forEach((workType) => {
       if (workType.isActive) {
@@ -668,10 +737,16 @@ const TaskTable = () => {
 
         // Filter: only show work types assigned to the user
         // If user has no work types assigned, show all (for backward compatibility/admins)
-        if (
-          userWorkTypeIds.length === 0 ||
-          userWorkTypeIds.includes(workTypeId)
-        ) {
+        const shouldShow = userWorkTypeIds.length === 0 || userWorkTypeIds.includes(workTypeId);
+        
+        console.log(`[WorkType Filter] ${workType.name}:`, {
+          workTypeId,
+          isAssignedToUser: userWorkTypeIds.includes(workTypeId),
+          shouldShow,
+          reason: userWorkTypeIds.length === 0 ? 'No work types (show all)' : userWorkTypeIds.includes(workTypeId) ? 'Assigned' : 'Not assigned'
+        });
+
+        if (shouldShow) {
           result[workTypeId] = {
             workTypeId,
             workTypeName: workType.name,
@@ -698,7 +773,17 @@ const TaskTable = () => {
       }
     );
 
-    return result;
+    // Preserve the sortOrder from backend for tab display
+    // Convert object back to array and sort by original workType order
+    const sortedResult = {};
+    worktypes.forEach((workType) => {
+      const workTypeId = workType.id.toString();
+      if (result[workTypeId]) {
+        sortedResult[workTypeId] = result[workTypeId];
+      }
+    });
+
+    return sortedResult;
   }, [worktypes, tableDataByWorkType, currentUser]);
 
   // Set default worktype tab when data loads
@@ -754,7 +839,8 @@ const TaskTable = () => {
       const input = {};
 
       if (field === "assigneeId") {
-        input.assigneeId = editedData.assigneeId || null;
+        // Explicitly handle null/undefined to allow clearing assignee
+        input.assigneeId = editedData.assigneeId !== undefined ? editedData.assigneeId : null;
       } else if (field === "assignees") {
         // Handle multiple user assignments
         const currentAssignments = task.taskAssignments || [];
@@ -853,6 +939,8 @@ const TaskTable = () => {
         input.status = editedData.status;
       }
 
+      console.log(`[saveTaskCell] Updating task ${task.id} field=${field}`, input);
+
       await updateTask({
         variables: {
           id: task.id,
@@ -860,8 +948,7 @@ const TaskTable = () => {
         },
       });
 
-      message.success("Task updated successfully");
-      cancelEditCell();
+      // Don't call cancelEditCell here - it's handled in mutation onCompleted
     } catch (error) {
       console.error("Error saving task:", error);
       message.error(`Failed to update task: ${error.message}`);
@@ -1662,13 +1749,13 @@ const TaskTable = () => {
           <Row gutter={16} align="middle">
             <Col span={6}>
               <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
-                Search
+                Client Search
               </div>
               <Input
-                placeholder="Search projects, clients..."
+                placeholder="Client code, name, company..."
                 prefix={<SearchOutlined />}
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
+                value={clientSearch}
+                onChange={(e) => setClientSearch(e.target.value)}
                 allowClear
               />
             </Col>
@@ -1768,14 +1855,36 @@ const TaskTable = () => {
                 <Option value="C">Low</Option>
               </Select>
             </Col>
-            <Col span={1} style={{ textAlign: "right", paddingTop: 20 }}>
-              <Button
-                icon={<ReloadOutlined />}
-                onClick={() => {
-                  refetchTasks();
-                  refetchWorkTypes();
-                }}
+            <Col span={3}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Project Search
+              </div>
+              <Input
+                placeholder="Project name or code..."
+                prefix={<SearchOutlined />}
+                value={projectSearch}
+                onChange={(e) => setProjectSearch(e.target.value)}
+                allowClear
               />
+            </Col>
+            <Col span={2} style={{ textAlign: "right", paddingTop: 20 }}>
+              <Space>
+                <Tooltip title="Reset Filters">
+                  <Button
+                    icon={<CloseCircleOutlined />}
+                    onClick={handleResetFilters}
+                  />
+                </Tooltip>
+                <Tooltip title="Refresh">
+                  <Button
+                    icon={<ReloadOutlined />}
+                    onClick={() => {
+                      refetchTasks();
+                      refetchWorkTypes();
+                    }}
+                  />
+                </Tooltip>
+              </Space>
             </Col>
           </Row>
         </Card>
@@ -1880,7 +1989,6 @@ const TaskTable = () => {
                           columns={generateColumnsForWorkType(workTypeId)}
                           dataSource={actualData.rows}
                           pagination={false}
-                          scroll={{ y: 600 }}
                           size="small"
                           tableLayout="fixed"
                           // loading={updateTaskLoading}

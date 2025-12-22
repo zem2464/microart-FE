@@ -83,6 +83,7 @@ export const TASK_FRAGMENT = gql`
         id
         clientCode
         displayName
+        companyName
         colorCorrectionStyle
         transferMode
         clientNotes

@@ -117,14 +117,20 @@ const ProjectDetailDrawer = ({ projectId }) => {
     fetchPolicy: "cache-and-network",
   });
 
-  // Fetch tasks separately with project filter
+  // Fetch tasks separately with project filter - include all statuses including completed
   const {
     data: tasksData,
     loading: tasksLoading,
     refetch: refetchTasks,
   } = useQuery(GET_TASKS, {
     variables: {
-      filters: { projectId: projectId },
+      filters: { 
+        projectId: projectId,
+        // Explicitly include all statuses including COMPLETED
+        statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
+        // Include inactive tasks (soft-deleted) to show completed tasks
+        includeInactive: true
+      },
       page: 1,
       limit: 1000,
       sortBy: "createdAt",
@@ -132,6 +138,20 @@ const ProjectDetailDrawer = ({ projectId }) => {
     },
     skip: !projectId,
     fetchPolicy: "cache-and-network",
+    onCompleted: (data) => {
+      console.log('[ProjectDetailDrawer] GET_TASKS completed. Tasks received:', data?.tasks?.tasks?.length || 0);
+      if (data?.tasks?.tasks?.length > 0) {
+        console.log('[ProjectDetailDrawer] Sample tasks:', data.tasks.tasks.slice(0, 3).map(t => ({ 
+          id: t.id, 
+          taskCode: t.taskCode, 
+          status: t.status,
+          isActive: t.isActive 
+        })));
+      }
+    },
+    onError: (error) => {
+      console.error('[ProjectDetailDrawer] GET_TASKS error:', error);
+    }
   });
 
   // Fetch available users
@@ -172,7 +192,11 @@ const ProjectDetailDrawer = ({ projectId }) => {
       {
         query: GET_TASKS,
         variables: {
-          filters: { projectId: projectId },
+          filters: { 
+            projectId: projectId,
+            statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
+            includeInactive: true
+          },
           page: 1,
           limit: 1000,
           sortBy: "createdAt",
@@ -181,11 +205,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
       },
     ],
     awaitRefetchQueries: true,
-    update(cache) {
-      // Evict all tasks to force fresh fetch
-      cache.evict({ fieldName: "tasks" });
-      cache.gc();
-    },
     onCompleted: () => {
       message.success("Task updated successfully");
       cancelEditCell();
@@ -200,7 +219,11 @@ const ProjectDetailDrawer = ({ projectId }) => {
       {
         query: GET_TASKS,
         variables: {
-          filters: { projectId: projectId },
+          filters: { 
+            projectId: projectId,
+            statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
+            includeInactive: true
+          },
           page: 1,
           limit: 1000,
           sortBy: "createdAt",
@@ -209,12 +232,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
       },
     ],
     awaitRefetchQueries: true,
-    update(cache) {
-      // Evict all tasks and taskAssignments to force fresh fetch
-      cache.evict({ fieldName: "tasks" });
-      cache.evict({ fieldName: "taskAssignments" });
-      cache.gc();
-    },
     onCompleted: () => {
       message.success("Assignments updated successfully");
       cancelEditCell();
@@ -229,7 +246,11 @@ const ProjectDetailDrawer = ({ projectId }) => {
       {
         query: GET_TASKS,
         variables: {
-          filters: { projectId: projectId },
+          filters: { 
+            projectId: projectId,
+            statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
+            includeInactive: true
+          },
           page: 1,
           limit: 1000,
           sortBy: "createdAt",
@@ -238,12 +259,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
       },
     ],
     awaitRefetchQueries: true,
-    update(cache) {
-      // Evict all tasks and taskAssignments to force fresh fetch
-      cache.evict({ fieldName: "tasks" });
-      cache.evict({ fieldName: "taskAssignments" });
-      cache.gc();
-    },
   });
 
   const [updateTaskAssignment] = useMutation(UPDATE_TASK_ASSIGNMENT, {
@@ -251,7 +266,11 @@ const ProjectDetailDrawer = ({ projectId }) => {
       {
         query: GET_TASKS,
         variables: {
-          filters: { projectId: projectId },
+          filters: { 
+            projectId: projectId,
+            statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
+            includeInactive: true
+          },
           page: 1,
           limit: 1000,
           sortBy: "createdAt",
@@ -260,12 +279,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
       },
     ],
     awaitRefetchQueries: true,
-    update(cache) {
-      // Evict all tasks and taskAssignments to force fresh fetch
-      cache.evict({ fieldName: "tasks" });
-      cache.evict({ fieldName: "taskAssignments" });
-      cache.gc();
-    },
     onCompleted: () => {
       message.success("Completed quantity updated successfully");
       cancelEditCell();
@@ -277,7 +290,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
 
   const project = data?.project;
   const tasks = tasksData?.tasks?.tasks || [];
-    const [projectNotesInput, setProjectNotesInput] = useState("");
+  const [projectNotesInput, setProjectNotesInput] = useState("");
     const [clientNotesInput, setClientNotesInput] = useState("");
 
     React.useEffect(() => {
@@ -512,8 +525,24 @@ const ProjectDetailDrawer = ({ projectId }) => {
     const projectGradings = project.projectGradings || [];
     if (projectGradings.length === 0) return [];
 
-    // Create tabs based on projectWorkTypes (not grading.workType which is null)
-    return project.projectWorkTypes
+    // Sort projectWorkTypes by workType.sortOrder to maintain BackOffice configuration order
+    const sortedProjectWorkTypes = [...project.projectWorkTypes].sort((a, b) => {
+      const workTypeA = allWorkTypes.find((wt) => wt.id === a.workTypeId);
+      const workTypeB = allWorkTypes.find((wt) => wt.id === b.workTypeId);
+      const sortOrderA = workTypeA?.sortOrder ?? 999;
+      const sortOrderB = workTypeB?.sortOrder ?? 999;
+      
+      // Sort by sortOrder first, then by name
+      if (sortOrderA !== sortOrderB) {
+        return sortOrderA - sortOrderB;
+      }
+      const nameA = workTypeA?.name || '';
+      const nameB = workTypeB?.name || '';
+      return nameA.localeCompare(nameB);
+    });
+
+    // Create tabs based on sorted projectWorkTypes
+    return sortedProjectWorkTypes
       .map((projectWorkType) => {
         const workTypeId = projectWorkType.workTypeId;
         const workTypeName = projectWorkType.workType?.name || "Unknown";
