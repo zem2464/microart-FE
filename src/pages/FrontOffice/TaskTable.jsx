@@ -107,7 +107,6 @@ const TaskTable = () => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const scrollContainerRef = useRef(null);
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState("DESC");
 
@@ -389,13 +388,21 @@ const TaskTable = () => {
   };
 
   // Handle scroll event for infinite scroll (same as ProjectManagement)
-  const handleScroll = (e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
+  const handleScroll = useCallback(() => {
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+    const scrollHeight = document.documentElement.scrollHeight;
+    const clientHeight = window.innerHeight;
     // Trigger load more when scrolled to 80% of the content
     if (scrollHeight - scrollTop <= clientHeight * 1.2) {
       loadMore();
     }
-  };
+  }, [loadMore]);
+
+  // Attach window scroll listener
+  useEffect(() => {
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
 
   const tasks = allTasks;
   const users = usersData?.availableUsers || [];
@@ -1991,6 +1998,7 @@ const TaskTable = () => {
                           pagination={false}
                           size="small"
                           tableLayout="fixed"
+                          scroll={{ x: 'max-content' }}
                           // loading={updateTaskLoading}
                           rowKey="key"
                           rowClassName={(record, index) => {
@@ -2019,6 +2027,18 @@ const TaskTable = () => {
             )}
           />
         </Card>
+        
+        {/* Infinite Scroll Loading Indicators */}
+        {isLoadingMore && (
+          <div style={{ textAlign: "center", padding: "16px" }}>
+            <Text type="secondary">Loading more tasks...</Text>
+          </div>
+        )}
+        {!hasMore && allTasks.length > 0 && (
+          <div style={{ textAlign: "center", padding: "16px" }}>
+            <Text type="secondary">No more tasks to load</Text>
+          </div>
+        )}
       </div>
     </div>
   );
