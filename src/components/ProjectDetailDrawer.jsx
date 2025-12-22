@@ -45,7 +45,8 @@ import {
 import { UPDATE_PROJECT } from "../graphql/projectQueries";
 import { UPDATE_CLIENT } from "../gql/clients";
 import { UPDATE_TASK, GET_TASKS } from "../gql/tasks";
-import { GET_WORK_TYPES } from "../graphql/workTypeQueries";
+// Use work types query that includes sortOrder for proper ordering
+import { GET_WORK_TYPES } from "../gql/workTypes";
 import {
   BULK_CREATE_TASK_ASSIGNMENTS,
   DELETE_TASK_ASSIGNMENT,
