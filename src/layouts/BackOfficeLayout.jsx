@@ -58,6 +58,7 @@ const BackOfficeLayout = () => {
   // Check permissions for menu items (using MANAGE to show/hide menu)
   const canManageUsers = hasPermission(user, generatePermission(MODULES.USERS, ACTIONS.MANAGE));
   const canManageRoles = hasPermission(user, generatePermission(MODULES.ROLES, ACTIONS.MANAGE));
+  const canManageUserManager = hasPermission(user, generatePermission(MODULES.USER_MANAGER, ACTIONS.MANAGE));
   const canManageTaskTypes = hasPermission(user, generatePermission(MODULES.TASK_TYPES, ACTIONS.MANAGE));
   const canManageWorkTypes = hasPermission(user, generatePermission(MODULES.WORK_TYPES, ACTIONS.MANAGE));
   const canManageGradings = hasPermission(user, generatePermission(MODULES.GRADINGS, ACTIONS.MANAGE));
@@ -95,6 +96,11 @@ const BackOfficeLayout = () => {
       key: "/users",
       icon: <UserOutlined />,
       label: <Link to="/users">Users</Link>,
+    },
+    canManageUserManager && {
+      key: "/user-manager",
+      icon: <UserOutlined />,
+      label: <Link to="/user-manager">User Manager</Link>,
     },
     canManageReports && {
       key: "/reports",
