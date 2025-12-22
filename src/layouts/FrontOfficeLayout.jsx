@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   Layout,
   Menu,
@@ -24,6 +24,7 @@ import {
   FileTextOutlined,
   DollarOutlined,
   TransactionOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { usePayment } from "../contexts/PaymentContext";
@@ -33,6 +34,7 @@ import ViewSwitcher from "../components/ViewSwitcher";
 import { useAppDrawer } from "../contexts/DrawerContext";
 import ChatTrigger from "../components/Chat/ChatTrigger";
 import { hasPermission, MODULES, ACTIONS, generatePermission } from "../config/permissions";
+import GlobalSearchModal from "../components/GlobalSearchModal";
 
 // Import pages
 import TaskTable from "../pages/FrontOffice/TaskTable";
@@ -52,6 +54,7 @@ const FrontOfficeLayout = () => {
   const location = useLocation();
   const { showClientFormDrawer, showProjectFormDrawer } = useAppDrawer();
   const { openPaymentModal } = usePayment();
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
 
   // Check permissions for menu items (using MANAGE to show/hide menu)
   const canManageTasks = hasPermission(user, generatePermission(MODULES.TASKS, ACTIONS.MANAGE));
@@ -68,6 +71,11 @@ const FrontOfficeLayout = () => {
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e) => {
+      // Ctrl+K or Cmd+K for Global Search
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchModalOpen(true);
+      }
       // Alt+C for Add Client
       if (e.altKey && e.key === "c" && canCreateClient) {
         e.preventDefault();
@@ -220,6 +228,17 @@ const FrontOfficeLayout = () => {
             )}
           </Space>
 
+          {/* Global Search Button */}
+          <Tooltip title="Search Projects (Ctrl+K)" placement="bottom">
+            <Button
+              type="text"
+              shape="circle"
+              icon={<SearchOutlined />}
+              onClick={() => setSearchModalOpen(true)}
+              className="hover:bg-gray-100"
+            />
+          </Tooltip>
+
           <ChatTrigger />
           <ViewSwitcher size="small" />
           <Badge count={3} size="small">
@@ -258,6 +277,12 @@ const FrontOfficeLayout = () => {
           </Routes>
         </div>
       </Content>
+
+      {/* Global Search Modal */}
+      <GlobalSearchModal 
+        open={searchModalOpen} 
+        onClose={() => setSearchModalOpen(false)} 
+      />
     </Layout>
   );
 };

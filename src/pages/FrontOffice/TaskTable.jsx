@@ -249,25 +249,38 @@ const TaskTable = () => {
   const [updateTask, { loading: updateTaskLoading }] = useMutation(
     UPDATE_TASK,
     {
-      // Automatically refetch GET_TASKS query after mutation
-      refetchQueries: [
-        {
-          query: GET_TASKS,
-          variables: {
-            filters: buildFilters(),
-            page: 1,
-            limit: 50,
-            sortBy: sortBy,
-            sortOrder: sortOrder,
-            search: searchText || undefined,
+      // Use update function to manually update cache instead of refetchQueries
+      // This preserves infinite scroll data and prevents missing/mismatched records
+      update: (cache, { data: mutationData }) => {
+        if (!mutationData?.updateTask) return;
+
+        const updatedTask = mutationData.updateTask;
+
+        // Read the current cache for GET_TASKS query
+        const cacheId = cache.identify({
+          __typename: 'Query',
+        });
+
+        // Modify the task in cache directly
+        cache.modify({
+          id: cache.identify(updatedTask),
+          fields: {
+            status: () => updatedTask.status,
+            assigneeId: () => updatedTask.assigneeId,
+            dueDate: () => updatedTask.dueDate,
+            taskAssignments: () => updatedTask.taskAssignments,
           },
-        },
-      ],
-      awaitRefetchQueries: true, // Wait for refetch before completing
+        });
+
+        // Force a re-read of all queries that include this task
+        cache.evict({ id: cache.identify(updatedTask) });
+        cache.gc();
+      },
       onCompleted: async (data) => {
         message.success("Task updated successfully");
         setEditedData({});
         cancelEditCell();
+        setIsInlineUpdating(false);
       },
       onError: (error) => {
         message.error(`Failed to update task: ${error.message}`);
@@ -280,7 +293,15 @@ const TaskTable = () => {
   const [bulkUpdateTaskStatus] = useMutation(BULK_UPDATE_TASK_STATUS, {
     onCompleted: () => {
       message.success("Tasks updated successfully");
-      refetchTasks();
+      // Refetch without resetting page to preserve infinite scroll
+      refetchTasks({
+        filters: buildFilters(),
+        page: 1,
+        limit: 50 * page, // Fetch all pages that were previously loaded
+        sortBy: sortBy,
+        sortOrder: sortOrder,
+        search: searchText || undefined,
+      });
     },
     onError: (error) => {
       message.error(`Failed to update tasks: ${error.message}`);
@@ -291,7 +312,15 @@ const TaskTable = () => {
   const [bulkCreateAssignments] = useMutation(BULK_CREATE_TASK_ASSIGNMENTS, {
     onCompleted: () => {
       message.success("Assignments updated successfully");
-      refetchTasks();
+      // Refetch without resetting page to preserve infinite scroll
+      refetchTasks({
+        filters: buildFilters(),
+        page: 1,
+        limit: 50 * page, // Fetch all pages that were previously loaded
+        sortBy: sortBy,
+        sortOrder: sortOrder,
+        search: searchText || undefined,
+      });
     },
     onError: (error) => {
       message.error(`Failed to update assignments: ${error.message}`);
@@ -300,7 +329,15 @@ const TaskTable = () => {
 
   const [deleteAssignment] = useMutation(DELETE_TASK_ASSIGNMENT, {
     onCompleted: () => {
-      refetchTasks();
+      // Refetch without resetting page to preserve infinite scroll
+      refetchTasks({
+        filters: buildFilters(),
+        page: 1,
+        limit: 50 * page, // Fetch all pages that were previously loaded
+        sortBy: sortBy,
+        sortOrder: sortOrder,
+        search: searchText || undefined,
+      });
     },
     onError: (error) => {
       message.error(`Failed to delete assignment: ${error.message}`);
@@ -310,7 +347,15 @@ const TaskTable = () => {
   const [updateTaskAssignment] = useMutation(UPDATE_TASK_ASSIGNMENT, {
     onCompleted: () => {
       message.success("Completed quantity updated successfully");
-      refetchTasks();
+      // Refetch without resetting page to preserve infinite scroll
+      refetchTasks({
+        filters: buildFilters(),
+        page: 1,
+        limit: 50 * page, // Fetch all pages that were previously loaded
+        sortBy: sortBy,
+        sortOrder: sortOrder,
+        search: searchText || undefined,
+      });
     },
     onError: (error) => {
       message.error(`Failed to update assignment: ${error.message}`);

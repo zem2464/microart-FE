@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Layout, Menu, Button, Dropdown, Avatar, Typography, Badge } from "antd";
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import {
@@ -12,12 +12,14 @@ import {
   SecurityScanOutlined,
   DollarOutlined,
   WalletOutlined,
+  SearchOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
 import { hasPermission, MODULES, ACTIONS, generatePermission } from "../config/permissions";
+import GlobalSearchModal from "../components/GlobalSearchModal";
 
 // Page Components
 import Dashboard from "../pages/BackOffice/Dashboard";
@@ -38,6 +40,20 @@ const BackOfficeLayout = () => {
   const user = useReactiveVar(userCacheVar); // Use cache variable instead of auth context
   const { logout } = useAuth();
   const location = useLocation();
+  const [searchModalOpen, setSearchModalOpen] = useState(false);
+
+  // Keyboard shortcut for global search (Ctrl+K or Cmd+K)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchModalOpen(true);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Check permissions for menu items (using MANAGE to show/hide menu)
   const canManageUsers = hasPermission(user, generatePermission(MODULES.USERS, ACTIONS.MANAGE));
@@ -161,6 +177,16 @@ const BackOfficeLayout = () => {
         
         {/* User Controls */}
         <div className="flex items-center space-x-4 ml-8">
+          {/* Global Search Button */}
+          <Button
+            type="text"
+            shape="circle"
+            icon={<SearchOutlined />}
+            onClick={() => setSearchModalOpen(true)}
+            className="hover:bg-gray-100"
+            title="Search Projects (Ctrl+K)"
+          />
+          
           <ViewSwitcher size="small" />
           <Badge count={5} size="small">
             <Button 
@@ -203,6 +229,12 @@ const BackOfficeLayout = () => {
           </Routes>
         </div>
       </Content>
+
+      {/* Global Search Modal */}
+      <GlobalSearchModal 
+        open={searchModalOpen} 
+        onClose={() => setSearchModalOpen(false)} 
+      />
     </Layout>
   );
 };

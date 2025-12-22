@@ -1,5 +1,37 @@
 import { gql } from '@apollo/client';
 
+// Global Search Query for Projects
+export const SEARCH_PROJECTS = gql`
+  query SearchProjects($search: String!) {
+    projects(
+      search: $search
+      limit: 50
+      sortBy: "createdAt"
+      sortOrder: "DESC"
+    ) {
+      projects {
+        id
+        projectCode
+        name
+        description
+        status
+        priority
+        deadlineDate
+        totalImageQuantity
+        taskCount
+        completedTaskCount
+        client {
+          id
+          clientCode
+          displayName
+          companyName
+        }
+        createdAt
+      }
+    }
+  }
+`;
+
 // Project Queries
 export const GET_PROJECTS = gql`
   query GetProjects(
