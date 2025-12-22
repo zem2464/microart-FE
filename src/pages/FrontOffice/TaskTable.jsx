@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useEffect, useRef } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   Table,
   Card,
@@ -54,6 +54,9 @@ import {
 
 dayjs.extend(relativeTime);
 
+// Fetch everything in one go; pagination/infinite scroll is removed
+const TASK_FETCH_LIMIT = 5000;
+
 const { Option } = Select;
 const { Text } = Typography;
 const { TabPane } = Tabs;
@@ -103,10 +106,6 @@ const TaskTable = () => {
   const [priorityFilter, setPriorityFilter] = useState("all");
   const [selectedWorkTypeId, setSelectedWorkTypeId] = useState("all");
   const [gradingFilter, setGradingFilter] = useState("all");
-  // Infinite scroll state
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState("DESC");
 
@@ -122,7 +121,6 @@ const TaskTable = () => {
     setGradingFilter("all");
     setSortBy("createdAt");
     setSortOrder("DESC");
-    setPage(1);
     message.success("Filters reset to default values");
   }, []);
 
@@ -193,17 +191,16 @@ const TaskTable = () => {
     currentUser?.id,
   ]);
 
-  // Fetch tasks with server-side filtering, pagination and sorting
+  // Fetch tasks with server-side filtering and sorting (single batch)
   const {
     data: tasksData,
     loading: tasksLoading,
     refetch: refetchTasks,
-    fetchMore,
   } = useQuery(GET_TASKS, {
     variables: {
       filters: buildFilters(),
       page: 1,
-      limit: 50,
+      limit: TASK_FETCH_LIMIT,
       sortBy: sortBy,
       sortOrder: sortOrder,
       search: searchText || undefined,
@@ -250,7 +247,7 @@ const TaskTable = () => {
     UPDATE_TASK,
     {
       // Use update function to manually update cache instead of refetchQueries
-      // This preserves infinite scroll data and prevents missing/mismatched records
+      // This preserves cached data and prevents missing/mismatched records
       update: (cache, { data: mutationData }) => {
         if (!mutationData?.updateTask) return;
 
@@ -293,11 +290,11 @@ const TaskTable = () => {
   const [bulkUpdateTaskStatus] = useMutation(BULK_UPDATE_TASK_STATUS, {
     onCompleted: () => {
       message.success("Tasks updated successfully");
-      // Refetch without resetting page to preserve infinite scroll
+      // Refetch tasks with the latest filters applied
       refetchTasks({
         filters: buildFilters(),
         page: 1,
-        limit: 50 * page, // Fetch all pages that were previously loaded
+        limit: TASK_FETCH_LIMIT,
         sortBy: sortBy,
         sortOrder: sortOrder,
         search: searchText || undefined,
@@ -312,11 +309,11 @@ const TaskTable = () => {
   const [bulkCreateAssignments] = useMutation(BULK_CREATE_TASK_ASSIGNMENTS, {
     onCompleted: () => {
       message.success("Assignments updated successfully");
-      // Refetch without resetting page to preserve infinite scroll
+      // Refetch tasks with the latest filters applied
       refetchTasks({
         filters: buildFilters(),
         page: 1,
-        limit: 50 * page, // Fetch all pages that were previously loaded
+        limit: TASK_FETCH_LIMIT,
         sortBy: sortBy,
         sortOrder: sortOrder,
         search: searchText || undefined,
@@ -329,11 +326,11 @@ const TaskTable = () => {
 
   const [deleteAssignment] = useMutation(DELETE_TASK_ASSIGNMENT, {
     onCompleted: () => {
-      // Refetch without resetting page to preserve infinite scroll
+      // Refetch tasks with the latest filters applied
       refetchTasks({
         filters: buildFilters(),
         page: 1,
-        limit: 50 * page, // Fetch all pages that were previously loaded
+        limit: TASK_FETCH_LIMIT,
         sortBy: sortBy,
         sortOrder: sortOrder,
         search: searchText || undefined,
@@ -347,11 +344,11 @@ const TaskTable = () => {
   const [updateTaskAssignment] = useMutation(UPDATE_TASK_ASSIGNMENT, {
     onCompleted: () => {
       message.success("Completed quantity updated successfully");
-      // Refetch without resetting page to preserve infinite scroll
+      // Refetch tasks with the latest filters applied
       refetchTasks({
         filters: buildFilters(),
         page: 1,
-        limit: 50 * page, // Fetch all pages that were previously loaded
+        limit: TASK_FETCH_LIMIT,
         sortBy: sortBy,
         sortOrder: sortOrder,
         search: searchText || undefined,
@@ -385,69 +382,7 @@ const TaskTable = () => {
   // Normalize tasks array from GraphQL response
   const allTasks = tasksData?.tasks?.tasks || [];
 
-  // Check if there are more items to load (same as ProjectManagement)
-  useEffect(() => {
-    if (tasksData?.tasks?.pagination) {
-      const { page: currentPage, totalPages } = tasksData.tasks.pagination;
-      setHasMore(currentPage < totalPages);
-    }
-  }, [tasksData]);
-
-  // Load more data for infinite scroll (same pattern as ProjectManagement)
-  const loadMore = async () => {
-    if (isLoadingMore || !hasMore || tasksLoading) return;
-
-    setIsLoadingMore(true);
-    try {
-      await fetchMore({
-        variables: {
-          filters: buildFilters(),
-          page: page + 1,
-          limit: 50,
-          sortBy: sortBy,
-          sortOrder: sortOrder,
-          search: searchText || undefined,
-        },
-        updateQuery: (prev, { fetchMoreResult }) => {
-          if (!fetchMoreResult) return prev;
-
-          const prevTasks = prev?.tasks?.tasks || [];
-          const newTasks = fetchMoreResult?.tasks?.tasks || [];
-
-          return {
-            ...fetchMoreResult,
-            tasks: {
-              ...fetchMoreResult.tasks,
-              tasks: [...prevTasks, ...newTasks],
-            },
-          };
-        },
-      });
-      setPage(page + 1);
-    } catch (error) {
-      console.error("Error loading more tasks:", error);
-      message.error("Failed to load more tasks");
-    } finally {
-      setIsLoadingMore(false);
-    }
-  };
-
-  // Handle scroll event for infinite scroll (same as ProjectManagement)
-  const handleScroll = useCallback(() => {
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-    const scrollHeight = document.documentElement.scrollHeight;
-    const clientHeight = window.innerHeight;
-    // Trigger load more when scrolled to 80% of the content
-    if (scrollHeight - scrollTop <= clientHeight * 1.2) {
-      loadMore();
-    }
-  }, [loadMore]);
-
-  // Attach window scroll listener
-  useEffect(() => {
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [handleScroll]);
+  // No pagination/infinite scroll; fetch all tasks in a single request
 
   const tasks = allTasks;
   const users = usersData?.availableUsers || [];
@@ -478,13 +413,12 @@ const TaskTable = () => {
     return { assignedUsers, unassignedUsers };
   }, [users, selectedWorkTypeId]);
 
-  // Reset page when filters / search / sorting changes
+  // Refetch tasks when filters / search / sorting changes
   useEffect(() => {
-    setPage(1);
     refetchTasks({
       filters: buildFilters(),
       page: 1,
-      limit: 50,
+      limit: TASK_FETCH_LIMIT,
       sortBy: sortBy,
       sortOrder: sortOrder,
       search: searchText || undefined,
@@ -2073,17 +2007,6 @@ const TaskTable = () => {
           />
         </Card>
         
-        {/* Infinite Scroll Loading Indicators */}
-        {isLoadingMore && (
-          <div style={{ textAlign: "center", padding: "16px" }}>
-            <Text type="secondary">Loading more tasks...</Text>
-          </div>
-        )}
-        {!hasMore && allTasks.length > 0 && (
-          <div style={{ textAlign: "center", padding: "16px" }}>
-            <Text type="secondary">No more tasks to load</Text>
-          </div>
-        )}
       </div>
     </div>
   );

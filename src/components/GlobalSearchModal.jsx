@@ -43,6 +43,23 @@ const GlobalSearchModal = ({ open, onClose }) => {
   };
 
   const projects = data?.projects?.projects || [];
+  const normalizedSearch = debouncedSearchTerm.trim();
+  const lowerSearch = normalizedSearch.toLowerCase();
+  const isNumericSearch = /^\d+$/.test(normalizedSearch);
+  const filteredProjects = projects.filter((project) => {
+    const code = project.projectCode?.toLowerCase() || '';
+    const name = project.name?.toLowerCase() || '';
+
+    if (!normalizedSearch) return false;
+
+    if (isNumericSearch) {
+      // Exact match on project code when input is numeric
+      return code === lowerSearch;
+    }
+
+    // Text search: match project code or project name (case-insensitive)
+    return code.includes(lowerSearch) || name.includes(lowerSearch);
+  });
 
   const getStatusColor = (status) => {
     const statusColors = {
@@ -126,7 +143,7 @@ const GlobalSearchModal = ({ open, onClose }) => {
 
         {!loading && !error && debouncedSearchTerm && debouncedSearchTerm.length >= 2 && (
           <>
-            {projects.length === 0 ? (
+            {filteredProjects.length === 0 ? (
               <Empty
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description="No projects found"
@@ -134,10 +151,10 @@ const GlobalSearchModal = ({ open, onClose }) => {
             ) : (
               <>
                 <Text type="secondary" className="text-sm mb-2 block">
-                  Found {projects.length} project{projects.length !== 1 ? 's' : ''}
+                  Found {filteredProjects.length} project{filteredProjects.length !== 1 ? 's' : ''}
                 </Text>
                 <List
-                  dataSource={projects}
+                  dataSource={filteredProjects}
                   renderItem={(project) => (
                     <List.Item
                       className="cursor-pointer hover:bg-gray-50 transition-colors rounded-lg px-4"
@@ -154,10 +171,10 @@ const GlobalSearchModal = ({ open, onClose }) => {
                         title={
                           <div className="flex items-center gap-2 flex-wrap">
                             <Text strong className="text-base">
-                              {highlightMatch(project.projectCode, debouncedSearchTerm)}
+                              {highlightMatch(project.projectCode, normalizedSearch)}
                             </Text>
                             <Text className="text-gray-600">
-                              {highlightMatch(project.name, debouncedSearchTerm)}
+                              {highlightMatch(project.name, normalizedSearch)}
                             </Text>
                             <Tag color={getStatusColor(project.status)}>
                               {project.status}
@@ -174,10 +191,7 @@ const GlobalSearchModal = ({ open, onClose }) => {
                             <div className="flex items-center gap-2">
                               <UserOutlined className="text-gray-400" />
                               <Text type="secondary">
-                                Client: {highlightMatch(project.client?.displayName || 'N/A', debouncedSearchTerm)}
-                              </Text>
-                              <Text type="secondary" className="ml-2">
-                                ({highlightMatch(project.client?.clientCode || 'N/A', debouncedSearchTerm)})
+                                Client: {project.client?.displayName || 'N/A'} ({project.client?.clientCode || 'N/A'})
                               </Text>
                             </div>
                             {project.description && (
