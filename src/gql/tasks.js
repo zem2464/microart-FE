@@ -116,6 +116,7 @@ export const TASK_FRAGMENT = gql`
       grading {
         id
         name
+        shortCode
         defaultRate
       }
     }
@@ -160,6 +161,7 @@ export const TASK_FRAGMENT = gql`
       lastName
       email
     }
+
   }
 `;
 

@@ -157,6 +157,7 @@ export const GET_CLIENT = gql`
         grading {
           id
           name
+          shortCode
           description
           defaultRate
           currency

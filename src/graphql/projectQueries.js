@@ -249,6 +249,7 @@ export const UPDATE_PROJECT = gql`
         grading {
           id
           name
+          shortCode
         }
         imageQuantity
         estimatedCost
@@ -325,6 +326,7 @@ export const GET_CLIENT_PREFERENCES = gql`
           id
           name
           defaultRate
+          shortCode
         }
         currency
         unit

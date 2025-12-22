@@ -115,7 +115,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
   const { data, loading, error, refetch } = useQuery(GET_PROJECT_DETAIL, {
     variables: { id: projectId },
     skip: !projectId,
-    fetchPolicy: "cache-and-network",
+    fetchPolicy: "no-cache",
   });
 
   // Fetch tasks separately with project filter - include all statuses including completed
@@ -138,7 +138,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
       sortOrder: "DESC",
     },
     skip: !projectId,
-    fetchPolicy: "cache-and-network",
+    fetchPolicy: "no-cache",
     onCompleted: (data) => {
       console.log('[ProjectDetailDrawer] GET_TASKS completed. Tasks received:', data?.tasks?.tasks?.length || 0);
       if (data?.tasks?.tasks?.length > 0) {
@@ -156,10 +156,14 @@ const ProjectDetailDrawer = ({ projectId }) => {
   });
 
   // Fetch available users
-  const { data: usersData } = useQuery(GET_AVAILABLE_USERS);
+  const { data: usersData } = useQuery(GET_AVAILABLE_USERS, {
+    fetchPolicy: "no-cache",
+  });
 
   // Fetch work types with task types
-  const { data: workTypesData } = useQuery(GET_WORK_TYPES);
+  const { data: workTypesData } = useQuery(GET_WORK_TYPES, {
+    fetchPolicy: "no-cache",
+  });
   const [updateProject] = useMutation(UPDATE_PROJECT, {
     onCompleted: () => {
       message.success("Project notes updated");
@@ -184,7 +188,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
   } = useQuery(GET_PROJECT_AUDIT_HISTORY, {
     variables: { projectId },
     skip: !projectId,
-    fetchPolicy: "cache-and-network",
+    fetchPolicy: "no-cache",
   });
 
   // Mutations - Using cache eviction and refetchQueries to ensure updates reflect
@@ -560,9 +564,9 @@ const ProjectDetailDrawer = ({ projectId }) => {
 
             // Get all tasks for this grading, organized by task type
             const tasksByType = {};
+            // Match tasks to current grading via gradingTask.grading.id
             const gradingTasks = tasks.filter((task) => {
-              const taskGradingId =
-                task.gradingTask?.grading?.id || task.gradingTask?.gradingId;
+              const taskGradingId = task.gradingTask?.grading?.id;
               return taskGradingId === grading.id;
             });
 
@@ -578,10 +582,22 @@ const ProjectDetailDrawer = ({ projectId }) => {
             // Only include this grading if it has tasks for this work type
             if (Object.keys(tasksByType).length === 0) return null;
 
+            // Prefer shortCode from tasks.project.projectGradings for the matching grading
+            // Prefer task.gradingTask.grading.shortCode; fallback to tasks.project.projectGradings[].grading.shortCode
+            const shortCodeFromTasks = gradingTasks
+              .map((task) => {
+                const direct = task.gradingTask?.grading?.shortCode || null;
+                if (direct) return direct;
+                const pg = task.project?.projectGradings || [];
+                const match = pg.find((g) => g.grading?.id === grading.id);
+                return match?.grading?.shortCode || null;
+              })
+              .find((code) => !!code);
+
             return {
               gradingId: grading.id,
-              gradingName: grading.name,
-              gradingShortCode: grading.shortCode,
+              gradingName: grading.name || null,
+              gradingShortCode: shortCodeFromTasks || grading.shortCode || null,
               imageQuantity: projectGrading.imageQuantity,
               estimatedCost: projectGrading.estimatedCost,
               actualCost: projectGrading.actualCost,
@@ -619,13 +635,13 @@ const ProjectDetailDrawer = ({ projectId }) => {
     const baseColumns = [
       {
         title: "Grading / Qty",
-        dataIndex: "gradingName",
+        dataIndex: "gradingShortCode",
         key: "grading",
         width: 150,
         fixed: "left",
-        render: (name, record) => (
+        render: (_, record) => (
           <div style={{ fontSize: 12 }}>
-            <div style={{ fontWeight: 500 }}>
+            <div style={{ fontWeight: 600 }}>
               {record.gradingShortCode || record.gradingName || "-"}
             </div>
             <Text type="secondary" style={{ fontSize: 11 }}>
