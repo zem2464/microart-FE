@@ -200,14 +200,17 @@ const UserDashboard = () => {
         "User Name",
         "Email",
         "Completed Quantity",
+        "Avg/Day",
       ],
     ];
 
     users.forEach((user) => {
+      const avgPerDay = totalDays ? Math.round(user.totalCompletedImages / totalDays) : 0;
       excelData.push([
         user.userName,
         user.userEmail,
         user.totalCompletedImages,
+        avgPerDay,
       ]);
 
       // Add work by date
@@ -257,6 +260,10 @@ const UserDashboard = () => {
   };
 
   // Main table columns
+  const totalDays = dateRange && dateRange[0] && dateRange[1]
+    ? dateRange[1].diff(dateRange[0], 'day') + 1
+    : 0;
+
   const mainColumns = [
     {
       title: "User",
@@ -281,6 +288,22 @@ const UserDashboard = () => {
       align: "center",
       sorter: (a, b) => a.totalCompletedImages - b.totalCompletedImages,
       render: (value) => <Tag color="success">{value}</Tag>,
+    },
+    {
+      title: "Avg/Day",
+      key: "avgPerDay",
+      width: 120,
+      align: "center",
+      render: (_, record) => {
+        if (!totalDays || !record?.totalCompletedImages) return <Text type="secondary">-</Text>;
+        const avg = Math.round(record.totalCompletedImages / totalDays);
+        return <Tag color="blue">{avg}</Tag>;
+      },
+      sorter: (a, b) => {
+        const avga = totalDays ? a.totalCompletedImages / totalDays : 0;
+        const avgb = totalDays ? b.totalCompletedImages / totalDays : 0;
+        return avga - avgb;
+      }
     },
     {
       title: "Grading Types & Quantity",
