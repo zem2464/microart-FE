@@ -40,15 +40,19 @@ const UserDashboard = () => {
     return typeof rt === "string" ? rt.toLowerCase() : "";
   }, [currentUser]);
   const isEmployee = roleType === "employee";
+  const isUser = roleType === "user";
   const isAdmin = roleType === "admin";
 
   const filterUsersByRole = useCallback(
     (users) => {
       if (!Array.isArray(users)) return [];
-      if (!isEmployee || !currentUser?.id) return users;
-      return users.filter((u) => String(u.userId) === String(currentUser.id));
+      // Filter to show only logged-in user's reports for "User" or "Employee" role types
+      if ((isEmployee || isUser) && currentUser?.id) {
+        return users.filter((u) => String(u.userId) === String(currentUser.id));
+      }
+      return users;
     },
-    [isEmployee, currentUser?.id]
+    [isEmployee, isUser, currentUser?.id]
   );
 
   // State for filters
@@ -75,7 +79,7 @@ const UserDashboard = () => {
     variables: {
       dateFrom: dateRange ? dateRange[0].format("YYYY-MM-DD") : null,
       dateTo: dateRange ? dateRange[1].format("YYYY-MM-DD") : null,
-      userId: isEmployee ? currentUser?.id : null,
+      userId: (isEmployee || isUser) ? currentUser?.id : null,
     },
     fetchPolicy: "network-only",
     onCompleted: (data) => {
