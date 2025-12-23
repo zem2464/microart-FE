@@ -36,6 +36,34 @@ export const GET_USER_WORK_DASHBOARD = gql`
             gradingShortCode
             workType
           }
+          gradingBreakdown {
+            gradingId
+            gradingName
+            gradingShortCode
+            workType
+            completedImages
+            projects {
+              projectCode
+              projectName
+              imageQuantity
+            }
+          }
+          taskTypeBreakdown {
+            taskTypeId
+            taskTypeName
+            completedImages
+            totalEarnings
+            details {
+              gradingId
+              gradingName
+              gradingShortCode
+              projectCode
+              projectName
+              quantity
+              employeeRate
+              earnings
+            }
+          }
         }
         gradingBreakdown {
           gradingId
@@ -43,6 +71,11 @@ export const GET_USER_WORK_DASHBOARD = gql`
           gradingShortCode
           workType
           completedImages
+          projects {
+            projectCode
+            projectName
+            imageQuantity
+          }
         }
       }
       summary {

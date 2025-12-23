@@ -20,6 +20,7 @@ export const GET_USERS = gql`
         permissions
       }
       isEmployee
+      isServiceProvider
       payType
       salaryType
       salaryAmount
@@ -70,6 +71,7 @@ export const GET_USER = gql`
         permissions
       }
       isEmployee
+      isServiceProvider
       payType
       salaryType
       salaryAmount
@@ -118,6 +120,7 @@ export const CREATE_USER = gql`
         name
         roleType
       }
+      isServiceProvider
       isEmployee
       payType
       salaryType
@@ -164,6 +167,7 @@ export const UPDATE_USER = gql`
         roleType
       }
       isEmployee
+      isServiceProvider
       payType
       salaryType
       salaryAmount

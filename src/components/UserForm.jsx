@@ -85,6 +85,7 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           hourlyRate: user.hourlyRate || 0,
           canLogin: user.canLogin ?? true,
           isActive: user.isActive ?? true,
+          isServiceProvider: user.isServiceProvider ?? false,
           workTypeIds: workTypeIds,
         });
       } else {
@@ -97,6 +98,7 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           hourlyRate: 0,
           canLogin: true,
           isActive: true,
+          isServiceProvider: false,
           workTypeIds: [],
         });
       }
@@ -266,6 +268,15 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           valuePropName="checked"
         >
           <Switch />
+
+        <Form.Item
+          name="isServiceProvider"
+          label="Is Service Provider"
+          valuePropName="checked"
+          tooltip="Enable this to allow the user to be assigned as a service provider to clients"
+        >
+          <Switch />
+        </Form.Item>
         </Form.Item>
       </div>
 

@@ -32,6 +32,7 @@ import Gradings from "../pages/BackOffice/Gradings";
 import Roles from "../pages/BackOffice/Roles";
 import AuditLogs from "../pages/BackOffice/AuditLogs";
 import PaymentTypes from "../pages/BackOffice/PaymentTypes";
+import UserGradingRateManagement from "../pages/Admin/UserGradingRateManagement";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -97,16 +98,6 @@ const BackOfficeLayout = () => {
       icon: <UserOutlined />,
       label: <Link to="/users">Users</Link>,
     },
-    canManageUserManager && {
-      key: "/user-manager",
-      icon: <UserOutlined />,
-      label: <Link to="/user-manager">User Manager</Link>,
-    },
-    canManageReports && {
-      key: "/reports",
-      icon: <BarChartOutlined />,
-      label: <Link to="/reports">Reports</Link>,
-    },
     canManageRoles && {
       key: "/roles",
       icon: <UserOutlined />, // You can use a different icon if desired
@@ -116,6 +107,11 @@ const BackOfficeLayout = () => {
       key: "/audit-logs",
       icon: <SecurityScanOutlined />,
       label: <Link to="/audit-logs">Audit Logs</Link>,
+    },
+    canManageGradings && {
+      key: "/user-rates",
+      icon: <DollarOutlined />,
+      label: <Link to="/user-rates">Employee Rates</Link>,
     },
     {
       key: "/settings",
@@ -230,6 +226,7 @@ const BackOfficeLayout = () => {
             <Route path="/users" element={<Users />} />
             <Route path="/roles" element={<Roles />} />
             <Route path="/audit-logs" element={<AuditLogs />} />
+            <Route path="/user-rates" element={<UserGradingRateManagement />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

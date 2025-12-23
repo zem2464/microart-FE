@@ -300,9 +300,11 @@ const ClientForm = ({
     // Create a map to avoid duplicates
     const userMap = new Map();
     
-    // Add all users from the API
+    // Add all users from the API who are marked as service providers
     users.forEach(user => {
-      userMap.set(user.id, user);
+      if (user.isServiceProvider) {
+        userMap.set(user.id, user);
+      }
     });
     
     // Add service providers from client (if they're not already in the list)

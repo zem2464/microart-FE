@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Card,
   Row,
@@ -21,16 +21,36 @@ import {
   FileExcelOutlined,
   UserOutlined,
 } from "@ant-design/icons";
-import { useQuery } from "@apollo/client";
+import { useQuery, useReactiveVar } from "@apollo/client";
 import dayjs from "dayjs";
 import { GET_USER_WORK_DASHBOARD } from "../../gql/userDashboard";
 import * as XLSX from "xlsx";
+import { userCacheVar, meUserData } from "../../cache/userCacheVar";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
 
 const UserDashboard = () => {
+  const cachedUser = useReactiveVar(userCacheVar);
+  const fallbackUser = useReactiveVar(meUserData);
+  const currentUser = cachedUser || fallbackUser;
+  const roleType = useMemo(() => {
+    const rt = currentUser?.role?.roleType || currentUser?.roleType || currentUser?.role?.name;
+    return typeof rt === "string" ? rt.toLowerCase() : "";
+  }, [currentUser]);
+  const isEmployee = roleType === "employee";
+  const isAdmin = roleType === "admin";
+
+  const filterUsersByRole = useCallback(
+    (users) => {
+      if (!Array.isArray(users)) return [];
+      if (!isEmployee || !currentUser?.id) return users;
+      return users.filter((u) => String(u.userId) === String(currentUser.id));
+    },
+    [isEmployee, currentUser?.id]
+  );
+
   // State for filters
   const [dateFilterType, setDateFilterType] = useState("monthly");
   const [selectedMonth, setSelectedMonth] = useState(dayjs());
@@ -45,27 +65,23 @@ const UserDashboard = () => {
   ]);
   const [selectedUser, setSelectedUser] = useState(null);
   const [allUsers, setAllUsers] = useState([]);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
 
   // Fetch user work dashboard data
   const {
     data: dashboardData,
     loading: dashboardLoading,
     refetch: refetchDashboard,
-    fetchMore,
   } = useQuery(GET_USER_WORK_DASHBOARD, {
     variables: {
       dateFrom: dateRange ? dateRange[0].format("YYYY-MM-DD") : null,
       dateTo: dateRange ? dateRange[1].format("YYYY-MM-DD") : null,
-      limit: 20,
-      offset: 0,
+      userId: isEmployee ? currentUser?.id : null,
     },
     fetchPolicy: "network-only",
     onCompleted: (data) => {
       if (data?.userWorkDashboard) {
-        setAllUsers(data.userWorkDashboard.users);
-        setHasMore(data.userWorkDashboard.hasMore);
+        const filteredUsers = filterUsersByRole(data.userWorkDashboard.users);
+        setAllUsers(filteredUsers);
       }
     },
   });
@@ -126,40 +142,6 @@ const UserDashboard = () => {
     }
   };
 
-  // Load more users for infinite scroll
-  const handleLoadMore = async () => {
-    if (loadingMore || !hasMore) return;
-
-    setLoadingMore(true);
-    try {
-      await fetchMore({
-        variables: {
-          offset: allUsers.length,
-          limit: 20,
-        },
-        updateQuery: (prev, { fetchMoreResult }) => {
-          if (!fetchMoreResult) return prev;
-
-          const newUsers = fetchMoreResult.userWorkDashboard.users;
-          setAllUsers([...allUsers, ...newUsers]);
-          setHasMore(fetchMoreResult.userWorkDashboard.hasMore);
-
-          return {
-            userWorkDashboard: {
-              ...fetchMoreResult.userWorkDashboard,
-              users: [...prev.userWorkDashboard.users, ...newUsers],
-            },
-          };
-        },
-      });
-    } catch (error) {
-      message.error("Failed to load more users");
-      console.error("Load more error:", error);
-    } finally {
-      setLoadingMore(false);
-    }
-  };
-
   // Reset filters
   const handleReset = () => {
     const today = dayjs();
@@ -169,17 +151,34 @@ const UserDashboard = () => {
     setSelectedMonth(today);
     setSelectedYear(today);
     setAllUsers([]);
-    setHasMore(true);
   };
+
+  const effectiveUsers = useMemo(() => filterUsersByRole(allUsers), [allUsers, filterUsersByRole]);
+  const effectiveSummary = useMemo(
+    () => ({
+      totalUsers: effectiveUsers.length,
+      totalCompletedImages: effectiveUsers.reduce(
+        (sum, user) => sum + (user.totalCompletedImages || 0),
+        0
+      ),
+    }),
+    [effectiveUsers]
+  );
+
+  useEffect(() => {
+    if (selectedUser && !effectiveUsers.find((u) => String(u.userId) === String(selectedUser.userId))) {
+      setSelectedUser(null);
+    }
+  }, [effectiveUsers, selectedUser]);
 
   // Export to Excel
   const handleExportExcel = () => {
-    if (!dashboardData?.userWorkDashboard?.users?.length) {
+    if (!effectiveUsers?.length) {
       message.warning("No data to export");
       return;
     }
 
-    const users = dashboardData.userWorkDashboard.users;
+    const users = effectiveUsers;
     
     // Prepare Excel data
     const excelData = [
@@ -192,8 +191,8 @@ const UserDashboard = () => {
       [`Generated on: ${dayjs().format("DD MMM YYYY, HH:mm")}`],
       [],
       ["SUMMARY"],
-      ["Total Users", dashboardData.userWorkDashboard.summary.totalUsers],
-      ["Total Completed Quantity", dashboardData.userWorkDashboard.summary.totalCompletedImages],
+      ["Total Users", effectiveSummary.totalUsers],
+      ["Total Completed Quantity", effectiveSummary.totalCompletedImages],
       [],
       ["USER WORK DETAILS"],
       [
@@ -313,16 +312,37 @@ const UserDashboard = () => {
         
         return (
           <Space size={[4, 4]} wrap>
-            {record.gradingBreakdown.map((grading) => (
-              <Tooltip
-                key={grading.gradingId}
-                title={`${grading.gradingName} (${grading.workType || 'N/A'})`}
-              >
-                <Tag color="blue" style={{ fontSize: 11 }}>
-                  {grading.gradingShortCode || grading.gradingName}: {grading.completedImages}
-                </Tag>
-              </Tooltip>
-            ))}
+            {record.gradingBreakdown.map((grading) => {
+              // Build tooltip content with project info
+              const tooltipContent = (
+                <div>
+                  <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
+                    {grading.gradingName} ({grading.workType || 'N/A'})
+                  </div>
+                  {grading.projects && grading.projects.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 11, opacity: 0.9, marginBottom: 2 }}>Projects:</div>
+                      {grading.projects.map((proj, idx) => (
+                        <div key={idx} style={{ fontSize: 11, paddingLeft: 8 }}>
+                          • {proj.projectName} ({proj.projectCode}): {proj.imageQuantity} images
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+
+              return (
+                <Tooltip
+                  key={grading.gradingId}
+                  title={tooltipContent}
+                >
+                  <Tag color="blue" style={{ fontSize: 11, cursor: 'pointer' }}>
+                    {grading.gradingShortCode || grading.gradingName}: {grading.completedImages}
+                  </Tag>
+                </Tooltip>
+              );
+            })}
           </Space>
         );
       },
@@ -377,8 +397,17 @@ const UserDashboard = () => {
     });
   };
 
-  const users = dashboardData?.userWorkDashboard?.users || [];
-  const summary = dashboardData?.userWorkDashboard?.summary;
+  // Calculate total earnings for selected user
+  const getTotalEarnings = () => {
+    if (!selectedUser || !isAdmin) return 0;
+    
+    return selectedUser.workByDate?.reduce((total, workDate) => {
+      const dayTotal = workDate.taskTypeBreakdown?.reduce((daySum, taskType) => {
+        return daySum + (taskType.totalEarnings || 0);
+      }, 0) || 0;
+      return total + dayTotal;
+    }, 0) || 0;
+  };
 
   return (
     <div style={{ padding: "24px" }}>
@@ -399,21 +428,21 @@ const UserDashboard = () => {
         </Col>
 
         {/* Summary Statistics */}
-        {summary && (
+        {effectiveSummary && (
           <Col span={24}>
             <Card>
               <Row gutter={16}>
                 <Col xs={24} sm={12}>
                   <Statistic
                     title="Total Users"
-                    value={summary.totalUsers}
+                    value={effectiveSummary.totalUsers}
                     prefix={<UserOutlined />}
                   />
                 </Col>
                 <Col xs={24} sm={12}>
                   <Statistic
                     title="Total Completed Quantity"
-                    value={summary.totalCompletedImages}
+                    value={effectiveSummary.totalCompletedImages}
                     valueStyle={{ color: "#3f8600" }}
                   />
                 </Col>
@@ -493,7 +522,6 @@ const UserDashboard = () => {
                     icon={<FilterOutlined />}
                     onClick={() => {
                       setAllUsers([]);
-                      setHasMore(true);
                       refetchDashboard();
                     }}
                   >
@@ -505,7 +533,7 @@ const UserDashboard = () => {
                   <Button
                     icon={<FileExcelOutlined />}
                     onClick={handleExportExcel}
-                    disabled={!users.length}
+                    disabled={!allUsers.length}
                   >
                     Export
                   </Button>
@@ -531,7 +559,7 @@ const UserDashboard = () => {
                 <Spin spinning={dashboardLoading}>
                   <Table
                     columns={mainColumns}
-                    dataSource={allUsers}
+                    dataSource={effectiveUsers}
                     rowKey="userId"
                     onRow={(record) => ({
                       onClick: () => setSelectedUser(record),
@@ -543,23 +571,6 @@ const UserDashboard = () => {
                     pagination={false}
                     scroll={{ x: 800, y: 600 }}
                     size="small"
-                    footer={() => (
-                      hasMore ? (
-                        <div style={{ textAlign: 'center', padding: '12px 0' }}>
-                          <Button
-                            type="link"
-                            loading={loadingMore}
-                            onClick={handleLoadMore}
-                          >
-                            {loadingMore ? 'Loading...' : 'Load More Users'}
-                          </Button>
-                        </div>
-                      ) : allUsers.length > 0 ? (
-                        <div style={{ textAlign: 'center', padding: '8px 0', color: '#999' }}>
-                          All {allUsers.length} users loaded
-                        </div>
-                      ) : null
-                    )}
                   />
                 </Spin>
               </Card>
@@ -569,16 +580,23 @@ const UserDashboard = () => {
             <Col xs={24} lg={14}>
               <Card 
                 title={selectedUser ? `Daily Work: ${selectedUser.userName}` : "Daily Work Breakdown"}
-                extra={
-                  selectedUser && (
-                    <Button 
-                      size="small" 
-                      onClick={() => setSelectedUser(null)}
-                    >
-                      Clear Selection
-                    </Button>
-                  )
-                }
+                extra={(
+                  <Space>
+                    {selectedUser && isAdmin && (
+                      <Text strong style={{ color: '#52c41a', fontSize: 14 }}>
+                        Total Earnings: ₹{getTotalEarnings().toFixed(2)}
+                      </Text>
+                    )}
+                    {selectedUser && (
+                      <Button 
+                        size="small" 
+                        onClick={() => setSelectedUser(null)}
+                      >
+                        Clear Selection
+                      </Button>
+                    )}
+                  </Space>
+                )}
               >
                 {selectedUser ? (
                   <Table
@@ -609,9 +627,272 @@ const UserDashboard = () => {
                         },
                       },
                       {
+                        title: "Task Types & Earnings",
+                        key: "taskTypeDetails",
+                        render: (_, workDate) => {
+                          // Use taskTypeBreakdown if available
+                          if (workDate.taskTypeBreakdown && workDate.taskTypeBreakdown.length > 0) {
+                            return (
+                              <Space size={[4, 4]} wrap>
+                                {workDate.taskTypeBreakdown.map((taskType) => {
+                                  // Build tooltip with clean, consistent table design
+                                  const tooltipContent = (
+                                    <div>
+                                      <div style={{ 
+                                        fontWeight: 600,
+                                        fontSize: 13,
+                                        marginBottom: 10,
+                                        paddingBottom: 8,
+                                        borderBottom: '1px solid #d9d9d9',
+                                        color: '#000',
+                                        whiteSpace: 'nowrap'
+                                      }}>
+                                        {taskType.taskTypeName}
+                                      </div>
+                                      <table style={{ 
+                                        width: '100%', 
+                                        fontSize: 12,
+                                        borderCollapse: 'collapse',
+                                        backgroundColor: '#fff'
+                                      }}>
+                                        <thead>
+                                          <tr style={{ 
+                                            backgroundColor: '#f5f5f5',
+                                            borderBottom: '1px solid #d9d9d9'
+                                          }}>
+                                            <th style={{ 
+                                              padding: '8px 12px', 
+                                              textAlign: 'left',
+                                              fontWeight: 600,
+                                              fontSize: 11,
+                                              color: '#000',
+                                              whiteSpace: 'nowrap'
+                                            }}>Grading</th>
+                                            <th style={{ 
+                                              padding: '8px 12px', 
+                                              textAlign: 'left',
+                                              fontWeight: 600,
+                                              fontSize: 11,
+                                              color: '#000',
+                                              whiteSpace: 'nowrap'
+                                            }}>Project</th>
+                                            <th style={{ 
+                                              padding: '8px 12px', 
+                                              textAlign: 'right',
+                                              fontWeight: 600,
+                                              fontSize: 11,
+                                              color: '#000',
+                                              whiteSpace: 'nowrap'
+                                            }}>Qty</th>
+                                            {isAdmin && (
+                                              <>
+                                                <th style={{ 
+                                                  padding: '8px 12px', 
+                                                  textAlign: 'right',
+                                                  fontWeight: 600,
+                                                  fontSize: 11,
+                                                  color: '#000',
+                                                  whiteSpace: 'nowrap'
+                                                }}>Rate</th>
+                                                <th style={{ 
+                                                  padding: '8px 12px', 
+                                                  textAlign: 'right',
+                                                  fontWeight: 600,
+                                                  fontSize: 11,
+                                                  color: '#000',
+                                                  whiteSpace: 'nowrap'
+                                                }}>Earnings</th>
+                                              </>
+                                            )}
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {taskType.details.map((detail, idx) => (
+                                            <tr key={idx} style={{ 
+                                              backgroundColor: '#fff',
+                                              borderBottom: '1px solid #f0f0f0'
+                                            }}>
+                                              <td style={{ 
+                                                padding: '8px 12px',
+                                                color: '#000',
+                                                whiteSpace: 'nowrap'
+                                              }}>
+                                                <Tag color="blue" style={{ 
+                                                  fontSize: 11,
+                                                  margin: 0,
+                                                  padding: '0 7px',
+                                                  lineHeight: '20px'
+                                                }}>
+                                                  {detail.gradingShortCode || detail.gradingName || '-'}
+                                                </Tag>
+                                              </td>
+                                              <td style={{ 
+                                                padding: '8px 12px',
+                                                color: '#000',
+                                                fontSize: 11,
+                                                whiteSpace: 'nowrap'
+                                              }}>
+                                                {detail.projectCode && detail.projectName 
+                                                  ? `${detail.projectCode} - ${detail.projectName}`
+                                                  : detail.projectName || detail.projectCode || '-'
+                                                }
+                                              </td>
+                                              <td style={{ 
+                                                padding: '8px 12px',
+                                                textAlign: 'right',
+                                                color: '#000',
+                                                fontWeight: 500,
+                                                whiteSpace: 'nowrap'
+                                              }}>
+                                                {detail.quantity}
+                                              </td>
+                                              {isAdmin && (
+                                                <>
+                                                  <td style={{ 
+                                                    padding: '8px 12px',
+                                                    textAlign: 'right',
+                                                    color: '#000',
+                                                    fontSize: 11,
+                                                    whiteSpace: 'nowrap'
+                                                  }}>
+                                                    ₹{detail.employeeRate.toFixed(2)}
+                                                  </td>
+                                                  <td style={{ 
+                                                    padding: '8px 12px',
+                                                    textAlign: 'right',
+                                                    fontWeight: 600,
+                                                    color: '#52c41a',
+                                                    whiteSpace: 'nowrap'
+                                                  }}>
+                                                    ₹{detail.earnings.toFixed(2)}
+                                                  </td>
+                                                </>
+                                              )}
+                                            </tr>
+                                          ))}
+                                        </tbody>
+                                        <tfoot>
+                                          <tr style={{ 
+                                            backgroundColor: '#f5f5f5',
+                                            borderTop: '1px solid #d9d9d9'
+                                          }}>
+                                            <td colSpan="2" style={{ 
+                                              padding: '10px 12px',
+                                              textAlign: 'right',
+                                              fontWeight: 600,
+                                              fontSize: 12,
+                                              color: '#000',
+                                              whiteSpace: 'nowrap'
+                                            }}>
+                                              Total:
+                                            </td>
+                                            <td style={{ 
+                                              padding: '10px 12px',
+                                              textAlign: 'right',
+                                              fontWeight: 600,
+                                              fontSize: 12,
+                                              color: '#000',
+                                              whiteSpace: 'nowrap'
+                                            }}>
+                                              {taskType.completedImages}
+                                            </td>
+                                            {isAdmin && (
+                                              <>
+                                                <td style={{ padding: '10px 12px' }}></td>
+                                                <td style={{ 
+                                                  padding: '10px 12px',
+                                                  textAlign: 'right',
+                                                  fontWeight: 600,
+                                                  fontSize: 13,
+                                                  color: '#52c41a',
+                                                  whiteSpace: 'nowrap'
+                                                }}>
+                                                  ₹{taskType.totalEarnings.toFixed(2)}
+                                                </td>
+                                              </>
+                                            )}
+                                          </tr>
+                                        </tfoot>
+                                      </table>
+                                    </div>
+                                  );
+
+                                  return (
+                                    <Tooltip
+                                      key={taskType.taskTypeId}
+                                      title={tooltipContent}
+                                      overlayInnerStyle={{ 
+                                        padding: 12,
+                                        backgroundColor: '#fff',
+                                        boxShadow: '0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 9px 28px 8px rgba(0, 0, 0, 0.05)'
+                                      }}
+                                      color="#fff"
+                                      overlayStyle={{ maxWidth: 'none' }}
+                                    >
+                                      <Tag color="green" style={{ 
+                                        fontSize: 11, 
+                                        cursor: 'pointer',
+                                        fontWeight: 500
+                                      }}>
+                                        {isAdmin 
+                                          ? `${taskType.taskTypeName}: ${taskType.completedImages} (₹${taskType.totalEarnings.toFixed(0)})`
+                                          : `${taskType.taskTypeName}: ${taskType.completedImages}`
+                                        }
+                                      </Tag>
+                                    </Tooltip>
+                                  );
+                                })}
+                              </Space>
+                            );
+                          }
+                          
+                          return <Text type="secondary">-</Text>;
+                        },
+                      },
+                      {
                         title: "Grading Types & Quantity",
                         key: "gradingDetails",
                         render: (_, workDate) => {
+                          // Use gradingBreakdown if available, otherwise fall back to tasks
+                          if (workDate.gradingBreakdown && workDate.gradingBreakdown.length > 0) {
+                            return (
+                              <Space size={[4, 4]} wrap>
+                                {workDate.gradingBreakdown.map((grading) => {
+                                  // Build tooltip content with project info
+                                  const tooltipContent = (
+                                    <div>
+                                      <div style={{ fontWeight: 'bold', marginBottom: 4 }}>
+                                        {grading.gradingName} ({grading.workType || 'N/A'})
+                                      </div>
+                                      {grading.projects && grading.projects.length > 0 && (
+                                        <div>
+                                          <div style={{ fontSize: 11, opacity: 0.9, marginBottom: 2 }}>Projects:</div>
+                                          {grading.projects.map((proj, idx) => (
+                                            <div key={idx} style={{ fontSize: 11, paddingLeft: 8 }}>
+                                              • {proj.projectName} ({proj.projectCode}): {proj.imageQuantity} images
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+
+                                  return (
+                                    <Tooltip
+                                      key={grading.gradingId}
+                                      title={tooltipContent}
+                                    >
+                                      <Tag color="blue" style={{ fontSize: 11, cursor: 'pointer' }}>
+                                        {grading.gradingShortCode || grading.gradingName}: {grading.completedImages}
+                                      </Tag>
+                                    </Tooltip>
+                                  );
+                                })}
+                              </Space>
+                            );
+                          }
+                          
+                          // Fallback to old task-based rendering if no gradingBreakdown
                           if (!workDate.tasks?.length) return <Text type="secondary">-</Text>;
                           
                           // Group tasks by grading
@@ -656,10 +937,7 @@ const UserDashboard = () => {
                     ]}
                     dataSource={getDailyData()}
                     rowKey="date"
-                    pagination={{
-                      pageSize: 31,
-                      hideOnSinglePage: true
-                    }}
+                    pagination={false}
                     scroll={{ y: 600 }}
                     size="small"
                     bordered

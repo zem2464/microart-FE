@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import {
   Spin,
@@ -19,6 +19,7 @@ import {
   Tooltip,
   Progress,
   Input,
+  Modal,
 } from "antd";
 import {
   FolderOutlined,
@@ -35,6 +36,7 @@ import {
   ExclamationCircleOutlined,
   UserOutlined,
   CopyOutlined,
+  EditOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { userCacheVar } from "../cache/userCacheVar";
@@ -110,6 +112,15 @@ const ProjectDetailDrawer = ({ projectId }) => {
     field: null,
   });
   const [editedData, setEditedData] = useState({});
+  
+  // Allocation modal state
+  const [assignQtyModalOpen, setAssignQtyModalOpen] = useState(false);
+  const [assignQtyModalTask, setAssignQtyModalTask] = useState(null);
+  const [assignQtyModalGradingRecord, setAssignQtyModalGradingRecord] = useState(null);
+  const [assignQtySelectedUserIds, setAssignQtySelectedUserIds] = useState([]);
+  const [assignQtyAllocations, setAssignQtyAllocations] = useState({});
+  const [assignQtyOriginalUserIds, setAssignQtyOriginalUserIds] = useState([]);
+  const [assignQtyOriginalAllocations, setAssignQtyOriginalAllocations] = useState({});
 
   // Fetch project details
   const { data, loading, error, refetch } = useQuery(GET_PROJECT_DETAIL, {
@@ -327,6 +338,179 @@ const ProjectDetailDrawer = ({ projectId }) => {
   const users = usersData?.availableUsers || [];
   const allWorkTypes = workTypesData?.workTypes || [];
 
+  // Helper to get task total quantity
+  // In ProjectDetailDrawer, quantity comes from the grading record, not individual task
+  const getTaskTotalQuantity = useCallback((task, gradingRecord = null) => {
+    // If we have a grading record, use its imageQuantity (preferred in drawer context)
+    if (gradingRecord && gradingRecord.imageQuantity) {
+      console.log('[ProjectDetailDrawer] Using grading imageQuantity:', gradingRecord.imageQuantity);
+      return gradingRecord.imageQuantity;
+    }
+    // Fallback to task imageQuantity
+    if (!task) return 0;
+    const qty = task?.imageQuantity || 0;
+    console.log('[ProjectDetailDrawer] Using task imageQuantity:', qty);
+    return qty;
+  }, []);
+
+  // Helper to get user display name
+  const getUserDisplayName = useCallback((userId) => {
+    const user = users.find((u) => u.id === userId);
+    if (!user) return "Unknown User";
+    return `${user.firstName} ${user.lastName}`;
+  }, [users]);
+
+  // Open allocation modal
+  const openAssignQtyModal = useCallback((task, selectedUserIds, gradingRecord = null) => {
+    console.log('[ProjectDetailDrawer] openAssignQtyModal called with task:', task, 'gradingRecord:', gradingRecord);
+    const totalQty = getTaskTotalQuantity(task, gradingRecord);
+    console.log('[ProjectDetailDrawer] totalQty:', totalQty);
+    const currentAssignments = task?.taskAssignments || [];
+
+    // Prefill allocations: use existing assignment qty if present, else equal split of remaining
+    const prefill = {};
+    let preSum = 0;
+    selectedUserIds.forEach((uid) => {
+      const existing = currentAssignments.find((a) => a.userId === uid);
+      if (existing && typeof existing.imageQuantity === "number") {
+        prefill[uid] = existing.imageQuantity;
+        preSum += existing.imageQuantity;
+      }
+    });
+
+    const toDistribute = Math.max(totalQty - preSum, 0);
+    const needAllocation = selectedUserIds.filter((uid) => prefill[uid] === undefined);
+    if (needAllocation.length > 0) {
+      const base = needAllocation.length > 0 ? Math.floor(toDistribute / needAllocation.length) : 0;
+      needAllocation.forEach((uid, idx) => {
+        const remainder = idx < (toDistribute % needAllocation.length) ? 1 : 0;
+        prefill[uid] = base + remainder;
+      });
+    }
+
+    setAssignQtyModalTask(task);
+    setAssignQtyModalGradingRecord(gradingRecord);
+    setAssignQtySelectedUserIds(selectedUserIds);
+    setAssignQtyAllocations(prefill);
+    setAssignQtyOriginalUserIds(selectedUserIds);
+    setAssignQtyOriginalAllocations(prefill);
+    setAssignQtyModalOpen(true);
+  }, [getTaskTotalQuantity]);
+
+  // Close allocation modal
+  const closeAssignQtyModal = useCallback(() => {
+    setAssignQtyModalOpen(false);
+    setAssignQtyModalTask(null);
+    setAssignQtyModalGradingRecord(null);
+    setAssignQtySelectedUserIds([]);
+    setAssignQtyAllocations({});
+    setAssignQtyOriginalUserIds([]);
+    setAssignQtyOriginalAllocations({});
+    cancelEditCell();
+  }, []);
+
+  // Calculate total allocated
+  const assignQtyTotalAllocated = useMemo(() => {
+    let sum = 0;
+    for (const uid of assignQtySelectedUserIds) {
+      sum += Number(assignQtyAllocations[uid]) || 0;
+    }
+    return sum;
+  }, [assignQtySelectedUserIds, assignQtyAllocations]);
+
+  const assignQtyModalTaskTotal = useMemo(() => {
+    return getTaskTotalQuantity(assignQtyModalTask, assignQtyModalGradingRecord);
+  }, [assignQtyModalTask, assignQtyModalGradingRecord, getTaskTotalQuantity]);
+
+  // Check if allocations have changed
+  const hasAssignQtyChanges = useMemo(() => {
+    console.log('[ProjectDetailDrawer] hasAssignQtyChanges check:', {
+      selectedUserIds: assignQtySelectedUserIds,
+      originalUserIds: assignQtyOriginalUserIds,
+      allocations: assignQtyAllocations,
+      originalAllocations: assignQtyOriginalAllocations
+    });
+    
+    if (assignQtySelectedUserIds.length !== assignQtyOriginalUserIds.length) {
+      console.log('[ProjectDetailDrawer] Length changed:', assignQtySelectedUserIds.length, 'vs', assignQtyOriginalUserIds.length);
+      return true;
+    }
+    const origSet = new Set(assignQtyOriginalUserIds);
+    for (const uid of assignQtySelectedUserIds) {
+      if (!origSet.has(uid)) {
+        console.log('[ProjectDetailDrawer] New user added:', uid);
+        return true;
+      }
+    }
+    for (const uid of assignQtySelectedUserIds) {
+      const currentQty = Number(assignQtyAllocations[uid]) || 0;
+      const originalQty = Number(assignQtyOriginalAllocations[uid]) || 0;
+      if (currentQty !== originalQty) {
+        console.log('[ProjectDetailDrawer] Quantity changed for user', uid, ':', currentQty, 'vs', originalQty);
+        return true;
+      }
+    }
+    console.log('[ProjectDetailDrawer] No changes detected');
+    return false;
+  }, [assignQtySelectedUserIds, assignQtyOriginalUserIds, assignQtyAllocations, assignQtyOriginalAllocations]);
+
+  // Auto distribute quantities
+  const handleAssignQtyAutoDistribute = useCallback(() => {
+    if (!assignQtyModalTask) return;
+    const totalQty = getTaskTotalQuantity(assignQtyModalTask, assignQtyModalGradingRecord);
+    console.log('[ProjectDetailDrawer] Auto-distribute totalQty:', totalQty, 'users:', assignQtySelectedUserIds.length);
+    const n = assignQtySelectedUserIds.length || 1;
+    const base = Math.floor(totalQty / n);
+    const remainder = totalQty % n;
+    const next = {};
+    assignQtySelectedUserIds.forEach((uid, idx) => {
+      next[uid] = base + (idx < remainder ? 1 : 0);
+    });
+    console.log('[ProjectDetailDrawer] Auto-distribute result:', next);
+    setAssignQtyAllocations(next);
+  }, [assignQtyModalTask, assignQtyModalGradingRecord, assignQtySelectedUserIds, getTaskTotalQuantity]);
+
+  // Confirm allocation modal
+  const handleAssignQtyConfirm = useCallback(async () => {
+    if (!assignQtyModalTask) return;
+    const task = assignQtyModalTask;
+    const selectedIds = assignQtySelectedUserIds;
+    const allocations = assignQtyAllocations;
+
+    try {
+      // Current assignments
+      const currentAssignments = task.taskAssignments || [];
+      // Delete users that are no longer selected
+      const toRemove = currentAssignments.filter((a) => !selectedIds.includes(a.userId));
+      for (const assignment of toRemove) {
+        await deleteAssignment({ variables: { id: assignment.id } });
+      }
+
+      // Upsert for all selected users
+      for (const uid of selectedIds) {
+        const qty = Number(allocations[uid]) || 0;
+        const existing = currentAssignments.find((a) => a.userId === uid);
+        if (existing) {
+          await updateTaskAssignment({
+            variables: { id: existing.id, input: { imageQuantity: qty } },
+          });
+        } else {
+          await bulkCreateAssignments({
+            variables: {
+              inputs: [{ taskId: task.id, userId: uid, imageQuantity: qty, notes: null }],
+            },
+          });
+        }
+      }
+
+      message.success("Task assignments updated successfully");
+      await refetchTasks();
+      closeAssignQtyModal();
+    } catch (error) {
+      message.error(`Failed to update assignments: ${error.message}`);
+    }
+  }, [assignQtyModalTask, assignQtySelectedUserIds, assignQtyAllocations, deleteAssignment, updateTaskAssignment, bulkCreateAssignments, closeAssignQtyModal, refetchTasks]);
+
   // Generate folder name matching ProjectManagement format
   const generateFolderName = (project) => {
     const parts = [];
@@ -423,20 +607,23 @@ const ProjectDetailDrawer = ({ projectId }) => {
     setEditedData({});
   }, []);
 
-  const saveTaskCell = async (task, field) => {
+  const saveTaskCell = async (task, field, gradingRecord = null) => {
     try {
       if (field === "assignees") {
         // Handle multiple user assignments
         const currentAssignments = task.taskAssignments || [];
         const currentUserIds = currentAssignments.map((a) => a.userId);
-        const newUserIds = editedData.assignees || [];
+        const selectedUserIds = editedData.assignees || [];
 
-        const usersToAdd = newUserIds.filter(
-          (id) => !currentUserIds.includes(id)
-        );
-        const usersToRemove = currentAssignments.filter(
-          (a) => !newUserIds.includes(a.userId)
-        );
+        // If more than 1 user selected, open allocation modal
+        if (selectedUserIds.length > 1) {
+          openAssignQtyModal(task, selectedUserIds, gradingRecord);
+          return;
+        }
+
+        // Otherwise, proceed with simple add/remove logic (single user)
+        const usersToAdd = selectedUserIds.filter((id) => !currentUserIds.includes(id));
+        const usersToRemove = currentAssignments.filter((a) => !selectedUserIds.includes(a.userId));
 
         // Delete removed assignments
         for (const assignment of usersToRemove) {
@@ -446,9 +633,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
         // Create new assignments
         if (usersToAdd.length > 0) {
           const taskImageQty = task.imageQuantity || 0;
-          const numUsers = newUserIds.length;
-          const qtyPerUser =
-            numUsers > 0 ? Math.floor(taskImageQty / numUsers) : 0;
+          const qtyPerUser = taskImageQty; // single user gets full quantity
 
           const assignmentInputs = usersToAdd.map((userId) => ({
             taskId: task.id,
@@ -462,6 +647,8 @@ const ProjectDetailDrawer = ({ projectId }) => {
           });
         }
 
+        message.success("Task assignments updated successfully");
+        await refetchTasks();
         cancelEditCell();
         return;
       } else if (field === "completedQty") {
@@ -715,7 +902,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
                           type="primary"
                           size="small"
                           icon={<SaveOutlined />}
-                          onClick={() => saveTaskCell(task, "status")}
+                          onClick={() => saveTaskCell(task, "status", record)}
                         >
                           Save
                         </Button>
@@ -758,7 +945,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
           {
             title: "Assignees",
             key: `task-${taskType.id}-assignees`,
-            width: 150,
+            width: 180,
             align: "center",
             onCell: () => ({
               style: { backgroundColor: `${taskType.color || "#d9d9d9"}20` },
@@ -766,8 +953,20 @@ const ProjectDetailDrawer = ({ projectId }) => {
             render: (_, record) => {
               const task = record.tasksByType[taskType.id];
               if (!task) return <Text type="secondary">-</Text>;
+              
+              // Debug log to verify task structure
+              if (task && !task._logged) {
+                console.log('[ProjectDetailDrawer] Task in Assignees column:', {
+                  taskId: task.id,
+                  taskCode: task.taskCode,
+                  imageQuantity: task.imageQuantity,
+                  hasImageQuantity: 'imageQuantity' in task,
+                  taskKeys: Object.keys(task)
+                });
+                task._logged = true;
+              }
 
-              const isEditing = isEditingCell(
+              const isEditingAssignees = isEditingCell(
                 record.gradingId,
                 taskType.id,
                 "assignees"
@@ -775,59 +974,131 @@ const ProjectDetailDrawer = ({ projectId }) => {
               const taskAssignments = task.taskAssignments || [];
               const assignedUserIds = taskAssignments.map((a) => a.userId);
 
-              if (isEditing) {
+              // Show multi-select when editing
+              if (isEditingAssignees) {
                 return (
                   <div
                     onClick={(e) => e.stopPropagation()}
                     style={{ padding: "4px 0" }}
                   >
-                    <Space
-                      direction="vertical"
-                      size={4}
+                    <Select
+                      mode="multiple"
+                      size="small"
+                      value={editedData.assignees || assignedUserIds}
+                      onChange={(values) =>
+                        setEditedData({ ...editedData, assignees: values })
+                      }
                       style={{ width: "100%" }}
+                      placeholder="Assign Users"
+                      maxTagCount="responsive"
+                      showSearch
+                      filterOption={(input, option) => {
+                        const children = option?.children;
+                        const searchText = Array.isArray(children)
+                          ? children.join(" ")
+                          : String(children ?? "");
+                        return searchText
+                          .toLowerCase()
+                          .includes(input.toLowerCase());
+                      }}
                     >
-                      <Select
-                        mode="multiple"
+                      {users.map((user) => (
+                        <Option key={user.id} value={user.id}>
+                          {user.firstName} {user.lastName}
+                        </Option>
+                      ))}
+                    </Select>
+                    <Space size="small" style={{ marginTop: 4 }}>
+                      <Button
+                        type="primary"
                         size="small"
-                        value={editedData.assignees || assignedUserIds}
-                        onChange={(values) =>
-                          setEditedData({ ...editedData, assignees: values })
-                        }
-                        style={{ width: "100%" }}
+                        icon={<SaveOutlined />}
+                        onClick={() => saveTaskCell(task, "assignees", record)}
                       >
-                        {users.map((user) => (
-                          <Option key={user.id} value={user.id}>
-                            {user.firstName} {user.lastName}
-                          </Option>
-                        ))}
-                      </Select>
-                      <Space size="small">
-                        <Button
-                          type="primary"
-                          size="small"
-                          icon={<SaveOutlined />}
-                          onClick={() => saveTaskCell(task, "assignees")}
-                        >
-                          Save
-                        </Button>
-                        <Button
-                          size="small"
-                          icon={<CloseCircleOutlined />}
-                          onClick={cancelEditCell}
-                        >
-                          Cancel
-                        </Button>
-                      </Space>
+                        Save
+                      </Button>
+                      <Button
+                        size="small"
+                        icon={<CloseCircleOutlined />}
+                        onClick={cancelEditCell}
+                      >
+                        Cancel
+                      </Button>
                     </Space>
                   </div>
                 );
               }
 
-              if (taskAssignments.length === 0) {
+              // Display assigned users with Edit button
+              if (taskAssignments.length > 0) {
                 return (
+                  <div
+                    onClick={(e) => e.stopPropagation()}
+                    style={{
+                      padding: "4px",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "4px",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Space
+                      direction="vertical"
+                      size={2}
+                      style={{ width: "100%" }}
+                    >
+                      {taskAssignments.map((assignment) => (
+                        <Text
+                          key={assignment.id}
+                          style={{
+                            fontSize: 11,
+                            display: "block",
+                            textAlign: "center",
+                          }}
+                        >
+                          {assignment.user?.firstName}{" "}
+                          {assignment.user?.lastName}
+                          {typeof assignment.imageQuantity === 'number' && (
+                            <span style={{ color: '#8c8c8c' }}> ({assignment.imageQuantity})</span>
+                          )}
+                        </Text>
+                      ))}
+                    </Space>
+                    <Button
+                      size="small"
+                      type="link"
+                      icon={<EditOutlined />}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startEditCell(
+                          record.gradingId,
+                          taskType.id,
+                          "assignees",
+                          assignedUserIds
+                        );
+                      }}
+                      style={{
+                        padding: "0 4px",
+                        height: "20px",
+                        fontSize: "11px",
+                      }}
+                    >
+                      Edit
+                    </Button>
+                  </div>
+                );
+              }
+
+              // No assignments - show "Assign" button
+              return (
+                <div
+                  onClick={(e) => e.stopPropagation()}
+                  style={{ padding: "4px" }}
+                >
                   <Button
                     size="small"
-                    type="link"
+                    type="dashed"
+                    block
                     onClick={(e) => {
                       e.stopPropagation();
                       startEditCell(
@@ -841,175 +1112,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
                   >
                     Assign Users
                   </Button>
-                );
-              }
-
-              return (
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    startEditCell(
-                      record.gradingId,
-                      taskType.id,
-                      "assignees",
-                      assignedUserIds
-                    );
-                  }}
-                  style={{ cursor: "pointer" }}
-                >
-                  {taskAssignments.map((assignment) => (
-                    <Tag
-                      key={assignment.id}
-                      icon={<UserOutlined />}
-                      style={{ fontSize: 11 }}
-                    >
-                      {assignment.user?.firstName} {assignment.user?.lastName}
-                    </Tag>
-                  ))}
                 </div>
-              );
-            },
-          },
-          {
-            title: "Images",
-            key: `task-${taskType.id}-images`,
-            width: 100,
-            align: "center",
-            onCell: () => ({
-              style: { backgroundColor: `${taskType.color || "#d9d9d9"}20` },
-            }),
-            render: (_, record) => {
-              const task = record.tasksByType[taskType.id];
-              if (!task) return <Text type="secondary">-</Text>;
-
-              const taskAssignments = task.taskAssignments || [];
-              const userAssignment = taskAssignments.find(
-                (assignment) => assignment.userId === currentUser?.id
-              );
-              const isAssignedUser = !!userAssignment;
-
-              const totalTaskQty =
-                record.imageQuantity || task.imageQuantity || 0;
-              const userCompleted = userAssignment?.completedImageQuantity || 0;
-
-              const totalCompleted = taskAssignments.reduce(
-                (sum, a) => sum + (a.completedImageQuantity || 0),
-                0
-              );
-
-              const isEditingImages = isEditingCell(
-                record.gradingId,
-                taskType.id,
-                "completedQty"
-              );
-
-              // If editing and user is assigned, show input
-              if (isEditingImages && isAssignedUser) {
-                // Calculate available quantity for additions
-                const currentUserCompleted = userAssignment?.completedImageQuantity || 0;
-                const otherUsersCompleted = taskAssignments
-                  .filter((a) => a.id !== userAssignment.id)
-                  .reduce((sum, a) => sum + (a.completedImageQuantity || 0), 0);
-                const maxCanAdd = totalTaskQty - currentUserCompleted - otherUsersCompleted;
-
-                return (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ padding: "4px 0" }}
-                  >
-                    <Space
-                      direction="vertical"
-                      size={4}
-                      style={{ width: "100%" }}
-                    >
-                      <Text type="secondary" style={{ fontSize: '11px' }}>
-                        Your current: {currentUserCompleted}
-                      </Text>
-                      <Tooltip
-                        title={
-                          `Enter the number of images you completed today. ` +
-                          `Your current total: ${currentUserCompleted}. ` +
-                          `You can add up to ${maxCanAdd} more images.`
-                        }
-                      >
-                        <InputNumber
-                          size="small"
-                          min={0}
-                          max={maxCanAdd}
-                          value={editedData.completedQty}
-                          onChange={(value) =>
-                            setEditedData({ ...editedData, completedQty: value })
-                          }
-                          style={{ width: "100%" }}
-                          addonBefore="+"
-                          placeholder={`Add (max: ${maxCanAdd})`}
-                        />
-                      </Tooltip>
-                      <Space size="small">
-                        <Button
-                          type="primary"
-                          size="small"
-                          icon={<SaveOutlined />}
-                          onClick={() => saveTaskCell(task, "completedQty")}
-                        >
-                          Save
-                        </Button>
-                        <Button
-                          size="small"
-                          icon={<CloseCircleOutlined />}
-                          onClick={cancelEditCell}
-                        >
-                          Cancel
-                        </Button>
-                      </Space>
-                    </Space>
-                  </div>
-                );
-              }
-
-              const displayCompleted = totalCompleted;
-              const percentage =
-                totalTaskQty > 0
-                  ? Math.round((displayCompleted / totalTaskQty) * 100)
-                  : 0;
-
-              const tooltipTitle = isAssignedUser
-                ? `Click to update your completed quantity (${userCompleted}/${totalTaskQty})`
-                : `Total progress: ${totalCompleted}/${totalTaskQty}`;
-
-              return (
-                <Tooltip title={tooltipTitle}>
-                  <div
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (isAssignedUser) {
-                        startEditCell(
-                          record.gradingId,
-                          taskType.id,
-                          "completedQty",
-                          userCompleted
-                        );
-                      }
-                    }}
-                    style={{
-                      cursor: isAssignedUser ? "pointer" : "not-allowed",
-                      padding: "4px",
-                      opacity: isAssignedUser ? 1 : 0.6,
-                    }}
-                  >
-                    <div
-                      style={{ fontSize: 11, fontWeight: 500, marginBottom: 2 }}
-                    >
-                      {displayCompleted} / {totalTaskQty}
-                    </div>
-                    <Progress
-                      percent={percentage}
-                      size="small"
-                      strokeColor={percentage === 100 ? "#52c41a" : "#1890ff"}
-                      showInfo={false}
-                    />
-                  </div>
-                </Tooltip>
               );
             },
           },
@@ -1077,7 +1180,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
       </div>
 
       {/* Project Statistics */}
-      <Row gutter={16} style={{ marginBottom: 24 }}>
+      {/* <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>
           <Card size="small">
             <Statistic
@@ -1118,7 +1221,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
             />
           </Card>
         </Col>
-      </Row>
+      </Row> */}
 
       {/* Quick Info Bar */}
       <Card size="small" style={{ marginBottom: 16 }}>
@@ -1265,6 +1368,118 @@ const ProjectDetailDrawer = ({ projectId }) => {
           loading={auditLoading}
         />
       </Card>
+
+      {/* Allocation Modal for per-user image quantities */}
+      <Modal
+        open={assignQtyModalOpen}
+        title="Assign image quantities per user"
+        onCancel={closeAssignQtyModal}
+        onOk={handleAssignQtyConfirm}
+        okButtonProps={{
+          disabled:
+            !assignQtyModalTask ||
+            assignQtySelectedUserIds.length === 0 ||
+            assignQtyTotalAllocated > assignQtyModalTaskTotal ||
+            !hasAssignQtyChanges,
+        }}
+        width={600}
+      >
+        {assignQtyModalTask ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <Text type="secondary">
+              Task total: {assignQtyModalTaskTotal} images
+            </Text>
+            
+            {/* User Selector */}
+            <div>
+              <Text strong style={{ display: "block", marginBottom: 8 }}>
+                Select Users:
+              </Text>
+              <Select
+                mode="multiple"
+                value={assignQtySelectedUserIds}
+                onChange={setAssignQtySelectedUserIds}
+                style={{ width: "100%" }}
+                placeholder="Select users to assign"
+                showSearch
+                filterOption={(input, option) => {
+                  const children = option?.children;
+                  const searchText = Array.isArray(children)
+                    ? children.join(" ")
+                    : String(children ?? "");
+                  return searchText.toLowerCase().includes(input.toLowerCase());
+                }}
+              >
+                {users.map((user) => (
+                  <Option key={user.id} value={user.id}>
+                    {user.firstName} {user.lastName}
+                  </Option>
+                ))}
+              </Select>
+            </div>
+
+            {/* Allocation Summary */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "8px 12px",
+                backgroundColor: "#f5f5f5",
+                borderRadius: "4px",
+              }}
+            >
+              <Text>
+                <strong>Allocated:</strong> {assignQtyTotalAllocated} / {assignQtyModalTaskTotal}
+                {assignQtyTotalAllocated > assignQtyModalTaskTotal && (
+                  <Text type="danger" style={{ marginLeft: 8 }}>
+                    (Exceeds total!)
+                  </Text>
+                )}
+              </Text>
+              <Button 
+                size="small" 
+                onClick={handleAssignQtyAutoDistribute}
+                disabled={assignQtySelectedUserIds.length === 0}
+              >
+                Auto distribute
+              </Button>
+            </div>
+
+            {/* Quantity Inputs */}
+            {assignQtySelectedUserIds.length > 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <Text strong>Quantity per user:</Text>
+                {assignQtySelectedUserIds.map((uid) => (
+                  <div key={uid} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0" }}>
+                    <div style={{ flex: 1 }}>
+                      <UserOutlined style={{ marginRight: 8, color: "#1890ff" }} />
+                      {getUserDisplayName(uid)}
+                    </div>
+                    <div style={{ width: 140 }}>
+                      <InputNumber
+                        size="small"
+                        min={0}
+                        max={assignQtyModalTaskTotal}
+                        value={assignQtyAllocations[uid] ?? 0}
+                        onChange={(val) =>
+                          setAssignQtyAllocations((prev) => ({ ...prev, [uid]: Number(val) || 0 }))
+                        }
+                        style={{ width: "100%" }}
+                        addonAfter="images"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding: "20px", textAlign: "center", backgroundColor: "#f5f5f5", borderRadius: "4px" }}>
+                <Text type="secondary">Please select users to assign quantities</Text>
+              </div>
+            )}
+          </div>
+        ) : null}
+      </Modal>
     </div>
   );
 };
