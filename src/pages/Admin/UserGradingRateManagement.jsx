@@ -245,10 +245,12 @@ const UserGradingRateManagement = () => {
               loading={usersLoading}
               allowClear
               showSearch
-              optionFilterProp="children"
-              filterOption={(input, option) =>
-                option.children.toLowerCase().includes(input.toLowerCase())
-              }
+              filterOption={(input, option) => {
+                const user = usersData?.users?.find(u => u.id === option.value);
+                if (!user) return false;
+                const searchText = `${user.firstName} ${user.lastName} ${user.role?.name || ''}`.toLowerCase();
+                return searchText.includes(input.toLowerCase());
+              }}
             >
               {usersData?.users
                 ?.filter(u => u.isActive)
@@ -272,7 +274,12 @@ const UserGradingRateManagement = () => {
               loading={gradingsLoading}
               allowClear
               showSearch
-              optionFilterProp="children"
+              filterOption={(input, option) => {
+                const grading = gradingsData?.gradings?.find(g => g.id === option.value);
+                if (!grading) return false;
+                const searchText = `${grading.name} ${grading.shortCode}`.toLowerCase();
+                return searchText.includes(input.toLowerCase());
+              }}
             >
               {gradingsData?.gradings?.map(grading => (
                 <Option key={grading.id} value={grading.id}>

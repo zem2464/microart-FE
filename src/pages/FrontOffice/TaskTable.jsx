@@ -56,7 +56,8 @@ import {
 dayjs.extend(relativeTime);
 
 // Fetch everything in one go; pagination/infinite scroll is removed
-const TASK_FETCH_LIMIT = 5000;
+// Increased limit to ensure all projects are fetched without pagination restrictions
+const TASK_FETCH_LIMIT = 10000;
 
 const { Option } = Select;
 const { Text } = Typography;
@@ -202,10 +203,14 @@ const TaskTable = () => {
     setAssignQtyModalTask(task);
     setAssignQtySelectedUserIds(selectedUserIds);
     setAssignQtyAllocations(prefill);
-    // Store original state for change detection (from existing task assignments, not selectedUserIds)
+    // Store original state for change detection (from existing task assignments)
     const originalUserIds = currentAssignments.map(a => a.userId);
+    const originalAllocations = {};
+    currentAssignments.forEach(a => {
+      originalAllocations[a.userId] = a.imageQuantity || 0;
+    });
     setAssignQtyOriginalUserIds(originalUserIds);
-    setAssignQtyOriginalAllocations(prefill);
+    setAssignQtyOriginalAllocations(originalAllocations);
     setAssignQtyModalOpen(true);
   }, []);
 
@@ -587,6 +592,8 @@ const TaskTable = () => {
     selectedWorkTypeId, // Re-enabled - backend now properly filters via ProjectWorkType
     gradingFilter,
     searchText,
+    clientSearch,
+    projectSearch,
     sortBy,
     sortOrder,
   ]);
