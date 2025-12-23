@@ -33,7 +33,12 @@ import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
 import { useAppDrawer } from "../contexts/DrawerContext";
 import ChatTrigger from "../components/Chat/ChatTrigger";
-import { hasPermission, MODULES, ACTIONS, generatePermission } from "../config/permissions";
+import {
+  hasPermission,
+  MODULES,
+  ACTIONS,
+  generatePermission,
+} from "../config/permissions";
 import GlobalSearchModal from "../components/GlobalSearchModal";
 
 // Import pages
@@ -57,16 +62,44 @@ const FrontOfficeLayout = () => {
   const [searchModalOpen, setSearchModalOpen] = useState(false);
 
   // Check permissions for menu items (using MANAGE to show/hide menu)
-  const canManageTasks = hasPermission(user, generatePermission(MODULES.TASKS, ACTIONS.MANAGE));
-  const canManageProjects = hasPermission(user, generatePermission(MODULES.PROJECTS, ACTIONS.MANAGE));
-  const canManageTransactions = hasPermission(user, generatePermission(MODULES.CLIENT_TRANSACTIONS, ACTIONS.MANAGE));
-  const canManageReports = hasPermission(user, generatePermission(MODULES.REPORTS, ACTIONS.MANAGE));
-  const canManageClients = hasPermission(user, generatePermission(MODULES.CLIENTS, ACTIONS.MANAGE));
-  
+  const canManageTasks = hasPermission(
+    user,
+    generatePermission(MODULES.TASKS, ACTIONS.MANAGE)
+  );
+  const canManageProjects = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.MANAGE)
+  );
+  const canManageTransactions = hasPermission(
+    user,
+    generatePermission(MODULES.CLIENT_TRANSACTIONS, ACTIONS.MANAGE)
+  );
+  const canManageReports = hasPermission(
+    user,
+    generatePermission(MODULES.REPORTS, ACTIONS.MANAGE)
+  );
+  const canManageUserDashboard = hasPermission(
+    user,
+    generatePermission(MODULES.USER_MANAGER, ACTIONS.MANAGE)
+  );
+  const canManageClients = hasPermission(
+    user,
+    generatePermission(MODULES.CLIENTS, ACTIONS.MANAGE)
+  );
+
   // Check permissions for actions
-  const canCreateClient = hasPermission(user, generatePermission(MODULES.CLIENTS, ACTIONS.CREATE));
-  const canCreateProject = hasPermission(user, generatePermission(MODULES.PROJECTS, ACTIONS.CREATE));
-  const canCreateTransaction = hasPermission(user, generatePermission(MODULES.CLIENT_TRANSACTIONS, ACTIONS.CREATE));
+  const canCreateClient = hasPermission(
+    user,
+    generatePermission(MODULES.CLIENTS, ACTIONS.CREATE)
+  );
+  const canCreateProject = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.CREATE)
+  );
+  const canCreateTransaction = hasPermission(
+    user,
+    generatePermission(MODULES.CLIENT_TRANSACTIONS, ACTIONS.CREATE)
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -90,7 +123,12 @@ const FrontOfficeLayout = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [showClientFormDrawer, showProjectFormDrawer, canCreateClient, canCreateProject]);
+  }, [
+    showClientFormDrawer,
+    showProjectFormDrawer,
+    canCreateClient,
+    canCreateProject,
+  ]);
 
   // Build menu items based on permissions
   const allMenuItems = [
@@ -114,7 +152,7 @@ const FrontOfficeLayout = () => {
       icon: <FileTextOutlined />,
       label: <Link to="/ledger">Ledger</Link>,
     },
-    canManageReports && {
+    canManageUserDashboard && {
       key: "/user-dashboard",
       icon: <UserOutlined />,
       label: <Link to="/user-dashboard">User Dashboard</Link>,
@@ -279,9 +317,9 @@ const FrontOfficeLayout = () => {
       </Content>
 
       {/* Global Search Modal */}
-      <GlobalSearchModal 
-        open={searchModalOpen} 
-        onClose={() => setSearchModalOpen(false)} 
+      <GlobalSearchModal
+        open={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
       />
     </Layout>
   );
