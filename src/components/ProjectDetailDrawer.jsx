@@ -392,7 +392,9 @@ const ProjectDetailDrawer = ({ projectId }) => {
     setAssignQtyModalGradingRecord(gradingRecord);
     setAssignQtySelectedUserIds(selectedUserIds);
     setAssignQtyAllocations(prefill);
-    setAssignQtyOriginalUserIds(selectedUserIds);
+    // Store original state for change detection (from existing task assignments, not selectedUserIds)
+    const originalUserIds = currentAssignments.map(a => a.userId);
+    setAssignQtyOriginalUserIds(originalUserIds);
     setAssignQtyOriginalAllocations(prefill);
     setAssignQtyModalOpen(true);
   }, [getTaskTotalQuantity]);

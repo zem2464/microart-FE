@@ -202,8 +202,9 @@ const TaskTable = () => {
     setAssignQtyModalTask(task);
     setAssignQtySelectedUserIds(selectedUserIds);
     setAssignQtyAllocations(prefill);
-    // Store original state for change detection
-    setAssignQtyOriginalUserIds(selectedUserIds);
+    // Store original state for change detection (from existing task assignments, not selectedUserIds)
+    const originalUserIds = currentAssignments.map(a => a.userId);
+    setAssignQtyOriginalUserIds(originalUserIds);
     setAssignQtyOriginalAllocations(prefill);
     setAssignQtyModalOpen(true);
   }, []);
