@@ -123,6 +123,12 @@ self.addEventListener('fetch', (event) => {
         return;
     }
     
+    // Skip navigation requests (page loads) - let them go straight to network
+    if (event.request.mode === 'navigate') {
+        event.respondWith(fetch(event.request));
+        return;
+    }
+    
     // For GraphQL/API requests - network first
     if (url.pathname.includes('/graphql') || url.pathname.includes('/api')) {
         event.respondWith(
@@ -134,6 +140,15 @@ self.addEventListener('fetch', (event) => {
                     );
                 })
         );
+        return;
+    }
+    
+    // Only cache static assets (js, css, images, fonts, etc.)
+    const staticAssetExtensions = ['.js', '.css', '.png', '.jpg', '.jpeg', '.svg', '.gif', '.woff', '.woff2', '.ttf', '.ico'];
+    const isStaticAsset = staticAssetExtensions.some(ext => url.pathname.endsWith(ext));
+    
+    if (!isStaticAsset) {
+        // Not a static asset, fetch from network
         return;
     }
     
@@ -153,9 +168,14 @@ self.addEventListener('fetch', (event) => {
                     const responseToCache = response.clone();
                     caches.open('microart-v1').then((cache) => {
                         cache.put(event.request, responseToCache);
+                    }).catch(err => {
+                        console.log('[SW] Cache put failed:', err);
                     });
                     
                     return response;
+                }).catch(error => {
+                    console.log('[SW] Fetch failed:', error);
+                    throw error;
                 });
             })
     );
