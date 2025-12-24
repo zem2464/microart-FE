@@ -113,6 +113,16 @@ self.addEventListener('fetch', (event) => {
         return;
     }
     
+    // Skip unsupported schemes (chrome-extension, blob, data, etc.)
+    if (!url.protocol.startsWith('http')) {
+        return;
+    }
+    
+    // Skip cross-origin requests
+    if (url.origin !== self.location.origin) {
+        return;
+    }
+    
     // For GraphQL/API requests - network first
     if (url.pathname.includes('/graphql') || url.pathname.includes('/api')) {
         event.respondWith(
