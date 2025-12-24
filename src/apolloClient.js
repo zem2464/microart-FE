@@ -97,8 +97,9 @@ const httpLink = createHttpLink({
   credentials: "include",
 });
 
-export const wsLink = new GraphQLWsLink(createClient({
-  url: process.env.REACT_APP_GRAPHQL_WS_URL || "ws://localhost:4000/graphql",
+// WebSocket link - works in both development and production with SSL
+export const wsLink = process.env.REACT_APP_GRAPHQL_WS_URL ? new GraphQLWsLink(createClient({
+  url: process.env.REACT_APP_GRAPHQL_WS_URL,
   connectionParams: () => {
     const token = getAuthToken();
     return {
@@ -107,29 +108,41 @@ export const wsLink = new GraphQLWsLink(createClient({
   },
   // Cookies will also be sent automatically with credentials: include
   retryAttempts: 5,
-  shouldRetry: () => true,
+  shouldRetry: (errOrCloseEvent) => {
+    // Don't retry on authentication errors
+    return true;
+  },
   keepAlive: 30000, // Send ping every 30 seconds
+  lazy: false, // Connect immediately when the client is created
   webSocketImpl: typeof window !== 'undefined' ? window.WebSocket : null,
+  connectionAckWaitTimeout: 10000, // Wait up to 10s for connection acknowledgment
   on: {
     connecting: () => {
-      // WebSocket connecting
+      console.log('WebSocket connecting...');
     },
-    opened: () => {
-      // WebSocket connection opened
+    opened: (socket) => {
+      console.log('WebSocket connection opened', socket);
     },
-    connected: () => {
-      // WebSocket connection established
-      console.log('WebSocket connected with authentication');
+    connected: (socket, payload) => {
+      console.log('WebSocket connected with authentication', payload);
+    },
+    ping: (received) => {
+      if (!received) console.log('Ping sent');
+    },
+    pong: (received) => {
+      if (received) console.log('Pong received');
     },
     closed: (event) => {
-      // WebSocket connection closed
       console.log('WebSocket closed:', event?.code, event?.reason);
+      if (event?.code === 1006) {
+        console.error('WebSocket closed abnormally - possible network issue or server unavailable');
+      }
     },
     error: (error) => {
       console.error("WebSocket error:", error);
     },
   },
-}));
+})) : null;
 
 const cache = new InMemoryCache({
   typePolicies: {
@@ -214,8 +227,8 @@ const cache = new InMemoryCache({
   },
 });
 
-// Split link to route subscriptions to WebSocket and queries/mutations to HTTP
-const splitLink = split(
+// Split link to route subscriptions to WebSocket (if available) or HTTP
+const splitLink = wsLink ? split(
   ({ query }) => {
     const definition = getMainDefinition(query);
     return (
@@ -225,7 +238,7 @@ const splitLink = split(
   },
   wsLink,
   from([operationNameHeaderLink, httpLink])
-);
+) : from([operationNameHeaderLink, httpLink]);
 
 // Create Apollo Client
 const client = new ApolloClient({
