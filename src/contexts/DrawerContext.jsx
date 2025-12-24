@@ -52,7 +52,7 @@ export const AppDrawerProvider = ({ children }) => {
 	const [projectDetailDrawer, setProjectDetailDrawer] = useState({ open: false, project: null });
 	
 	// New Project Detail Drawer (accepts projectId only)
-	const [projectDetailDrawerV2, setProjectDetailDrawerV2] = useState({ open: false, projectId: null });
+	const [projectDetailDrawerV2, setProjectDetailDrawerV2] = useState({ open: false, projectId: null, title: 'Project Details' });
 	
 	// Task Detail Drawer (accepts taskId only)
 	const [taskDetailDrawerV2, setTaskDetailDrawerV2] = useState({ open: false, taskId: null });
@@ -70,8 +70,9 @@ export const AppDrawerProvider = ({ children }) => {
 	const closeProjectDetailDrawer = () => setProjectDetailDrawer({ open: false, project: null });
 	
 	// New V2 functions for redesigned drawer
-	const showProjectDetailDrawerV2 = (projectId) => setProjectDetailDrawerV2({ open: true, projectId });
-	const closeProjectDetailDrawerV2 = () => setProjectDetailDrawerV2({ open: false, projectId: null });
+	const showProjectDetailDrawerV2 = (projectId) => setProjectDetailDrawerV2({ open: true, projectId, title: 'Project Details' });
+	const closeProjectDetailDrawerV2 = () => setProjectDetailDrawerV2({ open: false, projectId: null, title: 'Project Details' });
+	const updateProjectDetailDrawerTitle = (title) => setProjectDetailDrawerV2(prev => ({ ...prev, title }));
 	
 	// Task Detail Drawer V2 functions
 	const showTaskDetailDrawerV2 = (taskId) => setTaskDetailDrawerV2({ open: true, taskId });
@@ -134,6 +135,7 @@ export const AppDrawerProvider = ({ children }) => {
 		// New Project Detail V2
 		showProjectDetailDrawerV2,
 		closeProjectDetailDrawerV2,
+		updateProjectDetailDrawerTitle,
 		// New Task Detail V2
 		showTaskDetailDrawerV2,
 		closeTaskDetailDrawerV2,
@@ -538,7 +540,7 @@ export const AppDrawerProvider = ({ children }) => {
 			{projectDetailDrawerV2.open && (
 				<ModuleDrawer
 					open={projectDetailDrawerV2.open}
-					title="Project Details"
+					title={projectDetailDrawerV2.title}
 					width={1400}
 					placement="right"
 					onClose={closeProjectDetailDrawerV2}

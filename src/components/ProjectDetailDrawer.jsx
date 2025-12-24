@@ -1,16 +1,10 @@
-import React, { useState, useCallback, useMemo } from "react";
-import { useQuery, useMutation, useReactiveVar } from "@apollo/client";
+import React, { useState, useEffect } from "react";
+import { useQuery, useMutation, useReactiveVar, useApolloClient } from "@apollo/client";
 import {
   Spin,
   Alert,
   Typography,
   Tag,
-  Table,
-  Select,
-  InputNumber,
-  message,
-  Space,
-  Button,
   Empty,
   Statistic,
   Row,
@@ -19,7 +13,9 @@ import {
   Tooltip,
   Progress,
   Input,
-  Modal,
+  Button,
+  Space,
+  message,
 } from "antd";
 import {
   FolderOutlined,
@@ -30,13 +26,7 @@ import {
   DollarOutlined,
   FileImageOutlined,
   ReloadOutlined,
-  SaveOutlined,
-  CloseCircleOutlined,
-  SyncOutlined,
-  ExclamationCircleOutlined,
-  UserOutlined,
   CopyOutlined,
-  EditOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { userCacheVar } from "../cache/userCacheVar";
@@ -46,19 +36,16 @@ import {
 } from "../graphql/projectQueries";
 import { UPDATE_PROJECT } from "../graphql/projectQueries";
 import { UPDATE_CLIENT } from "../gql/clients";
-import { UPDATE_TASK, GET_TASKS } from "../gql/tasks";
+import { GET_TASKS } from "../gql/tasks";
 // Use work types query that includes sortOrder for proper ordering
 import { GET_WORK_TYPES } from "../gql/workTypes";
-import {
-  BULK_CREATE_TASK_ASSIGNMENTS,
-  DELETE_TASK_ASSIGNMENT,
-  UPDATE_TASK_ASSIGNMENT,
-} from "../gql/taskAssignments";
 import { GET_PROJECT_AUDIT_HISTORY } from "../gql/auditLogs";
 import AuditDisplay from "./common/AuditDisplay.jsx";
+import TasksTable from "./common/TasksTable";
+import { generateBaseColumns } from "./common/TasksTableColumns";
+import { useAppDrawer } from "../contexts/DrawerContext";
 
 const { Title, Text } = Typography;
-const { Option } = Select;
 
 // Project status configuration
 const STATUS_MAP = {
@@ -73,54 +60,10 @@ const STATUS_MAP = {
   REQUESTED: { label: "Pending Approval", color: "purple" },
 };
 
-// Status configuration matching TaskTable
-const TASK_STATUS = {
-  todo: { label: "To Do", color: "default", icon: <ClockCircleOutlined /> },
-  in_progress: {
-    label: "In Progress",
-    color: "blue",
-    icon: <SyncOutlined spin />,
-  },
-  review: {
-    label: "Ready QC",
-    color: "purple",
-    icon: <ExclamationCircleOutlined />,
-  },
-  completed: {
-    label: "Completed",
-    color: "green",
-    icon: <CheckCircleOutlined />,
-  },
-  revision: {
-    label: "Re-Open",
-    color: "orange",
-    icon: <ExclamationCircleOutlined />,
-  },
-  cancelled: {
-    label: "Cancelled",
-    color: "red",
-    icon: <CloseCircleOutlined />,
-  },
-  on_hold: { label: "On Hold", color: "gold", icon: <ClockCircleOutlined /> },
-};
-
 const ProjectDetailDrawer = ({ projectId }) => {
   const currentUser = useReactiveVar(userCacheVar);
-  const [editingCell, setEditingCell] = useState({
-    gradingId: null,
-    taskTypeId: null,
-    field: null,
-  });
-  const [editedData, setEditedData] = useState({});
-  
-  // Allocation modal state
-  const [assignQtyModalOpen, setAssignQtyModalOpen] = useState(false);
-  const [assignQtyModalTask, setAssignQtyModalTask] = useState(null);
-  const [assignQtyModalGradingRecord, setAssignQtyModalGradingRecord] = useState(null);
-  const [assignQtySelectedUserIds, setAssignQtySelectedUserIds] = useState([]);
-  const [assignQtyAllocations, setAssignQtyAllocations] = useState({});
-  const [assignQtyOriginalUserIds, setAssignQtyOriginalUserIds] = useState([]);
-  const [assignQtyOriginalAllocations, setAssignQtyOriginalAllocations] = useState({});
+  const { updateProjectDetailDrawerTitle } = useAppDrawer();
+  const client = useApolloClient();
 
   // Fetch project details
   const { data, loading, error, refetch } = useQuery(GET_PROJECT_DETAIL, {
@@ -176,14 +119,24 @@ const ProjectDetailDrawer = ({ projectId }) => {
     fetchPolicy: "no-cache",
   });
   const [updateProject] = useMutation(UPDATE_PROJECT, {
+    fetchPolicy: 'no-cache',
     onCompleted: () => {
+      // Evict cache
+      client.cache.evict({ fieldName: 'project' });
+      client.cache.evict({ fieldName: 'tasks' });
+      client.cache.gc();
       message.success("Project notes updated");
       refetch();
     },
     onError: (error) => message.error(error.message),
   });
   const [updateClient] = useMutation(UPDATE_CLIENT, {
+    fetchPolicy: 'no-cache',
     onCompleted: () => {
+      // Evict cache
+      client.cache.evict({ fieldName: 'project' });
+      client.cache.evict({ fieldName: 'client' });
+      client.cache.gc();
       message.success("Client notes updated");
       refetch();
     },
@@ -203,109 +156,39 @@ const ProjectDetailDrawer = ({ projectId }) => {
   });
 
   // Mutations - Using cache eviction and refetchQueries to ensure updates reflect
-  const [updateTask] = useMutation(UPDATE_TASK, {
-    refetchQueries: [
-      {
-        query: GET_TASKS,
-        variables: {
-          filters: { 
-            projectId: projectId,
-            statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
-            includeInactive: true
-          },
-          page: 1,
-          limit: 1000,
-          sortBy: "createdAt",
-          sortOrder: "DESC",
-        },
-      },
-    ],
-    awaitRefetchQueries: true,
-    onCompleted: () => {
-      message.success("Task updated successfully");
-      cancelEditCell();
-    },
-    onError: (error) => {
-      message.error(`Failed to update task: ${error.message}`);
-    },
-  });
-
-  const [bulkCreateAssignments] = useMutation(BULK_CREATE_TASK_ASSIGNMENTS, {
-    refetchQueries: [
-      {
-        query: GET_TASKS,
-        variables: {
-          filters: { 
-            projectId: projectId,
-            statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
-            includeInactive: true
-          },
-          page: 1,
-          limit: 1000,
-          sortBy: "createdAt",
-          sortOrder: "DESC",
-        },
-      },
-    ],
-    awaitRefetchQueries: true,
-    onCompleted: () => {
-      message.success("Assignments updated successfully");
-      cancelEditCell();
-    },
-    onError: (error) => {
-      message.error(`Failed to update assignments: ${error.message}`);
-    },
-  });
-
-  const [deleteAssignment] = useMutation(DELETE_TASK_ASSIGNMENT, {
-    refetchQueries: [
-      {
-        query: GET_TASKS,
-        variables: {
-          filters: { 
-            projectId: projectId,
-            statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
-            includeInactive: true
-          },
-          page: 1,
-          limit: 1000,
-          sortBy: "createdAt",
-          sortOrder: "DESC",
-        },
-      },
-    ],
-    awaitRefetchQueries: true,
-  });
-
-  const [updateTaskAssignment] = useMutation(UPDATE_TASK_ASSIGNMENT, {
-    refetchQueries: [
-      {
-        query: GET_TASKS,
-        variables: {
-          filters: { 
-            projectId: projectId,
-            statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
-            includeInactive: true
-          },
-          page: 1,
-          limit: 1000,
-          sortBy: "createdAt",
-          sortOrder: "DESC",
-        },
-      },
-    ],
-    awaitRefetchQueries: true,
-    onCompleted: () => {
-      message.success("Completed quantity updated successfully");
-      cancelEditCell();
-    },
-    onError: (error) => {
-      message.error(`Failed to update assignment: ${error.message}`);
-    },
-  });
-
   const project = data?.project;
   const tasks = tasksData?.tasks?.tasks || [];
+  
+  // Update drawer title when project loads
+  useEffect(() => {
+    if (project) {
+      const statusConfig = STATUS_MAP[project.status?.toUpperCase()] || {};
+      const titleElement = (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingRight: 24 }}>
+          <Space size="middle">
+            <span>{project.projectCode}</span>
+            <span style={{ color: '#8c8c8c', fontWeight: 'normal' }}>|</span>
+            <span style={{ fontWeight: 'normal' }}>{project.name}</span>
+            <Tag color={statusConfig.color || 'blue'}>
+              {statusConfig.label || project.status}
+            </Tag>
+          </Space>
+          <Button
+            icon={<ReloadOutlined />}
+            onClick={() => {
+              refetch();
+              refetchTasks();
+              refetchAudit();
+            }}
+            size="small"
+          >
+            Refresh
+          </Button>
+        </div>
+      );
+      updateProjectDetailDrawerTitle(titleElement);
+    }
+  }, [project, updateProjectDetailDrawerTitle]);
   const [projectNotesInput, setProjectNotesInput] = useState("");
     const [clientNotesInput, setClientNotesInput] = useState("");
 
@@ -338,180 +221,14 @@ const ProjectDetailDrawer = ({ projectId }) => {
   const users = usersData?.availableUsers || [];
   const allWorkTypes = workTypesData?.workTypes || [];
 
-  // Helper to get task total quantity
-  // In ProjectDetailDrawer, quantity comes from the grading record, not individual task
-  const getTaskTotalQuantity = useCallback((task, gradingRecord = null) => {
-    // If we have a grading record, use its imageQuantity (preferred in drawer context)
-    if (gradingRecord && gradingRecord.imageQuantity) {
-      console.log('[ProjectDetailDrawer] Using grading imageQuantity:', gradingRecord.imageQuantity);
-      return gradingRecord.imageQuantity;
-    }
-    // Fallback to task imageQuantity
-    if (!task) return 0;
-    const qty = task?.imageQuantity || 0;
-    console.log('[ProjectDetailDrawer] Using task imageQuantity:', qty);
-    return qty;
-  }, []);
-
-  // Helper to get user display name
-  const getUserDisplayName = useCallback((userId) => {
-    const user = users.find((u) => u.id === userId);
-    if (!user) return "Unknown User";
-    return `${user.firstName} ${user.lastName}`;
-  }, [users]);
-
-  // Open allocation modal
-  const openAssignQtyModal = useCallback((task, selectedUserIds, gradingRecord = null) => {
-    console.log('[ProjectDetailDrawer] openAssignQtyModal called with task:', task, 'gradingRecord:', gradingRecord);
-    const totalQty = getTaskTotalQuantity(task, gradingRecord);
-    console.log('[ProjectDetailDrawer] totalQty:', totalQty);
-    const currentAssignments = task?.taskAssignments || [];
-
-    // Prefill allocations: use existing assignment qty if present, else equal split of remaining
-    const prefill = {};
-    let preSum = 0;
-    selectedUserIds.forEach((uid) => {
-      const existing = currentAssignments.find((a) => a.userId === uid);
-      if (existing && typeof existing.imageQuantity === "number") {
-        prefill[uid] = existing.imageQuantity;
-        preSum += existing.imageQuantity;
-      }
-    });
-
-    const toDistribute = Math.max(totalQty - preSum, 0);
-    const needAllocation = selectedUserIds.filter((uid) => prefill[uid] === undefined);
-    if (needAllocation.length > 0) {
-      const base = needAllocation.length > 0 ? Math.floor(toDistribute / needAllocation.length) : 0;
-      needAllocation.forEach((uid, idx) => {
-        const remainder = idx < (toDistribute % needAllocation.length) ? 1 : 0;
-        prefill[uid] = base + remainder;
-      });
-    }
-
-    setAssignQtyModalTask(task);
-    setAssignQtyModalGradingRecord(gradingRecord);
-    setAssignQtySelectedUserIds(selectedUserIds);
-    setAssignQtyAllocations(prefill);
-    // Store original state for change detection (from existing task assignments, not selectedUserIds)
-    const originalUserIds = currentAssignments.map(a => a.userId);
-    setAssignQtyOriginalUserIds(originalUserIds);
-    setAssignQtyOriginalAllocations(prefill);
-    setAssignQtyModalOpen(true);
-  }, [getTaskTotalQuantity]);
-
-  // Close allocation modal
-  const closeAssignQtyModal = useCallback(() => {
-    setAssignQtyModalOpen(false);
-    setAssignQtyModalTask(null);
-    setAssignQtyModalGradingRecord(null);
-    setAssignQtySelectedUserIds([]);
-    setAssignQtyAllocations({});
-    setAssignQtyOriginalUserIds([]);
-    setAssignQtyOriginalAllocations({});
-    cancelEditCell();
-  }, []);
-
-  // Calculate total allocated
-  const assignQtyTotalAllocated = useMemo(() => {
-    let sum = 0;
-    for (const uid of assignQtySelectedUserIds) {
-      sum += Number(assignQtyAllocations[uid]) || 0;
-    }
-    return sum;
-  }, [assignQtySelectedUserIds, assignQtyAllocations]);
-
-  const assignQtyModalTaskTotal = useMemo(() => {
-    return getTaskTotalQuantity(assignQtyModalTask, assignQtyModalGradingRecord);
-  }, [assignQtyModalTask, assignQtyModalGradingRecord, getTaskTotalQuantity]);
-
-  // Check if allocations have changed
-  const hasAssignQtyChanges = useMemo(() => {
-    console.log('[ProjectDetailDrawer] hasAssignQtyChanges check:', {
-      selectedUserIds: assignQtySelectedUserIds,
-      originalUserIds: assignQtyOriginalUserIds,
-      allocations: assignQtyAllocations,
-      originalAllocations: assignQtyOriginalAllocations
-    });
-    
-    if (assignQtySelectedUserIds.length !== assignQtyOriginalUserIds.length) {
-      console.log('[ProjectDetailDrawer] Length changed:', assignQtySelectedUserIds.length, 'vs', assignQtyOriginalUserIds.length);
-      return true;
-    }
-    const origSet = new Set(assignQtyOriginalUserIds);
-    for (const uid of assignQtySelectedUserIds) {
-      if (!origSet.has(uid)) {
-        console.log('[ProjectDetailDrawer] New user added:', uid);
-        return true;
-      }
-    }
-    for (const uid of assignQtySelectedUserIds) {
-      const currentQty = Number(assignQtyAllocations[uid]) || 0;
-      const originalQty = Number(assignQtyOriginalAllocations[uid]) || 0;
-      if (currentQty !== originalQty) {
-        console.log('[ProjectDetailDrawer] Quantity changed for user', uid, ':', currentQty, 'vs', originalQty);
-        return true;
-      }
-    }
-    console.log('[ProjectDetailDrawer] No changes detected');
-    return false;
-  }, [assignQtySelectedUserIds, assignQtyOriginalUserIds, assignQtyAllocations, assignQtyOriginalAllocations]);
-
-  // Auto distribute quantities
-  const handleAssignQtyAutoDistribute = useCallback(() => {
-    if (!assignQtyModalTask) return;
-    const totalQty = getTaskTotalQuantity(assignQtyModalTask, assignQtyModalGradingRecord);
-    console.log('[ProjectDetailDrawer] Auto-distribute totalQty:', totalQty, 'users:', assignQtySelectedUserIds.length);
-    const n = assignQtySelectedUserIds.length || 1;
-    const base = Math.floor(totalQty / n);
-    const remainder = totalQty % n;
-    const next = {};
-    assignQtySelectedUserIds.forEach((uid, idx) => {
-      next[uid] = base + (idx < remainder ? 1 : 0);
-    });
-    console.log('[ProjectDetailDrawer] Auto-distribute result:', next);
-    setAssignQtyAllocations(next);
-  }, [assignQtyModalTask, assignQtyModalGradingRecord, assignQtySelectedUserIds, getTaskTotalQuantity]);
-
-  // Confirm allocation modal
-  const handleAssignQtyConfirm = useCallback(async () => {
-    if (!assignQtyModalTask) return;
-    const task = assignQtyModalTask;
-    const selectedIds = assignQtySelectedUserIds;
-    const allocations = assignQtyAllocations;
-
-    try {
-      // Current assignments
-      const currentAssignments = task.taskAssignments || [];
-      // Delete users that are no longer selected
-      const toRemove = currentAssignments.filter((a) => !selectedIds.includes(a.userId));
-      for (const assignment of toRemove) {
-        await deleteAssignment({ variables: { id: assignment.id } });
-      }
-
-      // Upsert for all selected users
-      for (const uid of selectedIds) {
-        const qty = Number(allocations[uid]) || 0;
-        const existing = currentAssignments.find((a) => a.userId === uid);
-        if (existing) {
-          await updateTaskAssignment({
-            variables: { id: existing.id, input: { imageQuantity: qty } },
-          });
-        } else {
-          await bulkCreateAssignments({
-            variables: {
-              inputs: [{ taskId: task.id, userId: uid, imageQuantity: qty, notes: null }],
-            },
-          });
-        }
-      }
-
-      message.success("Task assignments updated successfully");
-      await refetchTasks();
-      closeAssignQtyModal();
-    } catch (error) {
-      message.error(`Failed to update assignments: ${error.message}`);
-    }
-  }, [assignQtyModalTask, assignQtySelectedUserIds, assignQtyAllocations, deleteAssignment, updateTaskAssignment, bulkCreateAssignments, closeAssignQtyModal, refetchTasks]);
+  // Base columns for TasksTable - show all columns except project/client/dates
+  const baseColumns = generateBaseColumns({
+    showProjectCode: false, // Hide project column (we're in project detail)
+    showClientInfo: false,  // Hide client column (we're in project detail)
+    showOrderDate: false,   // Hide order date (shown in header)
+    showGrading: true,      // Show grading column (multiple gradings per project)
+    showPriority: true,     // Show priority
+  });
 
   // Generate folder name matching ProjectManagement format
   const generateFolderName = (project) => {
@@ -581,129 +298,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
         message.error("Failed to copy folder name");
       }
       document.body.removeChild(textArea);
-    }
-  };
-
-  // Inline editing helpers
-  const isEditingCell = useCallback(
-    (gradingId, taskTypeId, field) => {
-      return (
-        editingCell.gradingId === gradingId &&
-        editingCell.taskTypeId === taskTypeId &&
-        editingCell.field === field
-      );
-    },
-    [editingCell]
-  );
-
-  const startEditCell = useCallback(
-    (gradingId, taskTypeId, field, initialValue) => {
-      setEditingCell({ gradingId, taskTypeId, field });
-      setEditedData({ [field]: initialValue });
-    },
-    []
-  );
-
-  const cancelEditCell = useCallback(() => {
-    setEditingCell({ gradingId: null, taskTypeId: null, field: null });
-    setEditedData({});
-  }, []);
-
-  const saveTaskCell = async (task, field, gradingRecord = null) => {
-    try {
-      if (field === "assignees") {
-        // Handle multiple user assignments
-        const currentAssignments = task.taskAssignments || [];
-        const currentUserIds = currentAssignments.map((a) => a.userId);
-        const selectedUserIds = editedData.assignees || [];
-
-        // If more than 1 user selected, open allocation modal
-        if (selectedUserIds.length > 1) {
-          openAssignQtyModal(task, selectedUserIds, gradingRecord);
-          return;
-        }
-
-        // Otherwise, proceed with simple add/remove logic (single user)
-        const usersToAdd = selectedUserIds.filter((id) => !currentUserIds.includes(id));
-        const usersToRemove = currentAssignments.filter((a) => !selectedUserIds.includes(a.userId));
-
-        // Delete removed assignments
-        for (const assignment of usersToRemove) {
-          await deleteAssignment({ variables: { id: assignment.id } });
-        }
-
-        // Create new assignments
-        if (usersToAdd.length > 0) {
-          const taskImageQty = task.imageQuantity || 0;
-          const qtyPerUser = taskImageQty; // single user gets full quantity
-
-          const assignmentInputs = usersToAdd.map((userId) => ({
-            taskId: task.id,
-            userId,
-            imageQuantity: qtyPerUser,
-            notes: null,
-          }));
-
-          await bulkCreateAssignments({
-            variables: { inputs: assignmentInputs },
-          });
-        }
-
-        message.success("Task assignments updated successfully");
-        await refetchTasks();
-        cancelEditCell();
-        return;
-      } else if (field === "completedQty") {
-        // Update task assignment completed quantity (incremental addition)
-        const userAssignment = task.taskAssignments?.[0];
-        if (!userAssignment) {
-          message.error("No assignment found");
-          cancelEditCell();
-          return;
-        }
-
-        // Validate: the increment being added shouldn't cause total to exceed task quantity
-        if (task.imageQuantity) {
-          const currentUserCompleted = userAssignment.completedImageQuantity || 0;
-          const otherAssignmentsCompleted = task.taskAssignments
-            ?.filter((a) => a.id !== userAssignment.id)
-            .reduce((sum, a) => sum + (a.completedImageQuantity || 0), 0) || 0;
-
-          const incrementToAdd = editedData.completedQty;
-          const newTotalCompleted = currentUserCompleted + incrementToAdd + otherAssignmentsCompleted;
-
-          if (newTotalCompleted > task.imageQuantity) {
-            const maxCanAdd = task.imageQuantity - currentUserCompleted - otherAssignmentsCompleted;
-            message.error(
-              `Cannot add ${incrementToAdd} images. ` +
-              `You've completed ${currentUserCompleted}, others completed ${otherAssignmentsCompleted}. ` +
-              `You can add up to ${maxCanAdd} more images.`
-            );
-            cancelEditCell();
-            return;
-          }
-        }
-
-        // Send the increment value - backend will add it to existing total
-        await updateTaskAssignment({
-          variables: {
-            id: userAssignment.id,
-            input: { completedImageQuantity: editedData.completedQty },
-          },
-        });
-        return;
-      } else if (field === "status") {
-        await updateTask({
-          variables: {
-            id: task.id,
-            input: { status: editedData.status },
-          },
-        });
-        return;
-      }
-    } catch (error) {
-      console.error("Error saving task:", error);
-      message.error(`Failed to update task: ${error.message}`);
     }
   };
 
@@ -783,6 +377,10 @@ const ProjectDetailDrawer = ({ projectId }) => {
               })
               .find((code) => !!code);
 
+            // Get dueDate from first task (tasks have dueDate field)
+            const firstTask = gradingTasks[0];
+            const taskDueDate = firstTask?.dueDate || null;
+
             return {
               gradingId: grading.id,
               gradingName: grading.name || null,
@@ -791,6 +389,11 @@ const ProjectDetailDrawer = ({ projectId }) => {
               estimatedCost: projectGrading.estimatedCost,
               actualCost: projectGrading.actualCost,
               tasksByType,
+              // Add project-level fields for columns from main project query
+              projectId: project.id,
+              orderDate: project.createdAt, // Use createdAt as orderDate (like main TaskTable)
+              dueDate: taskDueDate, // Get dueDate from task (tasks have dueDate, not projects)
+              priority: project.priority,
             };
           })
           .filter(Boolean); // Remove null gradings
@@ -809,321 +412,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
   };
 
   const workTypeTabs = getWorkTypeTabsData() || [];
-
-  // Generate columns for work type table (similar to TaskTable)
-  const generateColumnsForWorkType = (workType) => {
-    // Sort task types by the order field from WorkTypeTask junction table
-    const taskTypes = Array.isArray(workType?.taskTypes)
-      ? [...workType.taskTypes].sort((a, b) => {
-          const orderA = a.WorkTypeTask?.order ?? 0;
-          const orderB = b.WorkTypeTask?.order ?? 0;
-          return orderA - orderB;
-        })
-      : [];
-
-    const baseColumns = [
-      {
-        title: "Grading / Qty",
-        dataIndex: "gradingShortCode",
-        key: "grading",
-        width: 150,
-        fixed: "left",
-        render: (_, record) => (
-          <div style={{ fontSize: 12 }}>
-            <div style={{ fontWeight: 600 }}>
-              {record.gradingShortCode || record.gradingName || "-"}
-            </div>
-            <Text type="secondary" style={{ fontSize: 11 }}>
-              ({record.imageQuantity || 0})
-            </Text>
-          </div>
-        ),
-      },
-    ];
-
-    // Dynamic task type columns
-    const taskColumns = taskTypes.flatMap((taskType) => [
-      {
-        title: (
-          <div style={{ textAlign: "center" }}>
-            <Tag color={taskType.color || "default"}>{taskType.name}</Tag>
-          </div>
-        ),
-        className: "task-type-column-group",
-        children: [
-          {
-            title: "Status",
-            key: `task-${taskType.id}-status`,
-            width: 110,
-            align: "center",
-            onCell: () => ({
-              style: { backgroundColor: `${taskType.color || "#d9d9d9"}20` },
-            }),
-            render: (_, record) => {
-              const task = record.tasksByType[taskType.id];
-              if (!task) return <Text type="secondary">-</Text>;
-
-              const isEditing = isEditingCell(
-                record.gradingId,
-                taskType.id,
-                "status"
-              );
-
-              if (isEditing) {
-                return (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ padding: "4px 0" }}
-                  >
-                    <Space
-                      direction="vertical"
-                      size={4}
-                      style={{ width: "100%" }}
-                    >
-                      <Select
-                        size="small"
-                        value={editedData.status || task.status}
-                        onChange={(value) =>
-                          setEditedData({ ...editedData, status: value })
-                        }
-                        style={{ width: "100%" }}
-                      >
-                        {Object.keys(TASK_STATUS).map((status) => (
-                          <Option key={status} value={status}>
-                            <Tag
-                              color={TASK_STATUS[status].color}
-                              icon={TASK_STATUS[status].icon}
-                            >
-                              {TASK_STATUS[status].label}
-                            </Tag>
-                          </Option>
-                        ))}
-                      </Select>
-                      <Space size="small">
-                        <Button
-                          type="primary"
-                          size="small"
-                          icon={<SaveOutlined />}
-                          onClick={() => saveTaskCell(task, "status", record)}
-                        >
-                          Save
-                        </Button>
-                        <Button
-                          size="small"
-                          icon={<CloseCircleOutlined />}
-                          onClick={cancelEditCell}
-                        >
-                          Cancel
-                        </Button>
-                      </Space>
-                    </Space>
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    startEditCell(
-                      record.gradingId,
-                      taskType.id,
-                      "status",
-                      task.status
-                    );
-                  }}
-                  style={{ cursor: "pointer" }}
-                >
-                  <Tag
-                    color={TASK_STATUS[task.status]?.color}
-                    icon={TASK_STATUS[task.status]?.icon}
-                  >
-                    {TASK_STATUS[task.status]?.label || task.status}
-                  </Tag>
-                </div>
-              );
-            },
-          },
-          {
-            title: "Assignees",
-            key: `task-${taskType.id}-assignees`,
-            width: 180,
-            align: "center",
-            onCell: () => ({
-              style: { backgroundColor: `${taskType.color || "#d9d9d9"}20` },
-            }),
-            render: (_, record) => {
-              const task = record.tasksByType[taskType.id];
-              if (!task) return <Text type="secondary">-</Text>;
-              
-              // Debug log to verify task structure
-              if (task && !task._logged) {
-                console.log('[ProjectDetailDrawer] Task in Assignees column:', {
-                  taskId: task.id,
-                  taskCode: task.taskCode,
-                  imageQuantity: task.imageQuantity,
-                  hasImageQuantity: 'imageQuantity' in task,
-                  taskKeys: Object.keys(task)
-                });
-                task._logged = true;
-              }
-
-              const isEditingAssignees = isEditingCell(
-                record.gradingId,
-                taskType.id,
-                "assignees"
-              );
-              const taskAssignments = task.taskAssignments || [];
-              const assignedUserIds = taskAssignments.map((a) => a.userId);
-
-              // Show multi-select when editing
-              if (isEditingAssignees) {
-                return (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    style={{ padding: "4px 0" }}
-                  >
-                    <Select
-                      mode="multiple"
-                      size="small"
-                      value={editedData.assignees || assignedUserIds}
-                      onChange={(values) =>
-                        setEditedData({ ...editedData, assignees: values })
-                      }
-                      style={{ width: "100%" }}
-                      placeholder="Assign Users"
-                      maxTagCount="responsive"
-                      showSearch
-                      filterOption={(input, option) => {
-                        const children = option?.children;
-                        const searchText = Array.isArray(children)
-                          ? children.join(" ")
-                          : String(children ?? "");
-                        return searchText
-                          .toLowerCase()
-                          .includes(input.toLowerCase());
-                      }}
-                    >
-                      {users.map((user) => (
-                        <Option key={user.id} value={user.id}>
-                          {user.firstName} {user.lastName}
-                        </Option>
-                      ))}
-                    </Select>
-                    <Space size="small" style={{ marginTop: 4 }}>
-                      <Button
-                        type="primary"
-                        size="small"
-                        icon={<SaveOutlined />}
-                        onClick={() => saveTaskCell(task, "assignees", record)}
-                      >
-                        Save
-                      </Button>
-                      <Button
-                        size="small"
-                        icon={<CloseCircleOutlined />}
-                        onClick={cancelEditCell}
-                      >
-                        Cancel
-                      </Button>
-                    </Space>
-                  </div>
-                );
-              }
-
-              // Display assigned users with Edit button
-              if (taskAssignments.length > 0) {
-                return (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    style={{
-                      padding: "4px",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: "4px",
-                      alignItems: "center",
-                    }}
-                  >
-                    <Space
-                      direction="vertical"
-                      size={2}
-                      style={{ width: "100%" }}
-                    >
-                      {taskAssignments.map((assignment) => (
-                        <Text
-                          key={assignment.id}
-                          style={{
-                            fontSize: 11,
-                            display: "block",
-                            textAlign: "center",
-                          }}
-                        >
-                          {assignment.user?.firstName}{" "}
-                          {assignment.user?.lastName}
-                          {typeof assignment.imageQuantity === 'number' && (
-                            <span style={{ color: '#8c8c8c' }}> ({assignment.imageQuantity})</span>
-                          )}
-                        </Text>
-                      ))}
-                    </Space>
-                    <Button
-                      size="small"
-                      type="link"
-                      icon={<EditOutlined />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        startEditCell(
-                          record.gradingId,
-                          taskType.id,
-                          "assignees",
-                          assignedUserIds
-                        );
-                      }}
-                      style={{
-                        padding: "0 4px",
-                        height: "20px",
-                        fontSize: "11px",
-                      }}
-                    >
-                      Edit
-                    </Button>
-                  </div>
-                );
-              }
-
-              // No assignments - show "Assign" button
-              return (
-                <div
-                  onClick={(e) => e.stopPropagation()}
-                  style={{ padding: "4px" }}
-                >
-                  <Button
-                    size="small"
-                    type="dashed"
-                    block
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      startEditCell(
-                        record.gradingId,
-                        taskType.id,
-                        "assignees",
-                        []
-                      );
-                    }}
-                    style={{ fontSize: "11px" }}
-                  >
-                    Assign Users
-                  </Button>
-                </div>
-              );
-            },
-          },
-        ],
-      },
-    ]);
-
-    return [...baseColumns, ...taskColumns];
-  };
 
   if (loading || tasksLoading) {
     return (
@@ -1160,27 +448,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
 
   return (
     <div style={{ padding: "0" }}>
-      {/* Header with Refresh Button */}
-      <div
-        style={{
-          marginBottom: 16,
-          display: "flex",
-          justifyContent: "flex-end",
-        }}
-      >
-        <Button
-          icon={<ReloadOutlined />}
-          onClick={() => {
-            refetch();
-            refetchTasks();
-            refetchAudit();
-          }}
-          size="small"
-        >
-          Refresh
-        </Button>
-      </div>
-
       {/* Project Statistics */}
       {/* <Row gutter={16} style={{ marginBottom: 24 }}>
         <Col span={6}>
@@ -1225,63 +492,74 @@ const ProjectDetailDrawer = ({ projectId }) => {
         </Col>
       </Row> */}
 
-      {/* Quick Info Bar */}
+      {/* Project Details Card */}
       <Card size="small" style={{ marginBottom: 16 }}>
-        <Space
-          split={<span style={{ color: "#d9d9d9" }}>|</span>}
-          size="large"
-          wrap
-        >
-          <Space>
-            <CodeOutlined />
-            <Text strong>Project:</Text>
-            <Tag color="blue">{project.projectCode}</Tag>
-            <Text>{project.name}</Text>
-          </Space>
-          <Space>
-            <FolderOutlined />
-            <Text strong>Folder:</Text>
-            <Space size={4}>
-              <Tooltip title="Copy folder name">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<CopyOutlined />}
-                  onClick={handleCopyFolderName}
-                  style={{ padding: "0 4px" }}
-                />
-              </Tooltip>
-              <Text copyable>{generateFolderName(project)}</Text>
+        <Row gutter={[16, 12]}>
+          {/* Client Row */}
+          <Col span={24}>
+            <Space>
+              <Text strong>Client:</Text>
+              <Text>
+                {project.client?.displayName} ({project.client?.clientCode})
+              </Text>
             </Space>
-          </Space>
-          <Space>
-            <Text strong>Client:</Text>
-            <Text>
-              {project.client?.displayName} ({project.client?.clientCode})
-            </Text>
-          </Space>
-          <Space>
-            <CalendarOutlined />
-            <Text strong>Deadline:</Text>
-            <Text>
-              {project.deadlineDate
-                ? dayjs(project.deadlineDate).format("YYYY-MM-DD")
-                : "No deadline"}
-            </Text>
-          </Space>
-          <Space>
-            <Text strong>Status:</Text>
-            <Tag
-              color={
-                (STATUS_MAP[project.status?.toUpperCase()] || {}).color ||
-                "blue"
-              }
-            >
-              {(STATUS_MAP[project.status?.toUpperCase()] || {}).label ||
-                project.status}
-            </Tag>
-          </Space>
-        </Space>
+          </Col>
+
+          {/* Dates Row */}
+          <Col span={8}>
+            <Space>
+              <CalendarOutlined style={{ color: "#1890ff" }} />
+              <Text strong>Order Date:</Text>
+              <Text>
+                {project.createdAt
+                  ? dayjs(project.createdAt).format("DD-MM-YYYY")
+                  : "-"}
+              </Text>
+            </Space>
+          </Col>
+          <Col span={8}>
+            <Space>
+              <ClockCircleOutlined style={{ color: "#faad14" }} />
+              <Text strong>Due Date:</Text>
+              <Text>
+                {tasks[0]?.dueDate
+                  ? dayjs(tasks[0].dueDate).format("DD-MM-YYYY")
+                  : "-"}
+              </Text>
+            </Space>
+          </Col>
+          <Col span={8}>
+            <Space>
+              <CalendarOutlined style={{ color: "#52c41a" }} />
+              <Text strong>Deadline:</Text>
+              <Text>
+                {project.deadlineDate
+                  ? dayjs(project.deadlineDate).format("DD-MM-YYYY")
+                  : "-"}
+              </Text>
+            </Space>
+          </Col>
+
+          {/* Folder Name Row */}
+          <Col span={24}>
+            <Space>
+              <FolderOutlined />
+              <Text strong>Folder Name:</Text>
+              <Space size={4}>
+                <Tooltip title="Copy folder name">
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<CopyOutlined />}
+                    onClick={handleCopyFolderName}
+                    style={{ padding: "0 4px" }}
+                  />
+                </Tooltip>
+                <Text copyable>{generateFolderName(project)}</Text>
+              </Space>
+            </Space>
+          </Col>
+        </Row>
       </Card>
 
       {/* Notes Section */}
@@ -1343,16 +621,28 @@ const ProjectDetailDrawer = ({ projectId }) => {
               size="small"
               style={{ marginBottom: 16 }}
             >
-              <Table
-                dataSource={
-                  Array.isArray(workType?.gradings) ? workType.gradings : []
-                }
-                columns={generateColumnsForWorkType(workType)}
-                rowKey="gradingId"
-                pagination={false}
-                size="small"
-                scroll={{ x: "max-content" }}
-                bordered
+              <TasksTable
+                dataSource={workType.gradings || []}
+                columns={baseColumns}
+                taskTypes={workType.taskTypes || []}
+                users={users}
+                projectId={projectId}
+                refetchQueries={[
+                  {
+                    query: GET_TASKS,
+                    variables: {
+                      filters: { 
+                        projectId: projectId,
+                        statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
+                        includeInactive: true
+                      },
+                      page: 1,
+                      limit: 1000,
+                      sortBy: "createdAt",
+                      sortOrder: "DESC",
+                    },
+                  },
+                ]}
               />
             </Card>
           );
@@ -1370,118 +660,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
           loading={auditLoading}
         />
       </Card>
-
-      {/* Allocation Modal for per-user image quantities */}
-      <Modal
-        open={assignQtyModalOpen}
-        title="Assign image quantities per user"
-        onCancel={closeAssignQtyModal}
-        onOk={handleAssignQtyConfirm}
-        okButtonProps={{
-          disabled:
-            !assignQtyModalTask ||
-            assignQtySelectedUserIds.length === 0 ||
-            assignQtyTotalAllocated > assignQtyModalTaskTotal ||
-            !hasAssignQtyChanges,
-        }}
-        width={600}
-      >
-        {assignQtyModalTask ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-            <Text type="secondary">
-              Task total: {assignQtyModalTaskTotal} images
-            </Text>
-            
-            {/* User Selector */}
-            <div>
-              <Text strong style={{ display: "block", marginBottom: 8 }}>
-                Select Users:
-              </Text>
-              <Select
-                mode="multiple"
-                value={assignQtySelectedUserIds}
-                onChange={setAssignQtySelectedUserIds}
-                style={{ width: "100%" }}
-                placeholder="Select users to assign"
-                showSearch
-                filterOption={(input, option) => {
-                  const children = option?.children;
-                  const searchText = Array.isArray(children)
-                    ? children.join(" ")
-                    : String(children ?? "");
-                  return searchText.toLowerCase().includes(input.toLowerCase());
-                }}
-              >
-                {users.map((user) => (
-                  <Option key={user.id} value={user.id}>
-                    {user.firstName} {user.lastName}
-                  </Option>
-                ))}
-              </Select>
-            </div>
-
-            {/* Allocation Summary */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "8px 12px",
-                backgroundColor: "#f5f5f5",
-                borderRadius: "4px",
-              }}
-            >
-              <Text>
-                <strong>Allocated:</strong> {assignQtyTotalAllocated} / {assignQtyModalTaskTotal}
-                {assignQtyTotalAllocated > assignQtyModalTaskTotal && (
-                  <Text type="danger" style={{ marginLeft: 8 }}>
-                    (Exceeds total!)
-                  </Text>
-                )}
-              </Text>
-              <Button 
-                size="small" 
-                onClick={handleAssignQtyAutoDistribute}
-                disabled={assignQtySelectedUserIds.length === 0}
-              >
-                Auto distribute
-              </Button>
-            </div>
-
-            {/* Quantity Inputs */}
-            {assignQtySelectedUserIds.length > 0 ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <Text strong>Quantity per user:</Text>
-                {assignQtySelectedUserIds.map((uid) => (
-                  <div key={uid} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0" }}>
-                    <div style={{ flex: 1 }}>
-                      <UserOutlined style={{ marginRight: 8, color: "#1890ff" }} />
-                      {getUserDisplayName(uid)}
-                    </div>
-                    <div style={{ width: 140 }}>
-                      <InputNumber
-                        size="small"
-                        min={0}
-                        max={assignQtyModalTaskTotal}
-                        value={assignQtyAllocations[uid] ?? 0}
-                        onChange={(val) =>
-                          setAssignQtyAllocations((prev) => ({ ...prev, [uid]: Number(val) || 0 }))
-                        }
-                        style={{ width: "100%" }}
-                        addonAfter="images"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div style={{ padding: "20px", textAlign: "center", backgroundColor: "#f5f5f5", borderRadius: "4px" }}>
-                <Text type="secondary">Please select users to assign quantities</Text>
-              </div>
-            )}
-          </div>
-        ) : null}
-      </Modal>
     </div>
   );
 };
