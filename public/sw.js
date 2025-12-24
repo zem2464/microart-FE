@@ -2,62 +2,101 @@
 
 self.addEventListener('install', (event) => {
     console.log('[SW] Installing...');
+    // Take control immediately
     self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
     console.log('[SW] Activating...');
+    // Take control of all clients immediately
     event.waitUntil(self.clients.claim());
 });
 
-self.addEventListener('fetch', (event) => {
-    // Pass-through - keeps SW active and inspectable
-});
-
 self.addEventListener('push', function (event) {
-    if (event.data) {
-        const data = event.data.json();
-        const options = {
-            body: data.body,
-            icon: data.icon || '/logo192.png',
-            badge: '/logo192.png',
-            vibrate: [100, 50, 100],
-            data: {
-                dateOfArrival: Date.now(),
-                primaryKey: '2',
-                url: data.data?.url || '/',
-                roomId: data.data?.roomId
-            }
+    console.log('[SW] Push event received', event);
+    
+    let data = {};
+    
+    try {
+        if (event.data) {
+            data = event.data.json();
+            console.log('[SW] Push data:', data);
+        } else {
+            console.log('[SW] Push event has no data');
+            data = {
+                title: 'New Notification',
+                body: 'You have a new message',
+            };
+        }
+    } catch (error) {
+        console.error('[SW] Error parsing push data:', error);
+        data = {
+            title: 'New Notification',
+            body: 'You have a new message',
         };
-
-        event.waitUntil(
-            self.registration.showNotification(data.title, options)
-        );
     }
+    
+    // Get the origin from the service worker location
+    const origin = self.location.origin;
+    
+    const options = {
+        body: data.body || 'You have a new message',
+        icon: data.icon || `${origin}/images/logo192.png`,
+        badge: data.badge || `${origin}/images/favicon-96x96.png`,
+        vibrate: [200, 100, 200],
+        tag: data.data?.roomId || `notification-${Date.now()}`,
+        requireInteraction: false,
+        silent: false,
+        renotify: true,
+        data: {
+            dateOfArrival: Date.now(),
+            url: data.data?.url || '/',
+            roomId: data.data?.roomId
+        }
+    };
+
+    event.waitUntil(
+        self.registration.showNotification(data.title || 'New Notification', options)
+            .then(() => console.log('[SW] Notification shown successfully'))
+            .catch(error => console.error('[SW] Error showing notification:', error))
+    );
 });
 
 self.addEventListener('notificationclick', function (event) {
     event.notification.close();
 
-    const urlToOpen = new URL(event.notification.data.url, self.location.origin).href;
+    const urlToOpen = new URL(event.notification.data.url || '/', self.location.origin).href;
+    const roomId = event.notification.data.roomId;
 
     const promiseChain = self.clients.matchAll({
         type: 'window',
         includeUncontrolled: true
     }).then((windowClients) => {
-        let matchingClient = null;
-
+        // Try to find an existing window
+        let clientToUse = null;
+        
         for (let i = 0; i < windowClients.length; i++) {
-            const windowClient = windowClients[i];
-            if (windowClient.url === urlToOpen) {
-                matchingClient = windowClient;
+            const client = windowClients[i];
+            // Focus any window from our app
+            if (client.url.includes(self.location.origin)) {
+                clientToUse = client;
                 break;
             }
         }
 
-        if (matchingClient) {
-            return matchingClient.focus();
+        if (clientToUse) {
+            // Focus the window and send message to open chat
+            return clientToUse.focus().then(client => {
+                if (roomId) {
+                    client.postMessage({
+                        type: 'OPEN_CHAT',
+                        roomId: roomId
+                    });
+                }
+                return client;
+            });
         } else {
+            // Open new window
             return self.clients.openWindow(urlToOpen);
         }
     });

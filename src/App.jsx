@@ -21,6 +21,7 @@ import RecordPaymentModal from "./components/RecordPaymentModal";
 import { userCacheVar, isApplicationLoading } from "./cache/userCacheVar";
 import { useReactiveVar, useApolloClient } from "@apollo/client";
 import notificationService from "./services/NotificationService";
+import { useTaskNotifications } from "./hooks/useTaskNotifications";
 
 const { defaultAlgorithm } = theme;
 
@@ -30,6 +31,9 @@ function AppContent() {
   const user = useReactiveVar(userCacheVar);
   const { effectiveLayout } = useViewMode();
   const client = useApolloClient();
+  
+  // Listen for task assignment notifications
+  useTaskNotifications();
 
   // Register push notifications on login
   useEffect(() => {
@@ -37,6 +41,21 @@ function AppContent() {
       notificationService.registerPushSubscription(client);
     }
   }, [user, client]);
+
+  // Listen for service worker messages (e.g., notification clicks)
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        console.log('[App] Received message from service worker:', event.data);
+        
+        if (event.data.type === 'OPEN_CHAT' && event.data.roomId) {
+          // Handle opening chat when notification is clicked
+          // This could be expanded to navigate to the chat room
+          console.log('[App] Should open chat room:', event.data.roomId);
+        }
+      });
+    }
+  }, []);
 
   console.log(user);
 

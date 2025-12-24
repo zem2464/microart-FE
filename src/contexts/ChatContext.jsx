@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useState, useCallback, useMemo } from 'react';
-import { useSubscription, useReactiveVar, useQuery } from '@apollo/client';
-import { CHAT_MESSAGE_ADDED, GET_MY_CHAT_ROOMS } from '../graphql/chat';
+import React, { createContext, useContext, useState, useCallback, useMemo, useEffect } from 'react';
+import { useReactiveVar, useQuery, useSubscription, useMutation } from '@apollo/client';
+import { useLocation } from 'react-router-dom';
+import { GET_MY_CHAT_ROOMS } from '../graphql/chat';
 import { userCacheVar } from '../cache/userCacheVar';
-import NotificationService from '../services/NotificationService';
+import { NOTIFICATION_CREATED_SUBSCRIPTION, MARK_ROOM_NOTIFICATIONS_AS_READ, GET_UNREAD_NOTIFICATION_COUNT } from '../graphql/notifications';
+import notificationService from '../services/NotificationService';
 
 const ChatContext = createContext();
 
@@ -15,6 +17,7 @@ export const useChatContext = () => {
 };
 
 export const ChatProvider = ({ children }) => {
+    const location = useLocation();
     const [openChats, setOpenChats] = useState([]);
     const [minimizedChats, setMinimizedChats] = useState({});
     // Store unread counts keyed by roomId
@@ -40,6 +43,12 @@ export const ChatProvider = ({ children }) => {
 
     const chatRooms = chatData?.myChatRooms || [];
 
+    // Mutation to mark room notifications as read
+    const [markRoomNotificationsAsRead] = useMutation(MARK_ROOM_NOTIFICATIONS_AS_READ, {
+        refetchQueries: [{ query: GET_UNREAD_NOTIFICATION_COUNT }],
+        awaitRefetchQueries: false
+    });
+
     // Calculate total unread count
     const totalUnreadCount = useMemo(() => {
         return Object.values(unreadCounts).reduce((sum, count) => sum + (count || 0), 0);
@@ -47,6 +56,8 @@ export const ChatProvider = ({ children }) => {
 
     // Open chat window function (used by notification service)
     const openChatWindow = useCallback((chatInfo) => {
+        console.log('[ChatContext] Opening chat window for room:', chatInfo.roomId);
+        
         setOpenChats(prev => {
             if (prev.find(chat => chat.roomId === chatInfo.roomId)) {
                 // If already open, just unminimize it
@@ -60,7 +71,19 @@ export const ChatProvider = ({ children }) => {
 
         // Reset unread count locally when opening
         setUnreadCounts(prev => ({ ...prev, [chatInfo.roomId]: 0 }));
-    }, []);
+
+        // Mark all notifications from this room as read
+        markRoomNotificationsAsRead({ 
+            variables: { roomId: chatInfo.roomId },
+            refetchQueries: [{ query: GET_UNREAD_NOTIFICATION_COUNT }],
+            awaitRefetchQueries: false
+        }).then(({ data }) => {
+            const count = data?.markRoomNotificationsAsRead || 0;
+            console.log(`[ChatContext] Marked ${count} notification(s) as read for room:`, chatInfo.roomId);
+        }).catch(error => {
+            console.error('[ChatContext] Failed to mark room notifications as read:', error);
+        });
+    }, [markRoomNotificationsAsRead]);
 
     const incrementUnreadCount = useCallback((roomId) => {
         setUnreadCounts(prev => ({
@@ -69,60 +92,85 @@ export const ChatProvider = ({ children }) => {
         }));
     }, []);
 
-    // Global subscription for all new messages
-    // Automatically activates when user logs in (currentUser.id is available)
-    useSubscription(CHAT_MESSAGE_ADDED, {
-        skip: !currentUser?.id, // Only active when user is logged in
-        onData: ({ data }) => {
-            if (data?.data?.chatMessageAdded) {
-                const newMessage = data.data.chatMessageAdded;
-                const roomId = newMessage.chatRoom?.id;
+    // Subscribe to message notifications (for sound and popup)
+    // Only triggers for message-type notifications, filters by current user
+    useSubscription(NOTIFICATION_CREATED_SUBSCRIPTION, {
+        skip: !currentUser?.id,
+        onData: ({ data: subData }) => {
+            const notification = subData?.data?.notificationCreated;
+            
+            console.log('[ChatContext] Notification received:', notification);
+            
+            if (notification && notification.type === 'message') {
+                const roomId = notification.metadata?.roomId;
+                const sender = notification.fromUser;
+                const messageContent = notification.message;
 
-                // Don't notify for own messages
-                if (newMessage.sender?.id === currentUser?.id) {
-                    return;
-                }
+                console.log('[ChatContext] Message notification - roomId:', roomId);
+                console.log('[ChatContext] Open chats:', openChats);
+                console.log('[ChatContext] Current location:', location.pathname);
+                
+                // Check if chat window is already open for this room
+                const isChatWindowOpen = openChats.some(chat => chat.roomId === roomId);
+                
+                // Check if user is on the Messages page
+                const isOnMessagesPage = location.pathname.startsWith('/messages');
+                
+                // Don't send notifications if chat window is open OR user is on Messages page
+                const shouldSendNotification = !isChatWindowOpen && !isOnMessagesPage;
+                
+                console.log('[ChatContext] Is chat window open?', isChatWindowOpen);
+                console.log('[ChatContext] Is on Messages page?', isOnMessagesPage);
+                console.log('[ChatContext] Should send notification?', shouldSendNotification);
 
-                // Check if chat is already open
-                const existingChat = openChats.find(chat => chat.roomId === roomId);
+                if (shouldSendNotification) {
+                    console.log('[ChatContext] Playing sound and showing notifications');
+                    
+                    // Play sound for new message
+                    notificationService.playSound();
 
-                // Auto-open chat window if not already open
-                if (!existingChat && roomId) {
-                    const chatName = newMessage.sender
-                        ? `${newMessage.sender.firstName} ${newMessage.sender.lastName} `
-                        : 'New Message';
-
-                    openChatWindow({
-                        roomId: roomId,
-                        name: chatName,
-                        type: newMessage.chatRoom?.type || 'direct'
+                    // Show popup notification
+                    notificationService.showNotification({
+                        sender,
+                        message: { content: messageContent },
+                        roomId,
+                        onClick: () => {
+                            const room = chatRooms.find(r => r.id === roomId);
+                            if (room) {
+                                openChatWindow({
+                                    roomId: room.id,
+                                    name: room.name || 'Chat',
+                                    type: room.type
+                                });
+                            }
+                        }
                     });
-                }
 
-                // Use notification service for all notifications
-                NotificationService.notifyNewMessage({
-                    message: newMessage,
-                    sender: newMessage.sender,
-                    roomId: roomId,
-                    onOpen: () => {
-                        openChatWindow({
-                            roomId: roomId,
-                            name: `${newMessage.sender.firstName} ${newMessage.sender.lastName} `,
-                            type: newMessage.chatRoom?.type || 'direct'
+                    // Show browser notification if window is not focused
+                    if (document.hidden) {
+                        notificationService.showBrowserNotification({
+                            title: `New message from ${sender?.firstName || 'Unknown'} ${sender?.lastName || ''}`,
+                            body: messageContent,
+                            icon: '/logo192.png'
                         });
                     }
-                });
 
-                // Increment unread count if chat is closed or minimized
-                if (!existingChat || minimizedChats[roomId]) {
-                    incrementUnreadCount(roomId);
+                    // Increment unread count
+                    if (roomId) {
+                        incrementUnreadCount(roomId);
+                    }
+                } else {
+                    console.log('[ChatContext] Skipping notifications - chat window open or on Messages page');
                 }
             }
-        },
-        onError: (error) => {
-            console.log('Chat subscription error:', error.message);
-        },
+        }
     });
+
+    // NOTE: We don't use a global CHAT_MESSAGE_ADDED subscription here because:
+    // 1. It would receive ALL messages, including from rooms the user isn't in
+    // 2. Room-specific subscriptions in MessageList handle real-time updates for open chats
+    // 3. The NOTIFICATION_CREATED subscription handles notifications for closed chats
+    // 4. This prevents the bug where User B gets popup for messages between A and C
 
     const closeChatWindow = useCallback((roomId) => {
         setOpenChats(prev => prev.filter(chat => chat.roomId !== roomId));
@@ -153,6 +201,29 @@ export const ChatProvider = ({ children }) => {
             [roomId]: 0
         }));
     }, []);
+
+    // Listen for service worker messages to open chat
+    useEffect(() => {
+        const handleMessage = (event) => {
+            if (event.data && event.data.type === 'OPEN_CHAT' && event.data.roomId) {
+                const roomId = event.data.roomId;
+                // Find the room details
+                const room = chatRooms.find(r => r.id === roomId);
+                if (room) {
+                    openChatWindow({
+                        roomId: room.id,
+                        name: room.name || 'Chat',
+                        type: room.type
+                    });
+                }
+            }
+        };
+
+        navigator.serviceWorker?.addEventListener('message', handleMessage);
+        return () => {
+            navigator.serviceWorker?.removeEventListener('message', handleMessage);
+        };
+    }, [chatRooms, openChatWindow]);
 
     const value = {
         openChats,

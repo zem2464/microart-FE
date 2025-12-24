@@ -10,6 +10,44 @@ class NotificationService {
     constructor() {
         this.isEnabled = true;
         this.soundEnabled = true;
+        this.audioContext = null;
+        this.isAudioContextInitialized = false;
+    }
+
+    /**
+     * Initialize or resume AudioContext (must be called after user gesture)
+     */
+    async initAudioContext() {
+        // Return early if already initialized and running
+        if (this.audioContext) {
+            try {
+                if (this.audioContext.state === 'suspended') {
+                    await this.audioContext.resume();
+                }
+                return this.audioContext;
+            } catch (error) {
+                console.log('Could not resume AudioContext:', error);
+                return null;
+            }
+        }
+
+        try {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) return null;
+
+            this.audioContext = new AudioContext();
+            this.isAudioContextInitialized = true;
+
+            // Only try to resume if suspended
+            if (this.audioContext.state === 'suspended') {
+                await this.audioContext.resume();
+            }
+
+            return this.audioContext;
+        } catch (error) {
+            console.log('Could not initialize AudioContext:', error);
+            return null;
+        }
     }
 
     /**
@@ -20,13 +58,10 @@ class NotificationService {
         if (!this.soundEnabled) return;
 
         try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) return;
-
-            const audioContext = new AudioContext();
-
-            if (audioContext.state === 'suspended') {
-                await audioContext.resume();
+            const audioContext = await this.initAudioContext();
+            if (!audioContext) {
+                console.log('AudioContext not available, notification will be silent');
+                return;
             }
 
             const oscillator = audioContext.createOscillator();
@@ -58,6 +93,56 @@ class NotificationService {
     }
 
     /**
+     * Play task notification sound
+     * Implements a distinct "Success Chime" sound for task notifications
+     */
+    async playTaskSound() {
+        if (!this.soundEnabled) return;
+
+        try {
+            const audioContext = await this.initAudioContext();
+            if (!audioContext) {
+                console.log('AudioContext not available, notification will be silent');
+                return;
+            }
+
+            const now = audioContext.currentTime;
+
+            // Create two oscillators for a pleasant chime
+            const osc1 = audioContext.createOscillator();
+            const osc2 = audioContext.createOscillator();
+            const gainNode1 = audioContext.createGain();
+            const gainNode2 = audioContext.createGain();
+
+            osc1.connect(gainNode1);
+            osc2.connect(gainNode2);
+            gainNode1.connect(audioContext.destination);
+            gainNode2.connect(audioContext.destination);
+
+            // First note: C note (523.25 Hz)
+            osc1.type = 'sine';
+            osc1.frequency.setValueAtTime(523.25, now);
+            gainNode1.gain.setValueAtTime(0, now);
+            gainNode1.gain.linearRampToValueAtTime(0.15, now + 0.02);
+            gainNode1.gain.exponentialRampToValueAtTime(0.01, now + 0.4);
+
+            // Second note: E note (659.25 Hz) - creates a pleasant harmony
+            osc2.type = 'sine';
+            osc2.frequency.setValueAtTime(659.25, now + 0.08);
+            gainNode2.gain.setValueAtTime(0, now + 0.08);
+            gainNode2.gain.linearRampToValueAtTime(0.15, now + 0.1);
+            gainNode2.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+            osc1.start(now);
+            osc1.stop(now + 0.4);
+            osc2.start(now + 0.08);
+            osc2.stop(now + 0.5);
+        } catch (error) {
+            console.log('Could not play task notification sound:', error);
+        }
+    }
+
+    /**
      * Play custom sound from file
      * @param {string} soundUrl - URL to sound file
      */
@@ -77,19 +162,51 @@ class NotificationService {
      * Show notification popup
      * @param {Object} options - Notification options
      */
-    showNotification({ sender, message, onClick, roomId }) {
+    showNotification({ sender, message, onClick, roomId, title, description, type, icon }) {
         if (!this.isEnabled) return;
 
         notification.open({
-            message: `New message from ${sender?.firstName || 'Unknown'}`,
-            description: message?.content || message,
-            icon: <MessageOutlined style={{ color: '#1890ff' }} />,
+            message: title || `New message from ${sender?.firstName || 'Unknown'}`,
+            description: description || message?.content || message,
+            icon: icon || <MessageOutlined style={{ color: '#1890ff' }} />,
             placement: 'topRight',
             duration: 4.5,
             onClick: () => {
                 if (onClick) {
                     onClick(roomId);
                 }
+            }
+        });
+    }
+
+    /**
+     * Show task assignment notification
+     * @param {Object} options - Notification options
+     * @param {string} options.title - Notification title
+     * @param {string} options.message - Notification message
+     * @param {string} options.projectId - Project ID to navigate to
+     * @param {Function} options.onNavigate - Callback to navigate to project
+     */
+    showTaskNotification({ title, message, projectId, onNavigate }) {
+        if (!this.isEnabled) return;
+
+        notification.open({
+            message: title || 'Task Assignment',
+            description: message,
+            icon: <MessageOutlined style={{ color: '#1890ff' }} />,
+            placement: 'topRight',
+            duration: 6,
+            onClick: () => {
+                if (onNavigate && projectId) {
+                    onNavigate(projectId);
+                }
+            },
+            style: {
+                cursor: 'pointer',
+                backgroundColor: '#ffffff',
+                border: '1px solid #d9d9d9',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+                borderRadius: '4px'
             }
         });
     }
@@ -109,8 +226,8 @@ class NotificationService {
         if (Notification.permission === 'granted') {
             new Notification(title, {
                 body,
-                icon: icon || '/favicon.ico',
-                badge: '/favicon.ico'
+                icon: icon || '/images/logo192.png',
+                badge: '/images/favicon-96x96.png'
             });
         }
     }
@@ -168,45 +285,79 @@ class NotificationService {
      * @param {ApolloClient} client - Apollo Client instance to save subscription
      */
     async registerPushSubscription(client) {
-        console.log('Registering push subscription...');
+        console.log('[NotificationService] Starting push subscription registration...');
+        
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-            console.warn('Push messaging isn\'t supported.');
+            console.warn('[NotificationService] Push messaging is not supported in this browser.');
             return;
         }
 
         try {
-            // Register SW
-            const registration = await navigator.serviceWorker.register('/sw.js');
-            console.log('Service Worker registered with scope:', registration.scope);
+            // Register or get existing service worker
+            let registration = await navigator.serviceWorker.getRegistration();
+            
+            if (!registration) {
+                console.log('[NotificationService] No SW registration found, registering /sw.js...');
+                registration = await navigator.serviceWorker.register('/sw.js', {
+                    scope: '/'
+                });
+                console.log('[NotificationService] Service Worker registered, waiting for ready state...');
+            }
+            
+            // Wait for service worker to be ready
+            await navigator.serviceWorker.ready;
+            console.log('[NotificationService] Service Worker ready with scope:', registration.scope);
 
-            // Request Permission
+            // Ensure SW is active
+            if (registration.installing) {
+                console.log('[NotificationService] Service Worker is installing...');
+                await new Promise((resolve) => {
+                    registration.installing.addEventListener('statechange', function() {
+                        if (this.state === 'activated') {
+                            resolve();
+                        }
+                    });
+                });
+            } else if (registration.waiting) {
+                console.log('[NotificationService] Service Worker is waiting...');
+                registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+            } else if (registration.active) {
+                console.log('[NotificationService] Service Worker is active');
+            }
+
+            // Request Permission first
             const permission = await this.requestPermission();
-            console.log('Notification permission status:', permission);
+            console.log('[NotificationService] Notification permission:', permission);
 
             if (permission !== 'granted') {
-                console.warn('Notification permission not granted');
+                console.warn('[NotificationService] Notification permission was denied or dismissed');
                 return;
             }
 
-            // Subscribe to PushManager
-            // TODO: Get VAPID key from env or config. 
-            // User needs to set REACT_APP_VAPID_PUBLIC_KEY
+            // Get VAPID key
             const vapidPublicKey = process.env.REACT_APP_VAPID_PUBLIC_KEY;
-            console.log('VAPID Public Key present:', !!vapidPublicKey);
+            console.log('[NotificationService] VAPID key present:', !!vapidPublicKey);
 
             if (!vapidPublicKey) {
-                console.warn('VAPID Public Key not found in environment variables. Check .env file.');
+                console.error('[NotificationService] VAPID Public Key not found. Set REACT_APP_VAPID_PUBLIC_KEY in .env file.');
                 return;
             }
 
-            const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+            // Check for existing subscription
+            let subscription = await registration.pushManager.getSubscription();
+            
+            if (subscription) {
+                console.log('[NotificationService] Existing push subscription found:', subscription.endpoint);
+            } else {
+                console.log('[NotificationService] Creating new push subscription...');
+                const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
 
-            const subscription = await registration.pushManager.subscribe({
-                userVisibleOnly: true,
-                applicationServerKey: convertedVapidKey
-            });
-
-            console.log('Push Subscription:', subscription);
+                subscription = await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: convertedVapidKey
+                });
+                console.log('[NotificationService] Push subscription created:', subscription.endpoint);
+            }
 
             // Send to Backend
             if (client) {
@@ -216,11 +367,14 @@ class NotificationService {
                         subscription: subscription
                     }
                 });
-                console.log('Push subscription saved to backend');
+                console.log('[NotificationService] Push subscription saved to backend successfully');
             }
 
         } catch (error) {
-            console.error('Error registering push subscription:', error);
+            console.error('[NotificationService] Error registering push subscription:', error);
+            if (error.message) {
+                console.error('[NotificationService] Error message:', error.message);
+            }
         }
     }
 }
@@ -244,13 +398,42 @@ function urlBase64ToUint8Array(base64String) {
 // Export singleton instance
 const notificationService = new NotificationService();
 
+// Initialize AudioContext on first user interaction (required by browsers)
+const initAudioOnInteraction = () => {
+    notificationService.initAudioContext().then(() => {
+        console.log('AudioContext initialized after user interaction');
+    }).catch((error) => {
+        console.log('Failed to initialize AudioContext:', error);
+    });
+};
+
+// Add listeners for user interactions after DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('click', initAudioOnInteraction, { once: true });
+        document.addEventListener('keydown', initAudioOnInteraction, { once: true });
+        document.addEventListener('touchstart', initAudioOnInteraction, { once: true });
+    });
+} else {
+    // DOM is already ready
+    document.addEventListener('click', initAudioOnInteraction, { once: true });
+    document.addEventListener('keydown', initAudioOnInteraction, { once: true });
+    document.addEventListener('touchstart', initAudioOnInteraction, { once: true });
+}
+
 // Expose for debugging
+window.notificationService = notificationService;
+
 window.testNotification = () => {
     notificationService.showBrowserNotification({
         title: 'Test Notification',
         body: 'If you see this, browser notifications are working!',
         icon: '/logo192.png'
     });
+};
+
+window.testSound = () => {
+    notificationService.playSound();
 };
 
 export default notificationService;

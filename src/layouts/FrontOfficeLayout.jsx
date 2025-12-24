@@ -33,6 +33,7 @@ import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
 import { useAppDrawer } from "../contexts/DrawerContext";
 import ChatTrigger from "../components/Chat/ChatTrigger";
+import NotificationDropdown from "../components/NotificationDropdown";
 import {
   hasPermission,
   MODULES,
@@ -49,6 +50,7 @@ import ClientList from "../pages/FrontOffice/ClientList";
 import LedgerReport from "../pages/FrontOffice/LedgerReport";
 import Transactions from "../pages/FrontOffice/Transactions";
 import UserDashboard from "../pages/FrontOffice/UserDashboard";
+import Messages from "../pages/FrontOffice/Messages";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -279,9 +281,7 @@ const FrontOfficeLayout = () => {
 
           <ChatTrigger />
           <ViewSwitcher size="small" />
-          <Badge count={3} size="small">
-            <Button type="text" icon={<BellOutlined />} />
-          </Badge>
+          <NotificationDropdown />
 
           <Dropdown
             menu={{ items: userMenuItems }}
@@ -302,8 +302,18 @@ const FrontOfficeLayout = () => {
         </div>
       </Header>
 
-      <Content className="p-2 bg-gray-50 min-h-[calc(100vh-64px)]">
-        <div className="w-full max-w-none mx-auto px-4">
+      <Content 
+        className={
+          location.pathname.startsWith('/messages') 
+            ? 'bg-white min-h-[calc(100vh-64px)]' 
+            : 'p-2 bg-gray-50 min-h-[calc(100vh-64px)]'
+        }
+      >
+        <div className={
+          location.pathname.startsWith('/messages')
+            ? 'w-full h-full'
+            : 'w-full max-w-none mx-auto px-4'
+        }>
           <Routes>
             <Route path="/" element={<TaskTable />} />
             <Route path="/projects" element={<ProjectManagement />} />
@@ -312,6 +322,8 @@ const FrontOfficeLayout = () => {
             <Route path="/user-dashboard" element={<UserDashboard />} />
             <Route path="/clients/dashboard" element={<ClientDashboard />} />
             <Route path="/clients" element={<ClientList />} />
+            <Route path="/messages" element={<Messages />} />
+            <Route path="/messages/:roomId" element={<Messages />} />
           </Routes>
         </div>
       </Content>

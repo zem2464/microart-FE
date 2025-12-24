@@ -218,6 +218,22 @@ const cache = new InMemoryCache({
         },
       },
     },
+    Notification: {
+      keyFields: ["id"],
+      fields: {
+        // Ensure notification fields update properly
+        isRead: {
+          merge(existing, incoming) {
+            return incoming;
+          },
+        },
+        readAt: {
+          merge(existing, incoming) {
+            return incoming;
+          },
+        },
+      },
+    },
     Role: {
       keyFields: ["id"],
     },
