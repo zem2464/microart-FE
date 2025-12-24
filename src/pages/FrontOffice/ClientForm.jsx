@@ -85,13 +85,53 @@ const ClientForm = ({
       JSON.stringify(currentWorkTypes.sort()) !== JSON.stringify(values.sort());
 
     if (workTypesChanged) {
-      // Clear related grading data when work types change
-      setSelectedGradings([]);
-      setGradingCustomRates({});
-      setGradingTaskAssignments({});
-      form.setFieldsValue({ gradings: [] });
+      // If all work types are removed, clear all gradings
+      if (values.length === 0) {
+        setSelectedGradings([]);
+        setGradingCustomRates({});
+        setGradingTaskAssignments({});
+        form.setFieldsValue({ gradings: [] });
+        console.log("Cleared all gradings because all work types were removed");
+      } else if (gradingsData?.gradingsByWorkType) {
+        // Only remove gradings that belong to deselected work types
+        // Get all gradings that belong to the currently selected work types
+        const validGradingIds = gradingsData.gradingsByWorkType
+          .filter((grading) => values.includes(grading.workTypeId))
+          .map((grading) => grading.id);
 
-      console.log("Cleared gradings due to work type change");
+        // Filter current selected gradings to only keep those that are still valid
+        const newSelectedGradings = selectedGradings.filter((gradingId) =>
+          validGradingIds.includes(gradingId)
+        );
+
+        // Filter custom rates to only keep valid gradings
+        const newCustomRates = {};
+        newSelectedGradings.forEach((gradingId) => {
+          if (Object.prototype.hasOwnProperty.call(gradingCustomRates, gradingId)) {
+            newCustomRates[gradingId] = gradingCustomRates[gradingId];
+          }
+        });
+
+        // Filter task assignments to only keep valid gradings
+        const newTaskAssignments = {};
+        newSelectedGradings.forEach((gradingId) => {
+          if (Object.prototype.hasOwnProperty.call(gradingTaskAssignments, gradingId)) {
+            newTaskAssignments[gradingId] = gradingTaskAssignments[gradingId];
+          }
+        });
+
+        // Update state with filtered data
+        setSelectedGradings(newSelectedGradings);
+        setGradingCustomRates(newCustomRates);
+        setGradingTaskAssignments(newTaskAssignments);
+        form.setFieldsValue({ gradings: newSelectedGradings });
+
+        console.log("Filtered gradings due to work type change:", {
+          before: selectedGradings.length,
+          after: newSelectedGradings.length,
+          removed: selectedGradings.length - newSelectedGradings.length
+        });
+      }
     }
   };
 
@@ -733,7 +773,7 @@ const ClientForm = ({
         );
         // Defensive: ensure gradings payload is always sent on update.
         // If the form transformed gradings already (array of objects), use that.
-        // Otherwise fall back to existing client gradings so we don't accidentally clear them.
+        // If gradings array is explicitly empty, send empty array to clear all gradings.
         let gradingsPayload = null;
         if (
           Array.isArray(input.gradings) &&
@@ -742,39 +782,43 @@ const ClientForm = ({
         ) {
           // Already transformed into grading objects by earlier logic
           gradingsPayload = input.gradings;
-        } else if (
-          Array.isArray(form.getFieldValue("gradings")) &&
-          form.getFieldValue("gradings").length > 0
-        ) {
-          // Form has selected grading IDs — build full objects preserving custom rates
+        } else if (Array.isArray(form.getFieldValue("gradings"))) {
+          // Form has gradings field - either with values or empty
           const gradingIdsFromForm = form.getFieldValue("gradings");
-          gradingsPayload = gradingIdsFromForm.map((gradingId) => {
-            const gradingData = gradingsData?.gradingsByWorkType?.find(
-              (g) => g.id === gradingId
-            );
-            const customRaw = Object.prototype.hasOwnProperty.call(
-              gradingCustomRates,
-              gradingId
-            )
-              ? gradingCustomRates[gradingId]
-              : undefined;
-            const customRate = (function () {
-              if (customRaw === undefined) return null;
-              if (customRaw === null) return null;
-              if (typeof customRaw === "number") return customRaw;
-              const s = String(customRaw).trim();
-              if (s === "") return null;
-              const p = parseFloat(s);
-              return Number.isFinite(p) ? p : null;
-            })();
+          
+          if (gradingIdsFromForm.length === 0) {
+            // Explicitly send empty array to clear all gradings
+            gradingsPayload = [];
+          } else {
+            // Build full objects preserving custom rates
+            gradingsPayload = gradingIdsFromForm.map((gradingId) => {
+              const gradingData = gradingsData?.gradingsByWorkType?.find(
+                (g) => g.id === gradingId
+              );
+              const customRaw = Object.prototype.hasOwnProperty.call(
+                gradingCustomRates,
+                gradingId
+              )
+                ? gradingCustomRates[gradingId]
+                : undefined;
+              const customRate = (function () {
+                if (customRaw === undefined) return null;
+                if (customRaw === null) return null;
+                if (typeof customRaw === "number") return customRaw;
+                const s = String(customRaw).trim();
+                if (s === "") return null;
+                const p = parseFloat(s);
+                return Number.isFinite(p) ? p : null;
+              })();
 
-            return {
-              gradingId,
-              customRate,
-              currency: gradingData?.currency || "INR",
-              unit: gradingData?.unit || "image",
-            };
-          });
+              return {
+                gradingId,
+                customRate,
+                currency: gradingData?.currency || "INR",
+                unit: gradingData?.unit || "image",
+              };
+            });
+          }
         } else if (
           fullClientData?.client?.gradings &&
           fullClientData.client.gradings.length > 0
