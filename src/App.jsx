@@ -42,6 +42,41 @@ function AppContent() {
     }
   }, [user, client]);
 
+  // Re-check and re-register push subscription periodically and on focus
+  useEffect(() => {
+    if (!user) return;
+
+    const checkAndReregister = async () => {
+      try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        
+        if (!subscription) {
+          console.log('[App] Push subscription missing, re-registering...');
+          await notificationService.registerPushSubscription(client);
+        }
+      } catch (error) {
+        console.error('[App] Error checking subscription:', error);
+      }
+    };
+
+    // Check when app regains focus
+    const handleFocus = () => {
+      console.log('[App] App gained focus, checking subscription...');
+      checkAndReregister();
+    };
+
+    window.addEventListener('focus', handleFocus);
+
+    // Also check periodically (every 5 minutes)
+    const intervalId = setInterval(checkAndReregister, 5 * 60 * 1000);
+
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      clearInterval(intervalId);
+    };
+  }, [user, client]);
+
   // Listen for service worker messages (e.g., notification clicks)
   useEffect(() => {
     if ('serviceWorker' in navigator) {

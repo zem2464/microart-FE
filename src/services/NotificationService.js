@@ -348,6 +348,7 @@ class NotificationService {
             
             if (subscription) {
                 console.log('[NotificationService] Existing push subscription found:', subscription.endpoint);
+                console.log('[NotificationService] Re-verifying subscription with backend...');
             } else {
                 console.log('[NotificationService] Creating new push subscription...');
                 const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
@@ -359,8 +360,8 @@ class NotificationService {
                 console.log('[NotificationService] Push subscription created:', subscription.endpoint);
             }
 
-            // Send to Backend
-            if (client) {
+            // Always send/update subscription to backend (in case it was cleared from DB)
+            if (client && subscription) {
                 await client.mutate({
                     mutation: SAVE_PUSH_SUBSCRIPTION,
                     variables: {
@@ -368,6 +369,8 @@ class NotificationService {
                     }
                 });
                 console.log('[NotificationService] Push subscription saved to backend successfully');
+            } else if (!subscription) {
+                console.error('[NotificationService] Failed to create subscription!');
             }
 
         } catch (error) {
