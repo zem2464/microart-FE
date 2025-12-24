@@ -103,3 +103,69 @@ self.addEventListener('notificationclick', function (event) {
 
     event.waitUntil(promiseChain);
 });
+
+// Fetch event handler - network-first strategy for API calls, cache-first for static assets
+self.addEventListener('fetch', (event) => {
+    const url = new URL(event.request.url);
+    
+    // Skip non-GET requests
+    if (event.request.method !== 'GET') {
+        return;
+    }
+    
+    // For GraphQL/API requests - network first
+    if (url.pathname.includes('/graphql') || url.pathname.includes('/api')) {
+        event.respondWith(
+            fetch(event.request)
+                .catch(() => {
+                    return new Response(
+                        JSON.stringify({ errors: [{ message: 'Network error - offline' }] }),
+                        { headers: { 'Content-Type': 'application/json' } }
+                    );
+                })
+        );
+        return;
+    }
+    
+    // For static assets - cache first, fallback to network
+    event.respondWith(
+        caches.match(event.request)
+            .then((response) => {
+                if (response) {
+                    return response;
+                }
+                return fetch(event.request).then((response) => {
+                    // Cache valid responses
+                    if (!response || response.status !== 200 || response.type !== 'basic') {
+                        return response;
+                    }
+                    
+                    const responseToCache = response.clone();
+                    caches.open('microart-v1').then((cache) => {
+                        cache.put(event.request, responseToCache);
+                    });
+                    
+                    return response;
+                });
+            })
+    );
+});
+
+// Message event handler - for communication from app
+self.addEventListener('message', (event) => {
+    console.log('[SW] Message received:', event.data);
+    
+    if (event.data && event.data.type === 'SKIP_WAITING') {
+        self.skipWaiting();
+    }
+    
+    if (event.data && event.data.type === 'CLEAR_CACHE') {
+        event.waitUntil(
+            caches.keys().then((cacheNames) => {
+                return Promise.all(
+                    cacheNames.map((cacheName) => caches.delete(cacheName))
+                );
+            })
+        );
+    }
+});
