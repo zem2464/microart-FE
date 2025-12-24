@@ -1,6 +1,6 @@
 {
-  "short_name": "ImageCare",
-  "name": "ImageCare - Medical Image Management",
+  "short_name": "Image Care",
+  "name": "Image Care - Precision for image editing",
   "icons": [
     {
       "src": "/images/favicon-96x96.png",
@@ -20,7 +20,7 @@
   ],
   "start_url": "/",
   "display": "standalone",
-  "theme_color": "#3b82f6",
+  "theme_color": "#0D0D0D",
   "background_color": "#ffffff",
-  "description": "Medical image management and collaboration platform"
+  "description": "Precision for image editing"
 }
