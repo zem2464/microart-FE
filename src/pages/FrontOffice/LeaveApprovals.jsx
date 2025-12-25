@@ -77,7 +77,10 @@ const LeaveApprovals = () => {
   const handleApprove = (leaveId) => {
     approveLeave({
       variables: {
-        input: { leaveId },
+        input: { 
+          leaveId,
+          status: 'APPROVED'
+        },
       },
     });
   };
