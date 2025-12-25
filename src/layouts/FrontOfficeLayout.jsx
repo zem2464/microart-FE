@@ -32,6 +32,7 @@ import {
   TransactionOutlined,
   SearchOutlined,
   CalendarOutlined,
+  BarChartOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { usePayment } from "../contexts/PaymentContext";
@@ -50,6 +51,7 @@ import {
 import GlobalSearchModal from "../components/GlobalSearchModal";
 
 // Import pages
+import Dashboard from "../pages/FrontOffice/Dashboard";
 import TaskTable from "../pages/FrontOffice/TaskTable";
 import ProjectManagement from "../pages/FrontOffice/ProjectManagement";
 import ClientDashboard from "../pages/FrontOffice/ClientDashboard";
@@ -144,6 +146,12 @@ const FrontOfficeLayout = () => {
 
   // Build menu items based on permissions - organized by usage and importance
   const allMenuItems = [
+    // Dashboard - Always show for all users
+    {
+      key: "/dashboard",
+      icon: <DashboardOutlined />,
+      label: <Link to="/dashboard">Dashboard</Link>,
+    },
     // Most Used - Direct Access
     canManageTasks && {
       key: "/",
@@ -163,8 +171,8 @@ const FrontOfficeLayout = () => {
       children: [
         {
           key: "/clients/dashboard",
-          icon: <DashboardOutlined />,
-          label: <Link to="/clients/dashboard">Dashboard</Link>,
+          icon: <BarChartOutlined />,
+          label: <Link to="/clients/dashboard">Client Insights</Link>,
         },
         {
           key: "/clients",
@@ -343,6 +351,7 @@ const FrontOfficeLayout = () => {
           }
         >
           <Routes>
+            <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/" element={<TaskTable />} />
             <Route path="/projects" element={<ProjectManagement />} />
             <Route path="/transactions" element={<Transactions />} />
