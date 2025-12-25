@@ -213,7 +213,8 @@ const FrontOfficeLayout = () => {
       label: "My Leaves",
       onClick: () => navigate("/leaves"),
     },
-    (user?.role?.roleType === 'ADMIN' || user?.role?.roleType === 'MANAGER') && {
+    (user?.role?.roleType === "ADMIN" ||
+      user?.role?.roleType === "MANAGER") && {
       key: "leave-approvals",
       icon: <CheckSquareOutlined />,
       label: "Leave Approvals",
@@ -232,14 +233,14 @@ const FrontOfficeLayout = () => {
 
   return (
     <Layout className="frontoffice-layout m-0 p-0">
-      <Header className="bg-white border-b border-gray-200 flex items-center justify-between shadow-sm">
+      <Header className="bg-white border-b border-gray-200 flex items-center justify-between shadow-sm px-4">
         {/* Title and Menu */}
         <div className="flex items-center w-full min-w-0">
           <div className="flex items-center">
             <img
               src="/images/images.png"
               alt="MicroArt Logo"
-              style={{ height: "100px", display: "block" }}
+              style={{ height: "130px", marginRight: "12px" }}
             />
           </div>
           <Menu

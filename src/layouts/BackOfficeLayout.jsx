@@ -1,5 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { Layout, Menu, Button, Dropdown, Avatar, Typography, Badge } from "antd";
+import {
+  Layout,
+  Menu,
+  Button,
+  Dropdown,
+  Avatar,
+  Typography,
+  Badge,
+} from "antd";
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import {
   DashboardOutlined,
@@ -19,7 +27,12 @@ import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
-import { hasPermission, MODULES, ACTIONS, generatePermission } from "../config/permissions";
+import {
+  hasPermission,
+  MODULES,
+  ACTIONS,
+  generatePermission,
+} from "../config/permissions";
 import GlobalSearchModal from "../components/GlobalSearchModal";
 
 // Page Components
@@ -48,25 +61,49 @@ const BackOfficeLayout = () => {
   // Keyboard shortcut for global search (Ctrl+K or Cmd+K)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
         e.preventDefault();
         setSearchModalOpen(true);
       }
     };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   // Check permissions for menu items (using MANAGE to show/hide menu)
-  const canManageUsers = hasPermission(user, generatePermission(MODULES.USERS, ACTIONS.MANAGE));
-  const canManageRoles = hasPermission(user, generatePermission(MODULES.ROLES, ACTIONS.MANAGE));
-  const canManageUserManager = hasPermission(user, generatePermission(MODULES.USER_MANAGER, ACTIONS.MANAGE));
-  const canManageTaskTypes = hasPermission(user, generatePermission(MODULES.TASK_TYPES, ACTIONS.MANAGE));
-  const canManageWorkTypes = hasPermission(user, generatePermission(MODULES.WORK_TYPES, ACTIONS.MANAGE));
-  const canManageGradings = hasPermission(user, generatePermission(MODULES.GRADINGS, ACTIONS.MANAGE));
-  const canManageReports = hasPermission(user, generatePermission(MODULES.REPORTS, ACTIONS.MANAGE));
-  const canManageAuditLogs = hasPermission(user, generatePermission(MODULES.AUDIT_LOGS, ACTIONS.MANAGE));
+  const canManageUsers = hasPermission(
+    user,
+    generatePermission(MODULES.USERS, ACTIONS.MANAGE)
+  );
+  const canManageRoles = hasPermission(
+    user,
+    generatePermission(MODULES.ROLES, ACTIONS.MANAGE)
+  );
+  const canManageUserManager = hasPermission(
+    user,
+    generatePermission(MODULES.USER_MANAGER, ACTIONS.MANAGE)
+  );
+  const canManageTaskTypes = hasPermission(
+    user,
+    generatePermission(MODULES.TASK_TYPES, ACTIONS.MANAGE)
+  );
+  const canManageWorkTypes = hasPermission(
+    user,
+    generatePermission(MODULES.WORK_TYPES, ACTIONS.MANAGE)
+  );
+  const canManageGradings = hasPermission(
+    user,
+    generatePermission(MODULES.GRADINGS, ACTIONS.MANAGE)
+  );
+  const canManageReports = hasPermission(
+    user,
+    generatePermission(MODULES.REPORTS, ACTIONS.MANAGE)
+  );
+  const canManageAuditLogs = hasPermission(
+    user,
+    generatePermission(MODULES.AUDIT_LOGS, ACTIONS.MANAGE)
+  );
 
   // Build menu items based on permissions
   const allMenuItems = [
@@ -122,7 +159,7 @@ const BackOfficeLayout = () => {
     },
     {
       key: "/settings",
-      icon: <SettingOutlined />, 
+      icon: <SettingOutlined />,
       label: <Link to="/settings">Settings</Link>,
     },
   ].filter(Boolean); // Remove null/false items
@@ -153,23 +190,23 @@ const BackOfficeLayout = () => {
 
   return (
     <Layout className="min-h-screen backoffice-layout">
-      <Header className="bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-sm">
+      <Header className="bg-white border-b border-gray-200 flex items-center justify-between shadow-sm px-4">
         {/* Title and Menu */}
         <div className="flex items-center w-full min-w-0">
           <div className="flex items-center mr-8">
-            <img 
-              src="/images/images.png" 
-              alt="MicroArt Logo" 
-              style={{ height: '130px', marginRight: '12px' }}
+            <img
+              src="/images/images.png"
+              alt="MicroArt Logo"
+              style={{ height: "130px", marginRight: "12px" }}
             />
-            <Badge 
-              count="Admin" 
-              style={{ 
-                backgroundColor: '#1890ff', 
-                color: '#ffffff',
-                fontWeight: '500',
-                fontSize: '10px'
-              }} 
+            <Badge
+              count="Admin"
+              style={{
+                backgroundColor: "#1890ff",
+                color: "#ffffff",
+                fontWeight: "500",
+                fontSize: "10px",
+              }}
             />
           </div>
           <Menu
@@ -177,13 +214,13 @@ const BackOfficeLayout = () => {
             selectedKeys={[location.pathname]}
             items={menuItems}
             className="flex-1 border-b-0"
-            style={{ 
-              flex: 1, 
-              minWidth: 0
+            style={{
+              flex: 1,
+              minWidth: 0,
             }}
           />
         </div>
-        
+
         {/* User Controls */}
         <div className="flex items-center space-x-4 ml-8">
           {/* Global Search Button */}
@@ -195,13 +232,10 @@ const BackOfficeLayout = () => {
             className="hover:bg-gray-100"
             title="Search Projects (Ctrl+K)"
           />
-          
+
           <ViewSwitcher size="small" />
           <Badge count={5} size="small">
-            <Button 
-              type="text" 
-              icon={<BellOutlined />} 
-            />
+            <Button type="text" icon={<BellOutlined />} />
           </Badge>
           <Dropdown
             menu={{ items: userMenuItems }}
@@ -209,9 +243,9 @@ const BackOfficeLayout = () => {
             trigger={["click"]}
           >
             <div className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 px-3 py-2 rounded-lg transition-colors">
-              <Avatar 
-                icon={<UserOutlined />} 
-                size={36} 
+              <Avatar
+                icon={<UserOutlined />}
+                size={36}
                 className="bg-blue-500"
               />
               <span className="font-medium text-base text-gray-800">
@@ -242,9 +276,9 @@ const BackOfficeLayout = () => {
       </Content>
 
       {/* Global Search Modal */}
-      <GlobalSearchModal 
-        open={searchModalOpen} 
-        onClose={() => setSearchModalOpen(false)} 
+      <GlobalSearchModal
+        open={searchModalOpen}
+        onClose={() => setSearchModalOpen(false)}
       />
     </Layout>
   );
