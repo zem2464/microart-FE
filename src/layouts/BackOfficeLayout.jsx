@@ -13,6 +13,7 @@ import {
   DollarOutlined,
   WalletOutlined,
   SearchOutlined,
+  CalendarOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
@@ -33,6 +34,7 @@ import Roles from "../pages/BackOffice/Roles";
 import AuditLogs from "../pages/BackOffice/AuditLogs";
 import PaymentTypes from "../pages/BackOffice/PaymentTypes";
 import UserGradingRateManagement from "../pages/Admin/UserGradingRateManagement";
+import HolidayManagement from "../pages/BackOffice/HolidayManagement";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -112,6 +114,11 @@ const BackOfficeLayout = () => {
       key: "/user-rates",
       icon: <DollarOutlined />,
       label: <Link to="/user-rates">Employee Rates</Link>,
+    },
+    {
+      key: "/holidays",
+      icon: <CalendarOutlined />,
+      label: <Link to="/holidays">Holidays</Link>,
     },
     {
       key: "/settings",
@@ -227,6 +234,7 @@ const BackOfficeLayout = () => {
             <Route path="/roles" element={<Roles />} />
             <Route path="/audit-logs" element={<AuditLogs />} />
             <Route path="/user-rates" element={<UserGradingRateManagement />} />
+            <Route path="/holidays" element={<HolidayManagement />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

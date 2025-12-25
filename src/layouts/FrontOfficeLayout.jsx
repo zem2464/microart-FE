@@ -10,7 +10,13 @@ import {
   Space,
   Tooltip,
 } from "antd";
-import { Routes, Route, Link, useLocation } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
 import {
   CheckSquareOutlined,
   ProjectOutlined,
@@ -25,6 +31,7 @@ import {
   DollarOutlined,
   TransactionOutlined,
   SearchOutlined,
+  CalendarOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { usePayment } from "../contexts/PaymentContext";
@@ -51,6 +58,8 @@ import LedgerReport from "../pages/FrontOffice/LedgerReport";
 import Transactions from "../pages/FrontOffice/Transactions";
 import UserDashboard from "../pages/FrontOffice/UserDashboard";
 import Messages from "../pages/FrontOffice/Messages";
+import MyLeaves from "../pages/FrontOffice/MyLeaves";
+import LeaveApprovals from "../pages/FrontOffice/LeaveApprovals";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -59,6 +68,7 @@ const FrontOfficeLayout = () => {
   const user = useReactiveVar(userCacheVar);
   const { logout } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const { showClientFormDrawer, showProjectFormDrawer } = useAppDrawer();
   const { openPaymentModal } = usePayment();
   const [searchModalOpen, setSearchModalOpen] = useState(false);
@@ -132,8 +142,9 @@ const FrontOfficeLayout = () => {
     canCreateProject,
   ]);
 
-  // Build menu items based on permissions
+  // Build menu items based on permissions - organized by usage and importance
   const allMenuItems = [
+    // Most Used - Direct Access
     canManageTasks && {
       key: "/",
       icon: <CheckSquareOutlined />,
@@ -144,30 +155,16 @@ const FrontOfficeLayout = () => {
       icon: <ProjectOutlined />,
       label: <Link to="/projects">Projects</Link>,
     },
-    canManageTransactions && {
-      key: "/transactions",
-      icon: <TransactionOutlined />,
-      label: <Link to="/transactions">Transactions</Link>,
-    },
-    canManageReports && {
-      key: "/ledger",
-      icon: <FileTextOutlined />,
-      label: <Link to="/ledger">Ledger</Link>,
-    },
-    canManageUserDashboard && {
-      key: "/user-dashboard",
-      icon: <UserOutlined />,
-      label: <Link to="/user-dashboard">User Dashboard</Link>,
-    },
+    // Client Management
     canManageClients && {
       key: "clients",
       icon: <TeamOutlined />,
-      label: "Client Management",
+      label: "Clients",
       children: [
         {
           key: "/clients/dashboard",
           icon: <DashboardOutlined />,
-          label: <Link to="/clients/dashboard">Client Dashboard</Link>,
+          label: <Link to="/clients/dashboard">Dashboard</Link>,
         },
         {
           key: "/clients",
@@ -175,6 +172,30 @@ const FrontOfficeLayout = () => {
           label: <Link to="/clients">Client List</Link>,
         },
       ],
+    },
+    // Finance Management
+    (canManageTransactions || canManageReports) && {
+      key: "finance",
+      icon: <DollarOutlined />,
+      label: "Finance",
+      children: [
+        canManageTransactions && {
+          key: "/transactions",
+          icon: <TransactionOutlined />,
+          label: <Link to="/transactions">Transactions</Link>,
+        },
+        canManageReports && {
+          key: "/ledger",
+          icon: <FileTextOutlined />,
+          label: <Link to="/ledger">Ledger Report</Link>,
+        },
+      ].filter(Boolean),
+    },
+    // User Dashboard
+    canManageUserDashboard && {
+      key: "/user-dashboard",
+      icon: <UserOutlined />,
+      label: <Link to="/user-dashboard">User Dashboard</Link>,
     },
   ].filter(Boolean); // Remove null/false items
 
@@ -187,6 +208,18 @@ const FrontOfficeLayout = () => {
       label: "Profile",
     },
     {
+      key: "leaves",
+      icon: <CalendarOutlined />,
+      label: "My Leaves",
+      onClick: () => navigate("/leaves"),
+    },
+    (user?.role?.roleType === 'ADMIN' || user?.role?.roleType === 'MANAGER') && {
+      key: "leave-approvals",
+      icon: <CheckSquareOutlined />,
+      label: "Leave Approvals",
+      onClick: () => navigate("/leave-approvals"),
+    },
+    {
       type: "divider",
     },
     {
@@ -195,27 +228,18 @@ const FrontOfficeLayout = () => {
       label: "Logout",
       onClick: logout,
     },
-  ];
+  ].filter(Boolean);
 
   return (
-    <Layout className="frontoffice-layout">
-      <Header className="bg-white border-b border-gray-200 px-6 flex items-center justify-between shadow-sm">
+    <Layout className="frontoffice-layout m-0 p-0">
+      <Header className="bg-white border-b border-gray-200 flex items-center justify-between shadow-sm">
         {/* Title and Menu */}
         <div className="flex items-center w-full min-w-0">
-          <div className="flex items-center mr-8">
+          <div className="flex items-center">
             <img
               src="/images/images.png"
               alt="MicroArt Logo"
-              style={{ height: "130px", marginRight: "12px" }}
-            />
-            <Badge
-              count="Employee"
-              style={{
-                backgroundColor: "#52c41a",
-                color: "#ffffff",
-                fontWeight: "500",
-                fontSize: "10px",
-              }}
+              style={{ height: "100px", display: "block" }}
             />
           </div>
           <Menu
@@ -302,18 +326,21 @@ const FrontOfficeLayout = () => {
         </div>
       </Header>
 
-      <Content 
+      <Content
         className={
-          location.pathname.startsWith('/messages') 
-            ? 'bg-white min-h-[calc(100vh-64px)]' 
-            : 'p-2 bg-gray-50 min-h-[calc(100vh-64px)]'
+          location.pathname.startsWith("/messages")
+            ? "bg-white min-h-[calc(100vh-64px)]"
+            : "bg-gray-50 min-h-[calc(100vh-64px)]"
         }
+        style={{ margin: 0, padding: 0 }}
       >
-        <div className={
-          location.pathname.startsWith('/messages')
-            ? 'w-full h-full'
-            : 'w-full max-w-none mx-auto px-4'
-        }>
+        <div
+          className={
+            location.pathname.startsWith("/messages")
+              ? "w-full h-full"
+              : "w-full max-w-none"
+          }
+        >
           <Routes>
             <Route path="/" element={<TaskTable />} />
             <Route path="/projects" element={<ProjectManagement />} />
@@ -324,6 +351,8 @@ const FrontOfficeLayout = () => {
             <Route path="/clients" element={<ClientList />} />
             <Route path="/messages" element={<Messages />} />
             <Route path="/messages/:roomId" element={<Messages />} />
+            <Route path="/leaves" element={<MyLeaves />} />
+            <Route path="/leave-approvals" element={<LeaveApprovals />} />
           </Routes>
         </div>
       </Content>

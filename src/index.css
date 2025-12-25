@@ -2,14 +2,23 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Prevent scroll on login page */
-body {
+/* Remove all default margins and padding */
+* {
+  margin: 0;
+  padding: 0;
+}
+
+body, html, #root {
+  margin: 0;
+  padding: 0;
   overflow-x: hidden;
 }
 
 /* Custom styles for better integration with Ant Design */
 .ant-layout {
   min-height: 100vh;
+  margin: 0;
+  padding: 0;
 }
 
 /* Override some Ant Design styles */
