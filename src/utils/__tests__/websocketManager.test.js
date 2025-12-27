@@ -219,12 +219,3 @@ describe('WebSocketManager', () => {
     expect(mockReconnectCallback).toHaveBeenCalled();
   });
 });
-
-console.log('✅ WebSocket Manager test file created successfully');
-console.log('✅ Test coverage includes:');
-console.log('   - Document Visibility API integration');
-console.log('   - Heartbeat monitoring (15s checks, 45s timeout)');
-console.log('   - Automatic reconnection on visibility changes');
-console.log('   - Pong timestamp tracking');
-console.log('   - Multiple reconnection prevention');
-console.log('   - Resource cleanup');
