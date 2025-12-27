@@ -16,6 +16,7 @@ import {
   isApplicationLoading,
 } from "./cache/userCacheVar";
 import { getAuthToken } from "./utils/cookieUtils";
+import WebSocketManager from "./utils/websocketManager";
 
 const createErrorLink = (client) =>
   onError(({ graphQLErrors, networkError }) => {
@@ -98,6 +99,9 @@ const httpLink = createHttpLink({
 });
 
 // WebSocket link - works in both development and production with SSL
+// Global WebSocket manager instance
+let wsManager = null;
+
 export const wsLink = process.env.REACT_APP_GRAPHQL_WS_URL ? new GraphQLWsLink(createClient({
   url: process.env.REACT_APP_GRAPHQL_WS_URL,
   connectionParams: () => {
@@ -125,12 +129,22 @@ export const wsLink = process.env.REACT_APP_GRAPHQL_WS_URL ? new GraphQLWsLink(c
     },
     connected: (socket, payload) => {
       console.log('WebSocket connected with authentication', payload);
+      // Update pong time on successful connection
+      if (wsManager) {
+        wsManager.updatePongTime();
+      }
     },
     ping: (received) => {
       if (!received) console.log('Ping sent');
     },
     pong: (received) => {
-      if (received) console.log('Pong received');
+      if (received) {
+        console.log('Pong received');
+        // Update the WebSocket manager's last pong time
+        if (wsManager) {
+          wsManager.updatePongTime();
+        }
+      }
     },
     closed: (event) => {
       console.log('WebSocket closed:', event?.code, event?.reason);
@@ -351,5 +365,26 @@ export const checkWebSocketAuth = () => {
     }
   });
 };
+
+// Initialize WebSocket Manager for visibility and heartbeat monitoring
+export const initWebSocketManager = () => {
+  if (!wsManager && typeof window !== 'undefined') {
+    wsManager = new WebSocketManager(reconnectWebSocket);
+    console.log('WebSocket Manager initialized');
+  }
+  return wsManager;
+};
+
+// Clean up WebSocket Manager
+export const cleanupWebSocketManager = () => {
+  if (wsManager) {
+    wsManager.cleanup();
+    wsManager = null;
+    console.log('WebSocket Manager cleaned up');
+  }
+};
+
+// Export the manager instance getter
+export const getWebSocketManager = () => wsManager;
 
 export default client;

@@ -22,6 +22,7 @@ import { userCacheVar, isApplicationLoading } from "./cache/userCacheVar";
 import { useReactiveVar, useApolloClient } from "@apollo/client";
 import notificationService from "./services/NotificationService";
 import { useTaskNotifications } from "./hooks/useTaskNotifications";
+import { initWebSocketManager, cleanupWebSocketManager } from "./apolloClient";
 
 const { defaultAlgorithm } = theme;
 
@@ -34,6 +35,19 @@ function AppContent() {
   
   // Listen for task assignment notifications
   useTaskNotifications();
+
+  // Initialize WebSocket Manager for visibility tracking and heartbeat monitoring
+  useEffect(() => {
+    if (user) {
+      initWebSocketManager();
+      console.log('[App] WebSocket Manager initialized for user:', user.email);
+      
+      return () => {
+        cleanupWebSocketManager();
+        console.log('[App] WebSocket Manager cleaned up');
+      };
+    }
+  }, [user]);
 
   // Register push notifications on login
   useEffect(() => {
