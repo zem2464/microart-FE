@@ -39,7 +39,7 @@ function AppContent() {
   // Initialize WebSocket Manager for visibility tracking and heartbeat monitoring
   useEffect(() => {
     if (user) {
-      const manager = initWebSocketManager();
+      initWebSocketManager();
       console.log('[App] WebSocket Manager initialized for user:', user.email);
       
       return () => {
