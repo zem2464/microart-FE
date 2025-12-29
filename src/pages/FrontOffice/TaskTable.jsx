@@ -868,15 +868,22 @@ const TaskTable = () => {
   const allWorkTypeTabs = useMemo(() => {
     const result = {};
 
-    // Get user's work type IDs from ME query
+    // Get user's work type IDs from ME query (prefer workTypes, fallback to userWorkTypes)
     const userWorkTypeIds =
-      currentUser?.workTypes?.map((wt) => wt.id.toString()) || [];
+      (currentUser?.workTypes?.map((wt) => wt.id.toString()) || 
+       currentUser?.userWorkTypes?.map((uwt) => uwt.workTypeId.toString())) || [];
+
+    // Check if user has any assigned work types
+    const hasAssignedWorkTypes = userWorkTypeIds && userWorkTypeIds.length > 0;
 
     console.log('[WorkType Filter] User work types:', {
       userId: currentUser?.id,
       userEmail: currentUser?.email,
       userWorkTypeIds,
-      userWorkTypeNames: currentUser?.workTypes?.map(wt => wt.name) || []
+      hasAssignedWorkTypes,
+      userWorkTypeNames: currentUser?.workTypes?.map(wt => wt.name) || [],
+      userWorkTypesData: currentUser?.workTypes,
+      userWorkTypesJunction: currentUser?.userWorkTypes
     });
 
     // Create tabs from all available worktypes
@@ -885,14 +892,14 @@ const TaskTable = () => {
         const workTypeId = workType.id.toString();
 
         // Filter: only show work types assigned to the user
-        // If user has no work types assigned, show all (for backward compatibility/admins)
-        const shouldShow = userWorkTypeIds.length === 0 || userWorkTypeIds.includes(workTypeId);
+        // Only filter if user has assigned work types. If none are assigned, show all (for backward compatibility/admins)
+        const shouldShow = !hasAssignedWorkTypes || userWorkTypeIds.includes(workTypeId);
         
         console.log(`[WorkType Filter] ${workType.name}:`, {
           workTypeId,
           isAssignedToUser: userWorkTypeIds.includes(workTypeId),
           shouldShow,
-          reason: userWorkTypeIds.length === 0 ? 'No work types (show all)' : userWorkTypeIds.includes(workTypeId) ? 'Assigned' : 'Not assigned'
+          reason: !hasAssignedWorkTypes ? 'No work types assigned (show all)' : userWorkTypeIds.includes(workTypeId) ? 'Assigned to user' : 'Not assigned to user'
         });
 
         if (shouldShow) {
