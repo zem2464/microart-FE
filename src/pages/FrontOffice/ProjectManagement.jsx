@@ -856,44 +856,57 @@ const ProjectManagement = () => {
 
   const handleSaveStatusEdit = async (projectId) => {
     const newStatus = tempValues[`status_${projectId}`];
-    
+
     // Find the project to validate
-    const project = allProjects.find(p => p.id === projectId);
-    
+    const project = allProjects.find((p) => p.id === projectId);
+
     // Validate DELIVERED status change
-    if (newStatus?.toLowerCase() === 'delivered') {
+    if (newStatus?.toLowerCase() === "delivered") {
       if (!project) {
-        message.error('Project not found');
+        message.error("Project not found");
         return;
       }
 
       // Invoice is REQUIRED for all client types before marking as delivered
       if (!project.invoice && !project.invoiceId) {
-        message.error('Cannot mark as delivered: Invoice must be generated first');
+        message.error(
+          "Cannot mark as delivered: Invoice must be generated first"
+        );
         return;
       }
 
       // Additional validation based on client type
       const clientType = project.client?.clientType;
-      const hasApprovePermission = hasPermission(user, generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE));
-      const isPaid = project.invoice?.status === 'fully_paid' || project.invoice?.balanceAmount <= 0;
-      
-      if (clientType === 'walkIn') {
+      const hasApprovePermission = hasPermission(
+        user,
+        generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE)
+      );
+      const isPaid =
+        project.invoice?.status === "fully_paid" ||
+        project.invoice?.balanceAmount <= 0;
+
+      if (clientType === "walkIn") {
         // Walk-in clients: Need permission AND payment (in addition to invoice)
         if (!hasApprovePermission) {
-          message.error('You do not have permission to mark walk-in projects as delivered. Only users with project approval permission can do this.');
+          message.error(
+            "You do not have permission to mark walk-in projects as delivered. Only users with project approval permission can do this."
+          );
           return;
         }
-        
+
         if (!isPaid) {
           const balance = project.invoice?.balanceAmount || 0;
-          message.error(`Cannot mark walk-in project as delivered: Invoice must be paid first. Current balance: ₹${balance.toFixed(2)}.`);
+          message.error(
+            `Cannot mark walk-in project as delivered: Invoice must be paid first. Current balance: ₹${balance.toFixed(
+              2
+            )}.`
+          );
           return;
         }
       }
       // Permanent clients: Invoice is sufficient (no additional checks)
     }
-    
+
     try {
       await updateProjectStatus({
         variables: {
@@ -914,6 +927,17 @@ const ProjectManagement = () => {
 
   // Table columns
   const columns = [
+    {
+      title: "Client",
+      dataIndex: "client",
+      key: "client",
+      width: 150,
+      render: (client) => (
+        <>
+          <strong>{client.clientCode} </strong>({client?.displayName || "N/A"})
+        </>
+      ),
+    },
     {
       title: "Project",
       key: "project",
@@ -936,17 +960,7 @@ const ProjectManagement = () => {
         </Space>
       ),
     },
-    {
-      title: "Client",
-      dataIndex: "client",
-      key: "client",
-      width: 150,
-      render: (client) => (
-        <>
-          <strong>{client.clientCode} </strong>({client?.displayName || "N/A"})
-        </>
-      ),
-    },
+
     {
       title: "Status",
       dataIndex: "status",
@@ -966,16 +980,22 @@ const ProjectManagement = () => {
         );
 
         // Check if user can select DELIVERED status
-        const hasApprovePermission = hasPermission(user, generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE));
+        const hasApprovePermission = hasPermission(
+          user,
+          generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE)
+        );
         const hasInvoice = record.invoice || record.invoiceId;
         const clientType = record.client?.clientType;
-        const isPaid = record.invoice?.status === 'fully_paid' || record.invoice?.balanceAmount <= 0;
-        const isCompleted = record.status?.toLowerCase() === 'completed';
-        
+        const isPaid =
+          record.invoice?.status === "fully_paid" ||
+          record.invoice?.balanceAmount <= 0;
+        const isCompleted = record.status?.toLowerCase() === "completed";
+
         // If project is completed AND has invoice, show ONLY delivered option
-        const filteredStatusOptions = (isCompleted && hasInvoice) 
-          ? statusOptions.filter(opt => opt.value === 'delivered')
-          : statusOptions;
+        const filteredStatusOptions =
+          isCompleted && hasInvoice
+            ? statusOptions.filter((opt) => opt.value === "delivered")
+            : statusOptions;
 
         if (isEditing) {
           return (
@@ -994,29 +1014,42 @@ const ProjectManagement = () => {
                 {filteredStatusOptions.map((option) => {
                   // Disable DELIVERED option based on permissions
                   let disabled = false;
-                  let title = '';
-                  
-                  if (option.value === 'delivered') {
+                  let title = "";
+
+                  if (option.value === "delivered") {
                     if (!hasInvoice) {
                       disabled = true;
-                      title = 'Invoice must be generated first';
-                    } else if (clientType === 'walkIn') {
+                      title = "Invoice must be generated first";
+                    } else if (clientType === "walkIn") {
                       // Walk-in: Need permission AND payment
                       if (!hasApprovePermission) {
                         disabled = true;
-                        title = 'Permission required to deliver walk-in projects';
+                        title =
+                          "Permission required to deliver walk-in projects";
                       } else if (!isPaid) {
                         disabled = true;
-                        title = 'Invoice must be paid for walk-in projects';
+                        title = "Invoice must be paid for walk-in projects";
                       }
                     }
                     // Permanent: No restrictions
                   }
-                  
+
                   return (
-                    <Option key={option.value} value={option.value} disabled={disabled} title={title}>
+                    <Option
+                      key={option.value}
+                      value={option.value}
+                      disabled={disabled}
+                      title={title}
+                    >
                       <Tag color={option.color}>{option.label}</Tag>
-                      {disabled && <Text type="secondary" style={{ fontSize: '10px', marginLeft: '4px' }}>🔒</Text>}
+                      {disabled && (
+                        <Text
+                          type="secondary"
+                          style={{ fontSize: "10px", marginLeft: "4px" }}
+                        >
+                          🔒
+                        </Text>
+                      )}
                     </Option>
                   );
                 })}
@@ -1116,46 +1149,6 @@ const ProjectManagement = () => {
       width: 120,
       sorter: (a, b) => new Date(a.createdAt) - new Date(b.createdAt),
       render: (date) => (date ? dayjs(date).format("MMM DD, YYYY") : "N/A"),
-    },
-    {
-      title: "Tasks",
-      dataIndex: "tasks",
-      key: "tasks",
-      width: 160,
-      sorter: (a, b) =>
-        ((a.tasks && a.tasks.length) || a.taskCount || 0) -
-        ((b.tasks && b.tasks.length) || b.taskCount || 0),
-      render: (tasks, record) => {
-        // If project is a draft, tasks should remain hidden / not visible
-        const status = (record.status || "").toString().toUpperCase();
-        if (status === "DRAFT") {
-          return (
-            <div style={{ minWidth: 140, color: "#fa8c16" }}>
-              Draft — tasks hidden
-            </div>
-          );
-        }
-
-        const all = tasks || record.tasks || [];
-        const total = all.length || record.taskCount || 0;
-        const completed =
-          (all.filter
-            ? all.filter(
-                (t) => (t.status || "").toString().toUpperCase() === "COMPLETED"
-              ).length
-            : 0) ||
-          record.completedTaskCount ||
-          0;
-        const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-        return (
-          <div style={{ minWidth: 140 }}>
-            <div style={{ marginBottom: 6 }}>
-              {total} task{total !== 1 ? "s" : ""}
-            </div>
-            <Progress percent={percent} size="small" />
-          </div>
-        );
-      },
     },
     {
       title: "Deadline",
@@ -1442,7 +1435,8 @@ const ProjectManagement = () => {
                     transition: "background-color 0.3s",
                     backgroundColor:
                       stats.notDelivered > 0 ? "#e6f7ff" : "transparent",
-                    border: stats.notDelivered > 0 ? "1px solid #1890ff" : "none",
+                    border:
+                      stats.notDelivered > 0 ? "1px solid #1890ff" : "none",
                   }}
                   className="hover:bg-blue-100"
                   onClick={() => setStatusFilter("COMPLETED")}
