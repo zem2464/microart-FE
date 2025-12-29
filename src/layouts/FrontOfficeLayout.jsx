@@ -33,6 +33,7 @@ import {
   SearchOutlined,
   CalendarOutlined,
   BarChartOutlined,
+  MessageOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { usePayment } from "../contexts/PaymentContext";
@@ -151,6 +152,16 @@ const FrontOfficeLayout = () => {
       key: "/dashboard",
       icon: <DashboardOutlined />,
       label: <Link to="/dashboard">Dashboard</Link>,
+    },
+    {
+      key: "/leaves",
+      icon: <CalendarOutlined />,
+      label: <Link to="/leaves">Leave Applied</Link>,
+    },
+    {
+      key: "/messages",
+      icon: <MessageOutlined />,
+      label: <Link to="/messages">Chat</Link>,
     },
     // Most Used - Direct Access
     canManageTasks && {

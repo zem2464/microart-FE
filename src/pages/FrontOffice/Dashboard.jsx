@@ -71,6 +71,10 @@ const Dashboard = () => {
   // Permission checks
   const isAdmin = user?.role?.roleType === "ADMIN";
   const isManager = user?.role?.roleType === "MANAGER";
+  const canManageTasks = hasPermission(
+    user,
+    generatePermission(MODULES.TASKS, ACTIONS.MANAGE)
+  );
   const canManageProjects =
     hasPermission(user, generatePermission(MODULES.PROJECTS, ACTIONS.MANAGE)) ||
     isAdmin ||
@@ -80,6 +84,14 @@ const Dashboard = () => {
       user,
       generatePermission(MODULES.CLIENT_TRANSACTIONS, ACTIONS.MANAGE)
     ) || isAdmin; // Allow admins to see transactions
+  const canManageReports = hasPermission(
+    user,
+    generatePermission(MODULES.REPORTS, ACTIONS.MANAGE)
+  );
+  const canManageUserDashboard = hasPermission(
+    user,
+    generatePermission(MODULES.USER_MANAGER, ACTIONS.MANAGE)
+  );
   const canApproveLeaves = isAdmin || isManager;
 
   // Date ranges
@@ -1581,16 +1593,23 @@ const Dashboard = () => {
           Quick Actions
         </Title>
         <Space size="large" wrap>
-          <Button
-            type="primary"
-            icon={<ProjectOutlined />}
-            onClick={() => navigate("/projects")}
-          >
-            All Projects
-          </Button>
-          <Button icon={<CheckCircleOutlined />} onClick={() => navigate("/")}>
-            Task Board
-          </Button>
+          {canManageProjects && (
+            <Button
+              type="primary"
+              icon={<ProjectOutlined />}
+              onClick={() => navigate("/projects")}
+            >
+              All Projects
+            </Button>
+          )}
+          {canManageTasks && (
+            <Button
+              icon={<CheckCircleOutlined />}
+              onClick={() => navigate("/")}
+            >
+              Task Board
+            </Button>
+          )}
           <Button
             icon={<CalendarOutlined />}
             onClick={() => navigate("/leaves")}
@@ -1605,7 +1624,7 @@ const Dashboard = () => {
               Transactions
             </Button>
           )}
-          {isAdmin && (
+          {canManageUserDashboard && (
             <Button
               icon={<TeamOutlined />}
               onClick={() => navigate("/user-dashboard")}
@@ -1613,7 +1632,7 @@ const Dashboard = () => {
               User Dashboard
             </Button>
           )}
-          {canManageProjects && (
+          {canManageReports && (
             <Button
               icon={<FileTextOutlined />}
               onClick={() => navigate("/ledger")}

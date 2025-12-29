@@ -1580,11 +1580,11 @@ const ProjectForm = ({
     } else {
       form.resetFields();
       // Set default values for new project
-      form.setFieldsValue({ status: "draft" });
+      form.setFieldsValue({ status: "active" });
 
       // Reset all state for new project
       setSelectedClientId(null);
-      setCurrentStatus("draft"); // Reset status for new project
+      setCurrentStatus("active"); // Reset status for new project
       // clear any previous client credit display (we rely on projectCreditValidation)
       setClientPreferences(null);
       setSelectedWorkTypes([]);
@@ -2887,9 +2887,6 @@ const ProjectForm = ({
           <Form.Item
             name="description"
             label="Project Description"
-            rules={[
-              { required: true, message: "Please enter project description" },
-            ]}
           >
             <Input.TextArea
               placeholder="Enter project description"
