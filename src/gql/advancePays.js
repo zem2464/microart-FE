@@ -116,6 +116,9 @@ export const UPDATE_ADVANCE_PAY = gql`
 
 export const DELETE_ADVANCE_PAY = gql`
   mutation DeleteAdvancePay($id: ID!) {
-    deleteAdvancePay(id: $id)
+    deleteAdvancePay(id: $id) {
+      success
+      message
+    }
   }
 `;
