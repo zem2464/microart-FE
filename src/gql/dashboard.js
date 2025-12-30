@@ -1,6 +1,66 @@
 import { gql } from '@apollo/client';
 
 /**
+ * Dashboard Queries
+ * Provides role-based dashboard data for different user types
+ */
+
+// Back Office Admin Dashboard Stats
+export const GET_DASHBOARD_STATS = gql`
+  query GetDashboardStats {
+    dashboardStats {
+      # Projects
+      totalProjects
+      projectsThisMonth
+      newClientProjects
+      recurringClientProjects
+      
+      # Clients
+      totalClients
+      newClientsThisMonth
+      activeClients
+      
+      # Users
+      totalUsers
+      activeUsers
+      
+      # Financial
+      totalRevenueThisMonth
+      totalExpenseThisMonth
+      totalIncomeThisMonth
+      paymentsReceivedThisMonth
+      
+      # Projects by status
+      activeProjects
+      completedProjects
+      onHoldProjects
+      deliveredProjects
+      
+      # Recent activity
+      recentProjects {
+        id
+        projectCode
+        name
+        status
+        client {
+          id
+          displayName
+        }
+        createdAt
+      }
+      
+      # Top clients by projects
+      topClients {
+        clientId
+        clientName
+        projectCount
+        totalRevenue
+      }
+    }
+  }
+`;
+
+/**
  * Front Office Dashboard Queries
  * Provides role-based dashboard data for different user types
  */

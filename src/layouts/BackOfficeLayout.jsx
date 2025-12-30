@@ -1,27 +1,15 @@
 import React, { useState, useEffect } from "react";
-import {
-  Layout,
-  Menu,
-  Button,
-  Dropdown,
-  Avatar,
-  Typography,
-  Badge,
-} from "antd";
+import { Layout, Menu, Button, Dropdown, Avatar, Badge } from "antd";
 import { Routes, Route, Link, useLocation } from "react-router-dom";
 import {
   DashboardOutlined,
   UserOutlined,
   SettingOutlined,
-  BarChartOutlined,
   LogoutOutlined,
   BellOutlined,
-  TagsOutlined,
-  SecurityScanOutlined,
-  DollarOutlined,
-  WalletOutlined,
   SearchOutlined,
-  CalendarOutlined,
+  DollarOutlined,
+  ToolOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
@@ -51,7 +39,6 @@ import HolidayManagement from "../pages/BackOffice/HolidayManagement";
 import Finance from "../pages/BackOffice/Finance";
 
 const { Header, Content } = Layout;
-const { Title } = Typography;
 
 const BackOfficeLayout = () => {
   const user = useReactiveVar(userCacheVar); // Use cache variable instead of auth context
@@ -81,9 +68,13 @@ const BackOfficeLayout = () => {
     user,
     generatePermission(MODULES.ROLES, ACTIONS.MANAGE)
   );
-  const canManageUserManager = hasPermission(
+  const canManageReports = hasPermission(
     user,
-    generatePermission(MODULES.USER_MANAGER, ACTIONS.MANAGE)
+    generatePermission(MODULES.REPORTS, ACTIONS.MANAGE)
+  );
+  const canManageAuditLogs = hasPermission(
+    user,
+    generatePermission(MODULES.AUDIT_LOGS, ACTIONS.MANAGE)
   );
   const canManageTaskTypes = hasPermission(
     user,
@@ -97,84 +88,90 @@ const BackOfficeLayout = () => {
     user,
     generatePermission(MODULES.GRADINGS, ACTIONS.MANAGE)
   );
-  const canManageReports = hasPermission(
-    user,
-    generatePermission(MODULES.REPORTS, ACTIONS.MANAGE)
-  );
-  const canManageAuditLogs = hasPermission(
-    user,
-    generatePermission(MODULES.AUDIT_LOGS, ACTIONS.MANAGE)
-  );
   const canViewFinance = hasPermission(
     user,
     generatePermission(MODULES.FINANCE, ACTIONS.READ)
   );
 
-  // Build menu items based on permissions
-  const allMenuItems = [
+  const navSections = [
     {
       key: "/",
       icon: <DashboardOutlined />,
       label: <Link to="/">Dashboard</Link>,
     },
-    canManageTaskTypes && {
-      key: "/task-types",
-      icon: <TagsOutlined />,
-      label: <Link to="/task-types">Task Types</Link>,
-    },
-    canManageWorkTypes && {
-      key: "/work-types",
-      icon: <DollarOutlined />,
-      label: <Link to="/work-types">Work Types</Link>,
-    },
-    canManageGradings && {
-      key: "/gradings",
-      icon: <DollarOutlined />,
-      label: <Link to="/gradings">Gradings</Link>,
-    },
-    canViewFinance && {
-      key: "/finance",
-      icon: <BarChartOutlined />,
-      label: <Link to="/finance">Finance</Link>,
-    },
     {
-      key: "/payment-types",
-      icon: <WalletOutlined />,
-      label: <Link to="/payment-types">Payment Types</Link>,
+      key: "finance",
+      label: "Finance",
+      icon: <DollarOutlined />,
+      children: [
+        canViewFinance && {
+          key: "/finance",
+          label: <Link to="/finance">Finance</Link>,
+        },
+        {
+          key: "/payment-types",
+          label: <Link to="/payment-types">Payment Types</Link>,
+        },
+      ].filter(Boolean),
     },
-    canManageUsers && {
-      key: "/users",
+    (canManageUsers || canManageRoles) && {
+      key: "people",
+      label: "People",
       icon: <UserOutlined />,
-      label: <Link to="/users">Users</Link>,
-    },
-    canManageRoles && {
-      key: "/roles",
-      icon: <UserOutlined />, // You can use a different icon if desired
-      label: <Link to="/roles">Roles</Link>,
-    },
-    canManageAuditLogs && {
-      key: "/audit-logs",
-      icon: <SecurityScanOutlined />,
-      label: <Link to="/audit-logs">Audit Logs</Link>,
-    },
-    canManageGradings && {
-      key: "/user-rates",
-      icon: <DollarOutlined />,
-      label: <Link to="/user-rates">Employee Rates</Link>,
+      children: [
+        canManageUsers && {
+          key: "/users",
+          label: <Link to="/users">Employees</Link>,
+        },
+        canManageRoles && {
+          key: "/roles",
+          label: <Link to="/roles">Roles</Link>,
+        },
+      ].filter(Boolean),
     },
     {
-      key: "/holidays",
-      icon: <CalendarOutlined />,
-      label: <Link to="/holidays">Holidays</Link>,
-    },
-    {
-      key: "/settings",
+      key: "system",
+      label: "System",
       icon: <SettingOutlined />,
-      label: <Link to="/settings">Settings</Link>,
+      children: [
+        {
+          key: "/holidays",
+          label: <Link to="/holidays">Holidays</Link>,
+        },
+        canManageAuditLogs && {
+          key: "/audit-logs",
+          label: <Link to="/audit-logs">Audit Log</Link>,
+        },
+        canManageReports && {
+          key: "/reports",
+          label: <Link to="/reports">Reports</Link>,
+        },
+      ].filter(Boolean),
     },
-  ].filter(Boolean); // Remove null/false items
-
-  const menuItems = allMenuItems;
+    {
+      key: "configuration",
+      label: "Configuration",
+      icon: <ToolOutlined />,
+      children: [
+        canManageTaskTypes && {
+          key: "/task-types",
+          label: <Link to="/task-types">Task Types</Link>,
+        },
+        canManageWorkTypes && {
+          key: "/work-types",
+          label: <Link to="/work-types">Work Types</Link>,
+        },
+        canManageGradings && {
+          key: "/gradings",
+          label: <Link to="/gradings">Gradings</Link>,
+        },
+        canManageGradings && {
+          key: "/user-rates",
+          label: <Link to="/user-rates">Employee Rates</Link>,
+        },
+      ].filter(Boolean),
+    },
+  ].filter(Boolean);
 
   const userMenuItems = [
     {
@@ -222,12 +219,9 @@ const BackOfficeLayout = () => {
           <Menu
             mode="horizontal"
             selectedKeys={[location.pathname]}
-            items={menuItems}
+            items={navSections}
             className="flex-1 border-b-0"
-            style={{
-              flex: 1,
-              minWidth: 0,
-            }}
+            style={{ flex: 1, minWidth: 0 }}
           />
         </div>
 

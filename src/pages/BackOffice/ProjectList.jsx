@@ -46,6 +46,26 @@ const { Title, Text } = Typography;
 const { Option } = Select;
 const { TextArea } = Input;
 
+// Status and Priority configurations (shared across components)
+// Map backend status codes to display label and color
+const STATUS_MAP = {
+  draft: { label: "Draft", color: "orange" },
+  in_progress: { label: "In Progress", color: "blue" },
+  completed: { label: "Completed", color: "green" },
+  cancelled: { label: "Cancelled", color: "red" },
+  active: { label: "Active", color: "green" },
+  on_hold: { label: "On Hold", color: "purple" },
+  requested: { label: "Pending Approval", color: "purple" },
+};
+
+// Map backend priority codes (A/B/C) to labels/colors
+const PRIORITY_MAP = {
+  A: { label: "High", color: "red" },
+  B: { label: "Medium", color: "orange" },
+  C: { label: "Low", color: "green" },
+  URGENT: { label: "Urgent", color: "volcano" },
+};
+
 const ProjectList = () => {
   // Drawer context
   const { showProjectDetailDrawerV2 } = useAppDrawer();
@@ -151,26 +171,6 @@ const ProjectList = () => {
       setProjects(projectsData.projects.projects || projectsData.projects);
     }
   }, [projectsData]);
-
-  // Status and Priority configurations
-  // Map backend status codes to display label and color
-  const STATUS_MAP = {
-    draft: { label: "Draft", color: "orange" },
-    in_progress: { label: "In Progress", color: "blue" },
-    completed: { label: "Completed", color: "green" },
-    cancelled: { label: "Cancelled", color: "red" },
-    active: { label: "Active", color: "green" },
-    on_hold: { label: "On Hold", color: "purple" },
-    requested: { label: "Pending Approval", color: "purple" },
-  };
-
-  // Map backend priority codes (A/B/C) to labels/colors
-  const PRIORITY_MAP = {
-    A: { label: "High", color: "red" },
-    B: { label: "Medium", color: "orange" },
-    C: { label: "Low", color: "green" },
-    URGENT: { label: "Urgent", color: "volcano" },
-  };
 
   // Table columns
   const columns = [
