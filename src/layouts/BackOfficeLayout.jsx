@@ -48,6 +48,7 @@ import AuditLogs from "../pages/BackOffice/AuditLogs";
 import PaymentTypes from "../pages/BackOffice/PaymentTypes";
 import UserGradingRateManagement from "../pages/Admin/UserGradingRateManagement";
 import HolidayManagement from "../pages/BackOffice/HolidayManagement";
+import Finance from "../pages/BackOffice/Finance";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -104,6 +105,10 @@ const BackOfficeLayout = () => {
     user,
     generatePermission(MODULES.AUDIT_LOGS, ACTIONS.MANAGE)
   );
+  const canViewFinance = hasPermission(
+    user,
+    generatePermission(MODULES.FINANCE, ACTIONS.READ)
+  );
 
   // Build menu items based on permissions
   const allMenuItems = [
@@ -126,6 +131,11 @@ const BackOfficeLayout = () => {
       key: "/gradings",
       icon: <DollarOutlined />,
       label: <Link to="/gradings">Gradings</Link>,
+    },
+    canViewFinance && {
+      key: "/finance",
+      icon: <BarChartOutlined />,
+      label: <Link to="/finance">Finance</Link>,
     },
     {
       key: "/payment-types",
@@ -263,6 +273,7 @@ const BackOfficeLayout = () => {
             <Route path="/task-types" element={<TaskTypes />} />
             <Route path="/work-types" element={<WorkTypes />} />
             <Route path="/gradings" element={<Gradings />} />
+            <Route path="/finance" element={<Finance />} />
             <Route path="/payment-types" element={<PaymentTypes />} />
             <Route path="/users" element={<Users />} />
             <Route path="/roles" element={<Roles />} />
