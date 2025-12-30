@@ -73,3 +73,40 @@ export const UPDATE_PAYMENT_TYPE = gql`
     }
   }
 `;
+
+export const CREATE_PAYMENT_TYPE_TRANSFER = gql`
+  mutation CreatePaymentTypeTransfer($input: PaymentTypeTransferInput!) {
+    createPaymentTypeTransfer(input: $input) {
+      id
+      transferNumber
+      amount
+      transferDate
+      referenceNumber
+      description
+      notes
+      status
+      fromBalanceBefore
+      fromBalanceAfter
+      toBalanceBefore
+      toBalanceAfter
+      fromPaymentType {
+        id
+        name
+        type
+        currentBalance
+      }
+      toPaymentType {
+        id
+        name
+        type
+        currentBalance
+      }
+      creator {
+        id
+        firstName
+        lastName
+      }
+      createdAt
+    }
+  }
+`;

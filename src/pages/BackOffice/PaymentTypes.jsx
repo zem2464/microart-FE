@@ -17,6 +17,8 @@ import {
   Row,
   Col,
   Typography,
+  DatePicker,
+  Alert,
 } from "antd";
 import {
   PlusOutlined,
@@ -26,12 +28,15 @@ import {
   WalletOutlined,
   CreditCardOutlined,
   QrcodeOutlined,
+  SwapOutlined,
 } from "@ant-design/icons";
+import dayjs from "dayjs";
 import { useQuery, useMutation } from "@apollo/client";
 import {
   GET_PAYMENT_TYPES,
   CREATE_PAYMENT_TYPE,
   UPDATE_PAYMENT_TYPE,
+  CREATE_PAYMENT_TYPE_TRANSFER,
 } from "../../gql/paymentTypes";
 
 const { Title, Text } = Typography;
@@ -40,8 +45,11 @@ const { TextArea } = Input;
 
 const PaymentTypes = () => {
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isTransferModalVisible, setIsTransferModalVisible] = useState(false);
   const [editingPaymentType, setEditingPaymentType] = useState(null);
+  const [selectedFromPaymentType, setSelectedFromPaymentType] = useState(null);
   const [form] = Form.useForm();
+  const [transferForm] = Form.useForm();
 
   // Queries
   const { data, loading, refetch } = useQuery(GET_PAYMENT_TYPES, {
@@ -76,6 +84,25 @@ const PaymentTypes = () => {
       },
       onError: (error) => {
         message.error(`Error: ${error.message}`);
+      },
+    }
+  );
+
+  const [createTransfer, { loading: transferring }] = useMutation(
+    CREATE_PAYMENT_TYPE_TRANSFER,
+    {
+      onCompleted: (data) => {
+        const transfer = data.createPaymentTypeTransfer;
+        message.success(
+          `Transfer ${transfer.transferNumber} completed successfully! ` +
+          `₹${transfer.amount} transferred from ${transfer.fromPaymentType.name} to ${transfer.toPaymentType.name}`
+        );
+        setIsTransferModalVisible(false);
+        transferForm.resetFields();
+        refetch();
+      },
+      onError: (error) => {
+        message.error(`Transfer failed: ${error.message}`);
       },
     }
   );
@@ -127,6 +154,36 @@ const PaymentTypes = () => {
       }
     } catch (error) {
       console.error("Error submitting payment type:", error);
+    }
+  };
+
+  const showTransferModal = () => {
+    transferForm.resetFields();
+    transferForm.setFieldsValue({
+      transferDate: dayjs(),
+    });
+    setSelectedFromPaymentType(null);
+    setIsTransferModalVisible(true);
+  };
+
+  const handleTransferCancel = () => {
+    setIsTransferModalVisible(false);
+    transferForm.resetFields();
+    setSelectedFromPaymentType(null);
+  };
+
+  const handleTransferSubmit = async (values) => {
+    try {
+      await createTransfer({
+        variables: {
+          input: {
+            ...values,
+            transferDate: values.transferDate?.toISOString(),
+          },
+        },
+      });
+    } catch (error) {
+      console.error("Error creating transfer:", error);
     }
   };
 
@@ -280,14 +337,24 @@ const PaymentTypes = () => {
           <Title level={2} className="mb-0">
             Payment Types
           </Title>
-          <Button
-            type="primary"
-            icon={<PlusOutlined />}
-            onClick={showCreateModal}
-            size="large"
-          >
-            Add Payment Type
-          </Button>
+          <Space>
+            <Button
+              type="default"
+              icon={<SwapOutlined />}
+              onClick={showTransferModal}
+              size="large"
+            >
+              Internal Transfer
+            </Button>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              onClick={showCreateModal}
+              size="large"
+            >
+              Add Payment Type
+            </Button>
+          </Space>
         </div>
 
         {/* Statistics */}
@@ -481,6 +548,229 @@ const PaymentTypes = () => {
                 loading={creating || updating}
               >
                 {editingPaymentType ? "Update" : "Create"}
+              </Button>
+            </Space>
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Internal Transfer Modal */}
+      <Modal
+        title={
+          <Space>
+            <SwapOutlined style={{ color: "#1890ff" }} />
+            <span>Internal Transfer</span>
+          </Space>
+        }
+        open={isTransferModalVisible}
+        onCancel={handleTransferCancel}
+        footer={null}
+        width={700}
+      >
+        <Form
+          form={transferForm}
+          layout="vertical"
+          onFinish={handleTransferSubmit}
+          initialValues={{
+            transferDate: dayjs(),
+          }}
+        >
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="fromPaymentTypeId"
+                label="From Payment Type"
+                rules={[
+                  { required: true, message: "Please select source payment type" },
+                ]}
+              >
+                <Select
+                  placeholder="Select source"
+                  showSearch
+                  optionFilterProp="children"
+                  onChange={(value) => {
+                    const selectedPT = paymentTypes.find(pt => pt.id === value);
+                    setSelectedFromPaymentType(selectedPT);
+                    // Reset amount field when source changes
+                    transferForm.setFieldsValue({ amount: undefined });
+                  }}
+                  filterOption={(input, option) =>
+                    option.children.toLowerCase().includes(input.toLowerCase())
+                  }
+                >
+                  {paymentTypes
+                    .filter((pt) => pt.isActive)
+                    .map((pt) => (
+                      <Option key={pt.id} value={pt.id}>
+                        <Space>
+                          {getPaymentTypeIcon(pt.type)}
+                          <span>{pt.name}</span>
+                          <Text type="secondary" style={{ fontSize: "12px" }}>
+                            (₹{pt.currentBalance?.toFixed(2)})
+                          </Text>
+                        </Space>
+                      </Option>
+                    ))}
+                </Select>
+              </Form.Item>
+              {selectedFromPaymentType && (
+                <Alert
+                  message={
+                    <Space direction="vertical" size={0}>
+                      <Text strong>Available Balance</Text>
+                      <Text style={{ fontSize: "20px", color: "#52c41a" }}>
+                        ₹{selectedFromPaymentType.currentBalance?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </Text>
+                    </Space>
+                  }
+                  type="info"
+                  style={{ marginTop: "-16px", marginBottom: "16px" }}
+                />
+              )}
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="toPaymentTypeId"
+                label="To Payment Type"
+                rules={[
+                  { required: true, message: "Please select destination payment type" },
+                  ({ getFieldValue }) => ({
+                    validator(_, value) {
+                      if (!value || getFieldValue("fromPaymentTypeId") !== value) {
+                        return Promise.resolve();
+                      }
+                      return Promise.reject(
+                        new Error("Cannot transfer to the same payment type")
+                      );
+                    },
+                  }),
+                ]}
+              >
+                <Select
+                  placeholder="Select destination"
+                  showSearch
+                  optionFilterProp="children"
+                  filterOption={(input, option) =>
+                    option.children.toLowerCase().includes(input.toLowerCase())
+                  }
+                >
+                  {paymentTypes
+                    .filter((pt) => pt.isActive)
+                    .map((pt) => (
+                      <Option key={pt.id} value={pt.id}>
+                        <Space>
+                          {getPaymentTypeIcon(pt.type)}
+                          <span>{pt.name}</span>
+                          <Text type="secondary" style={{ fontSize: "12px" }}>
+                            (₹{pt.currentBalance?.toFixed(2)})
+                          </Text>
+                        </Space>
+                      </Option>
+                    ))}
+                </Select>
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item
+                name="amount"
+                label="Transfer Amount"
+                rules={[
+                  { required: true, message: "Please enter transfer amount" },
+                  {
+                    type: "number",
+                    min: 0.01,
+                    message: "Amount must be greater than 0",
+                  },
+                  () => ({
+                    validator(_, value) {
+                      if (!value) {
+                        return Promise.resolve();
+                      }
+                      if (!selectedFromPaymentType) {
+                        return Promise.reject(
+                          new Error("Please select source payment type first")
+                        );
+                      }
+                      const availableBalance = parseFloat(selectedFromPaymentType.currentBalance || 0);
+                      if (value > availableBalance) {
+                        return Promise.reject(
+                          new Error(
+                            `Amount cannot exceed available balance of ₹${availableBalance.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+                          )
+                        );
+                      }
+                      return Promise.resolve();
+                    },
+                  }),
+                ]}
+              >
+                <InputNumber
+                  style={{ width: "100%" }}
+                  placeholder="0.00"
+                  precision={2}
+                  max={selectedFromPaymentType?.currentBalance || undefined}
+                  formatter={(value) =>
+                    `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+                  }
+                  parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
+                />
+              </Form.Item>
+              {selectedFromPaymentType && (
+                <Text type="secondary" style={{ fontSize: "12px", marginTop: "-12px", display: "block" }}>
+                  Maximum: ₹{selectedFromPaymentType.currentBalance?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </Text>
+              )}
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                name="transferDate"
+                label="Transfer Date"
+                rules={[{ required: true, message: "Please select transfer date" }]}
+              >
+                <DatePicker
+                  style={{ width: "100%" }}
+                  showTime
+                  format="DD MMM YYYY HH:mm"
+                />
+              </Form.Item>
+            </Col>
+          </Row>
+
+          <Form.Item name="referenceNumber" label="Reference Number">
+            <Input placeholder="e.g., Bank transaction ID, Cheque number" />
+          </Form.Item>
+
+          <Form.Item
+            name="description"
+            label="Description"
+            rules={[{ required: true, message: "Please provide a description" }]}
+          >
+            <TextArea
+              rows={2}
+              placeholder="Purpose of transfer (e.g., Daily cash deposit to bank)"
+            />
+          </Form.Item>
+
+          <Form.Item name="notes" label="Notes">
+            <TextArea
+              rows={2}
+              placeholder="Additional notes (optional)"
+            />
+          </Form.Item>
+
+          <Form.Item className="mb-0 mt-4">
+            <Space className="w-full justify-end">
+              <Button onClick={handleTransferCancel}>Cancel</Button>
+              <Button
+                type="primary"
+                htmlType="submit"
+                loading={transferring}
+                icon={<SwapOutlined />}
+              >
+                Transfer
               </Button>
             </Space>
           </Form.Item>

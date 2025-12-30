@@ -25,6 +25,7 @@ export const GET_USERS = gql`
       salaryType
       salaryAmount
       hourlyRate
+      monthlyHours
       canLogin
       hasSetInitialPassword
       isActive
@@ -76,6 +77,7 @@ export const GET_USER = gql`
       salaryType
       salaryAmount
       hourlyRate
+      monthlyHours
       canLogin
       hasSetInitialPassword
       isActive
@@ -126,6 +128,8 @@ export const CREATE_USER = gql`
       salaryType
       salaryAmount
       hourlyRate
+      monthlyHours
+      paymentDetails
       canLogin
       hasSetInitialPassword
       isActive
@@ -172,6 +176,8 @@ export const UPDATE_USER = gql`
       salaryType
       salaryAmount
       hourlyRate
+      monthlyHours
+      paymentDetails
       canLogin
       hasSetInitialPassword
       isActive

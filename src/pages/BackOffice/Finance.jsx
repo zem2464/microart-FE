@@ -28,7 +28,6 @@ import {
   PlusOutlined,
   CheckCircleOutlined,
   ReloadOutlined,
-  MoneyCollectOutlined,
   CalendarOutlined,
 } from "@ant-design/icons";
 import { useMutation, useQuery } from "@apollo/client";
@@ -40,8 +39,14 @@ import {
   GET_PAYMENT_TYPE_LEDGER,
   CREATE_EXPENSE,
   CREATE_INCOME,
+  UPDATE_EXPENSE,
+  UPDATE_INCOME,
   MARK_EXPENSE_PAID,
   MARK_INCOME_RECEIVED,
+  GET_EXPENSE_INCOME_CATEGORIES,
+  CREATE_EXPENSE_INCOME_CATEGORY,
+  UPDATE_EXPENSE_INCOME_CATEGORY,
+  DELETE_EXPENSE_INCOME_CATEGORY,
 } from "../../gql/finance";
 import { GET_PAYMENT_TYPES } from "../../gql/paymentTypes";
 
@@ -72,10 +77,30 @@ const Finance = () => {
   const [ledgerRange, setLedgerRange] = useState([]);
   const [expenseModalOpen, setExpenseModalOpen] = useState(false);
   const [incomeModalOpen, setIncomeModalOpen] = useState(false);
+  const [paymentTypeModalOpen, setPaymentTypeModalOpen] = useState(false);
+  const [incomePaymentModalOpen, setIncomePaymentModalOpen] = useState(false);
+  const [selectedExpense, setSelectedExpense] = useState(null);
+  const [selectedIncome, setSelectedIncome] = useState(null);
+  const [paymentTypeForm] = Form.useForm();
+  const [incomePaymentForm] = Form.useForm();
+  const [categoryForm] = Form.useForm();
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [expenseTypeFilter, setExpenseTypeFilter] = useState(null);
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState(null);
+  const [incomeTypeFilter, setIncomeTypeFilter] = useState(null);
+  const [incomeCategoryFilter, setIncomeCategoryFilter] = useState(null);
 
   const { data: paymentTypeData } = useQuery(GET_PAYMENT_TYPES, {
     fetchPolicy: "cache-and-network",
   });
+
+  const { data: categoriesData, refetch: refetchCategories } = useQuery(
+    GET_EXPENSE_INCOME_CATEGORIES,
+    {
+      fetchPolicy: "cache-and-network",
+    }
+  );
 
   const {
     data: dashboardData,
@@ -90,7 +115,12 @@ const Finance = () => {
     loading: expensesLoading,
     refetch: refetchExpenses,
   } = useQuery(GET_EXPENSES, {
-    variables: { limit: 50, offset: 0 },
+    variables: {
+      limit: 50,
+      offset: 0,
+      type: expenseTypeFilter,
+      categoryId: expenseCategoryFilter,
+    },
     fetchPolicy: "cache-and-network",
   });
 
@@ -99,7 +129,12 @@ const Finance = () => {
     loading: incomesLoading,
     refetch: refetchIncomes,
   } = useQuery(GET_INCOMES, {
-    variables: { limit: 50, offset: 0 },
+    variables: {
+      limit: 50,
+      offset: 0,
+      type: incomeTypeFilter,
+      categoryId: incomeCategoryFilter,
+    },
     fetchPolicy: "cache-and-network",
   });
 
@@ -153,6 +188,22 @@ const Finance = () => {
     }
   );
 
+  const [updateExpense] = useMutation(UPDATE_EXPENSE, {
+    onCompleted: () => {
+      message.success("Expense updated");
+      refetchExpenses();
+    },
+    onError: (error) => message.error(error.message),
+  });
+
+  const [updateIncome] = useMutation(UPDATE_INCOME, {
+    onCompleted: () => {
+      message.success("Income updated");
+      refetchIncomes();
+    },
+    onError: (error) => message.error(error.message),
+  });
+
   const [markExpensePaid, { loading: markingExpense }] = useMutation(
     MARK_EXPENSE_PAID,
     {
@@ -179,14 +230,113 @@ const Finance = () => {
     }
   );
 
+  const [createCategory, { loading: creatingCategory }] = useMutation(
+    CREATE_EXPENSE_INCOME_CATEGORY,
+    {
+      onCompleted: () => {
+        message.success("Category created successfully");
+        categoryForm.resetFields();
+        refetchCategories();
+        setCategoryModalOpen(false);
+        setEditingCategory(null);
+      },
+      onError: (error) => message.error(error.message),
+    }
+  );
+
+  const [updateCategory, { loading: updatingCategory }] = useMutation(
+    UPDATE_EXPENSE_INCOME_CATEGORY,
+    {
+      onCompleted: () => {
+        message.success("Category updated successfully");
+        categoryForm.resetFields();
+        refetchCategories();
+        setCategoryModalOpen(false);
+        setEditingCategory(null);
+      },
+      onError: (error) => message.error(error.message),
+    }
+  );
+
+  const [deleteCategory] = useMutation(DELETE_EXPENSE_INCOME_CATEGORY, {
+    onCompleted: () => {
+      message.success("Category deleted successfully");
+      refetchCategories();
+    },
+    onError: (error) => message.error(error.message),
+  });
+
   const paymentTypes = useMemo(
     () => paymentTypeData?.paymentTypes || [],
     [paymentTypeData]
   );
 
+  const categories = useMemo(
+    () => categoriesData?.expenseIncomeCategories || [],
+    [categoriesData]
+  );
+
+  const activeCategories = useMemo(
+    () => categories.filter(cat => cat.isActive),
+    [categories]
+  );
+
+  const expenseCategories = useMemo(
+    () => activeCategories.filter(cat => cat.applicableTo === 'EXPENSE' || cat.applicableTo === 'BOTH'),
+    [activeCategories]
+  );
+
+  const incomeCategories = useMemo(
+    () => activeCategories.filter(cat => cat.applicableTo === 'INCOME' || cat.applicableTo === 'BOTH'),
+    [activeCategories]
+  );
+
+  const handleCreateCategory = (values) => {
+    if (editingCategory) {
+      updateCategory({
+        variables: {
+          id: editingCategory.id,
+          input: values,
+        },
+      });
+    } else {
+      createCategory({ variables: { input: values } });
+    }
+  };
+
+  const handleEditCategory = (category) => {
+    setEditingCategory(category);
+    categoryForm.setFieldsValue({
+      name: category.name,
+      type: category.type,
+      applicableTo: category.applicableTo,
+      description: category.description,
+      isActive: category.isActive,
+    });
+    setCategoryModalOpen(true);
+  };
+
+  const handleDeleteCategory = (categoryId) => {
+    Modal.confirm({
+      title: "Delete Category",
+      content:
+        "Are you sure you want to delete this category? This action cannot be undone if the category has associated expenses or incomes.",
+      okText: "Delete",
+      okType: "danger",
+      onOk: () => {
+        deleteCategory({ variables: { id: categoryId } });
+      },
+    });
+  };
+
   const handleCreateExpense = (values) => {
+    // Get type from selected category
+    const selectedCategory = expenseCategories.find(cat => cat.id === values.categoryId);
+    const type = selectedCategory ? selectedCategory.type : null;
+    
     const payload = {
       ...values,
+      type,
       amount: Number(values.amount || 0),
       dueDate: values.dueDate ? values.dueDate.toISOString() : null,
       recurringFrequency: values.isRecurring
@@ -201,8 +351,13 @@ const Finance = () => {
   };
 
   const handleCreateIncome = (values) => {
+    // Get type from selected category
+    const selectedCategory = incomeCategories.find(cat => cat.id === values.categoryId);
+    const type = selectedCategory ? selectedCategory.type : null;
+    
     const payload = {
       ...values,
+      type,
       amount: Number(values.amount || 0),
       dueDate: values.dueDate ? values.dueDate.toISOString() : null,
       recurringFrequency: values.isRecurring
@@ -218,31 +373,99 @@ const Finance = () => {
 
   const handleMarkExpensePaid = (record) => {
     if (!record.paymentType?.id) {
-      message.warning("Add a payment type before marking paid");
+      // Show modal to select payment type
+      setSelectedExpense(record);
+      paymentTypeForm.setFieldsValue({
+        paymentTypeId: null,
+        markNextAsPaid: record.isRecurring || false,
+      });
+      setPaymentTypeModalOpen(true);
       return;
     }
+    // Payment type already exists, mark as paid directly with current date
     markExpensePaid({
       variables: {
         id: record.id,
         paymentTypeId: record.paymentType.id,
-        paidDate: dayjs().toISOString(),
-        markNextAsPaid: false,
+        paidDate: dayjs().format('YYYY-MM-DD'),
+        markNextAsPaid: record.isRecurring || false,
+      },
+    });
+  };
+
+  const handleConfirmPayment = () => {
+    paymentTypeForm.validateFields().then((values) => {
+      if (!selectedExpense) return;
+      
+      markExpensePaid({
+        variables: {
+          id: selectedExpense.id,
+          paymentTypeId: values.paymentTypeId,
+          paidDate: dayjs().format('YYYY-MM-DD'),
+          markNextAsPaid: values.markNextAsPaid || false,
+        },
+      });
+      setPaymentTypeModalOpen(false);
+      setSelectedExpense(null);
+      paymentTypeForm.resetFields();
+    });
+  };
+
+  const handleUpdateExpensePaymentType = (expenseId, paymentTypeId) => {
+    updateExpense({
+      variables: {
+        id: expenseId,
+        paymentTypeId: paymentTypeId,
+      },
+    });
+  };
+
+  const handleUpdateIncomePaymentType = (incomeId, paymentTypeId) => {
+    updateIncome({
+      variables: {
+        id: incomeId,
+        paymentTypeId: paymentTypeId,
       },
     });
   };
 
   const handleMarkIncomeReceived = (record) => {
     if (!record.paymentType?.id) {
-      message.warning("Add a payment type before marking received");
+      // Show modal to select payment type
+      setSelectedIncome(record);
+      incomePaymentForm.setFieldsValue({
+        paymentTypeId: null,
+        markNextAsReceived: record.isRecurring || false,
+      });
+      setIncomePaymentModalOpen(true);
       return;
     }
+    // Payment type already exists, mark as received directly with current date
     markIncomeReceived({
       variables: {
         id: record.id,
         paymentTypeId: record.paymentType.id,
-        receivedDate: dayjs().toISOString(),
-        markNextAsReceived: false,
+        receivedDate: dayjs().format('YYYY-MM-DD'),
+        markNextAsReceived: record.isRecurring || false,
       },
+    });
+  };
+
+  const handleConfirmIncomePayment = () => {
+    incomePaymentForm.validateFields().then((values) => {
+      if (!selectedIncome) return;
+      
+      markIncomeReceived({
+        variables: {
+          id: selectedIncome.id,
+          paymentTypeId: values.paymentTypeId,
+          receivedDate: dayjs().format('YYYY-MM-DD'),
+          markNextAsReceived: values.markNextAsReceived || false,
+        },
+      });
+      setIncomePaymentModalOpen(false);
+      setSelectedIncome(null);
+      incomePaymentForm.resetFields();
     });
   };
 
@@ -254,7 +477,17 @@ const Finance = () => {
       render: (text, record) => (
         <div>
           <Text strong>{text}</Text>
-          {record.category && (
+          {record.expenseCategory && (
+            <div>
+              <Tag color={record.expenseCategory.type === 'DIRECT' ? 'blue' : 'purple'} style={{ fontSize: 11 }}>
+                {record.expenseCategory.type}
+              </Tag>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {record.expenseCategory.name}
+              </Text>
+            </div>
+          )}
+          {record.category && !record.expenseCategory && (
             <div>
               <Text type="secondary" style={{ fontSize: 12 }}>
                 {record.category}
@@ -282,7 +515,28 @@ const Finance = () => {
       title: "Payment Type",
       dataIndex: ["paymentType", "name"],
       key: "paymentType",
-      render: (_, record) => record.paymentType?.name || "-",
+      render: (_, record) => {
+        if (record.status === "PAID") {
+          return record.paymentType?.name || "-";
+        }
+        // Editable for non-paid expenses
+        return (
+          <Select
+            size="small"
+            style={{ width: "100%", minWidth: 120 }}
+            value={record.paymentType?.id || undefined}
+            placeholder="Select payment type"
+            onChange={(value) => handleUpdateExpensePaymentType(record.id, value)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {paymentTypes.map((pt) => (
+              <Option key={pt.id} value={pt.id}>
+                {pt.name} ({pt.type})
+              </Option>
+            ))}
+          </Select>
+        );
+      },
     },
     {
       title: "Status",
@@ -327,6 +581,16 @@ const Finance = () => {
       render: (text, record) => (
         <div>
           <Text strong>{text}</Text>
+          {record.incomeCategory && (
+            <div>
+              <Tag color={record.incomeCategory.type === 'DIRECT' ? 'blue' : 'purple'} style={{ fontSize: 11 }}>
+                {record.incomeCategory.type}
+              </Tag>
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {record.incomeCategory.name}
+              </Text>
+            </div>
+          )}
           {record.source && (
             <div>
               <Text type="secondary" style={{ fontSize: 12 }}>
@@ -355,7 +619,28 @@ const Finance = () => {
       title: "Payment Type",
       dataIndex: ["paymentType", "name"],
       key: "paymentType",
-      render: (_, record) => record.paymentType?.name || "-",
+      render: (_, record) => {
+        if (record.status === "RECEIVED") {
+          return record.paymentType?.name || "-";
+        }
+        // Editable for non-received incomes
+        return (
+          <Select
+            size="small"
+            style={{ width: "100%", minWidth: 120 }}
+            value={record.paymentType?.id || undefined}
+            placeholder="Select payment type"
+            onChange={(value) => handleUpdateIncomePaymentType(record.id, value)}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {paymentTypes.map((pt) => (
+              <Option key={pt.id} value={pt.id}>
+                {pt.name} ({pt.type})
+              </Option>
+            ))}
+          </Select>
+        );
+      },
     },
     {
       title: "Status",
@@ -461,9 +746,34 @@ const Finance = () => {
   const renderCreateForm = (form, type) => {
     const isExpense = type === "expense";
     const onFinish = isExpense ? handleCreateExpense : handleCreateIncome;
+    const availableCategories = isExpense ? expenseCategories : incomeCategories;
 
     return (
-      <Form layout="vertical" form={form} onFinish={onFinish} initialValues={{ isRecurring: false }}>
+      <Form layout="vertical" form={form} onFinish={onFinish} initialValues={{ isRecurring: false, dueDate: dayjs() }}>
+        <Form.Item
+          name="categoryId"
+          label="Category"
+          rules={[{ required: true, message: "Please select a category" }]}
+        >
+          <Select 
+            placeholder="Select category" 
+            showSearch
+            optionFilterProp="children"
+            filterOption={(input, option) =>
+              option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+            }
+          >
+            {availableCategories.map((cat) => (
+              <Option key={cat.id} value={cat.id}>
+                <Tag color={cat.type === 'DIRECT' ? 'blue' : 'purple'} style={{ fontSize: 10, marginRight: 4 }}>
+                  {cat.type}
+                </Tag>
+                {cat.name}
+              </Option>
+            ))}
+          </Select>
+        </Form.Item>
+
         <Form.Item
           name="description"
           label="Description"
@@ -472,12 +782,11 @@ const Finance = () => {
           <Input placeholder={isExpense ? "e.g. Office rent" : "e.g. Client payment"} />
         </Form.Item>
 
-        <Form.Item
-          name={isExpense ? "category" : "source"}
-          label={isExpense ? "Category" : "Source"}
-        >
-          <Input placeholder={isExpense ? "e.g. Utilities" : "e.g. Customer"} />
-        </Form.Item>
+        {!isExpense && (
+          <Form.Item name="source" label="Source">
+            <Input placeholder="e.g. Customer" />
+          </Form.Item>
+        )}
 
         <Form.Item
           name="amount"
@@ -589,7 +898,35 @@ const Finance = () => {
             label: "Expenses",
             children: (
               <div>
-                <div className="flex justify-end mb-3">
+                <div className="flex justify-between items-center mb-3">
+                  <Space>
+                    <Select
+                      placeholder="Filter by Type"
+                      style={{ width: 150 }}
+                      value={expenseTypeFilter}
+                      onChange={setExpenseTypeFilter}
+                      allowClear
+                    >
+                      <Option value="DIRECT">Direct</Option>
+                      <Option value="INDIRECT">Indirect</Option>
+                    </Select>
+                    <Select
+                      placeholder="Filter by Category"
+                      style={{ width: 200 }}
+                      value={expenseCategoryFilter}
+                      onChange={setExpenseCategoryFilter}
+                      allowClear
+                    >
+                      {activeCategories.map((cat) => (
+                        <Option key={cat.id} value={cat.id}>
+                          <Tag color={cat.type === 'DIRECT' ? 'blue' : 'purple'} style={{ marginRight: 4, fontSize: 10 }}>
+                            {cat.type}
+                          </Tag>
+                          {cat.name}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Space>
                   <Button
                     type="primary"
                     icon={<PlusOutlined />}
@@ -613,7 +950,35 @@ const Finance = () => {
             label: "Incomes",
             children: (
               <div>
-                <div className="flex justify-end mb-3">
+                <div className="flex justify-between items-center mb-3">
+                  <Space>
+                    <Select
+                      placeholder="Filter by Type"
+                      style={{ width: 150 }}
+                      value={incomeTypeFilter}
+                      onChange={setIncomeTypeFilter}
+                      allowClear
+                    >
+                      <Option value="DIRECT">Direct</Option>
+                      <Option value="INDIRECT">Indirect</Option>
+                    </Select>
+                    <Select
+                      placeholder="Filter by Category"
+                      style={{ width: 200 }}
+                      value={incomeCategoryFilter}
+                      onChange={setIncomeCategoryFilter}
+                      allowClear
+                    >
+                      {activeCategories.map((cat) => (
+                        <Option key={cat.id} value={cat.id}>
+                          <Tag color={cat.type === 'DIRECT' ? 'blue' : 'purple'} style={{ marginRight: 4, fontSize: 10 }}>
+                            {cat.type}
+                          </Tag>
+                          {cat.name}
+                        </Option>
+                      ))}
+                    </Select>
+                  </Space>
                   <Button
                     type="primary"
                     icon={<PlusOutlined />}
@@ -627,6 +992,105 @@ const Finance = () => {
                   loading={incomesLoading}
                   dataSource={incomesData?.incomes?.items || []}
                   columns={incomeColumns}
+                  pagination={{ pageSize: 10 }}
+                />
+              </div>
+            ),
+          },
+          {
+            key: "categories",
+            label: "Categories",
+            children: (
+              <div>
+                <div className="flex justify-end mb-3">
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => {
+                      setEditingCategory(null);
+                      categoryForm.resetFields();
+                      categoryForm.setFieldsValue({ isActive: true, applicableTo: 'BOTH' });
+                      setCategoryModalOpen(true);
+                    }}
+                  >
+                    Add Category
+                  </Button>
+                </div>
+                <Table
+                  rowKey="id"
+                  dataSource={categories}
+                  columns={[
+                    {
+                      title: "Name",
+                      dataIndex: "name",
+                      key: "name",
+                      render: (text) => <Text strong>{text}</Text>,
+                    },
+                    {
+                      title: "Type",
+                      dataIndex: "type",
+                      key: "type",
+                      render: (type) => (
+                        <Tag color={type === 'DIRECT' ? 'blue' : 'purple'}>
+                          {type}
+                        </Tag>
+                      ),
+                    },
+                    {
+                      title: "For",
+                      dataIndex: "applicableTo",
+                      key: "applicableTo",
+                      render: (applicableTo) => {
+                        const colorMap = {
+                          EXPENSE: 'red',
+                          INCOME: 'green',
+                          BOTH: 'orange',
+                        };
+                        return (
+                          <Tag color={colorMap[applicableTo] || 'default'}>
+                            {applicableTo}
+                          </Tag>
+                        );
+                      },
+                    },
+                    {
+                      title: "Description",
+                      dataIndex: "description",
+                      key: "description",
+                      render: (text) => text || <Text type="secondary">-</Text>,
+                    },
+                    {
+                      title: "Status",
+                      dataIndex: "isActive",
+                      key: "isActive",
+                      render: (isActive) => (
+                        <Tag color={isActive ? 'green' : 'red'}>
+                          {isActive ? 'Active' : 'Inactive'}
+                        </Tag>
+                      ),
+                    },
+                    {
+                      title: "Actions",
+                      key: "actions",
+                      render: (_, record) => (
+                        <Space>
+                          <Button
+                            size="small"
+                            onClick={() => handleEditCategory(record)}
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="small"
+                            danger
+                            onClick={() => handleDeleteCategory(record.id)}
+                          >
+                            Delete
+                          </Button>
+                        </Space>
+                      ),
+                    },
+                  ]}
                   pagination={{ pageSize: 10 }}
                 />
               </div>
@@ -758,6 +1222,156 @@ const Finance = () => {
         destroyOnClose
       >
         {renderCreateForm(incomeForm, "income")}
+      </Modal>
+
+      <Modal
+        title="Select Payment Type"
+        open={paymentTypeModalOpen}
+        onCancel={() => {
+          setPaymentTypeModalOpen(false);
+          setSelectedExpense(null);
+          paymentTypeForm.resetFields();
+        }}
+        onOk={handleConfirmPayment}
+        okText="Mark as Paid"
+        cancelText="Cancel"
+        okButtonProps={{ loading: markingExpense }}
+      >
+        <Form form={paymentTypeForm} layout="vertical">
+          <Form.Item
+            name="paymentTypeId"
+            label="Payment Type"
+            rules={[{ required: true, message: "Please select a payment type" }]}
+          >
+            <Select placeholder="Select payment type">
+              {paymentTypes.map((pt) => (
+                <Option key={pt.id} value={pt.id}>
+                  {pt.name} ({pt.type})
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+          {selectedExpense?.isRecurring && (
+            <Form.Item
+              name="markNextAsPaid"
+              label="Also mark next occurrence as paid?"
+              valuePropName="checked"
+            >
+              <Switch />
+            </Form.Item>
+          )}
+        </Form>
+      </Modal>
+
+      <Modal
+        title="Select Payment Type"
+        open={incomePaymentModalOpen}
+        onCancel={() => {
+          setIncomePaymentModalOpen(false);
+          setSelectedIncome(null);
+          incomePaymentForm.resetFields();
+        }}
+        onOk={handleConfirmIncomePayment}
+        okText="Mark as Received"
+        cancelText="Cancel"
+        okButtonProps={{ loading: markingIncome }}
+      >
+        <Form form={incomePaymentForm} layout="vertical">
+          <Form.Item
+            name="paymentTypeId"
+            label="Payment Type"
+            rules={[{ required: true, message: "Please select a payment type" }]}
+          >
+            <Select placeholder="Select payment type">
+              {paymentTypes.map((pt) => (
+                <Option key={pt.id} value={pt.id}>
+                  {pt.name} ({pt.type})
+                </Option>
+              ))}
+            </Select>
+          </Form.Item>
+          {selectedIncome?.isRecurring && (
+            <Form.Item
+              name="markNextAsReceived"
+              label="Also mark next occurrence as received?"
+              valuePropName="checked"
+            >
+              <Switch />
+            </Form.Item>
+          )}
+        </Form>
+      </Modal>
+
+      <Modal
+        title={editingCategory ? "Edit Category" : "Add Category"}
+        open={categoryModalOpen}
+        onCancel={() => {
+          setCategoryModalOpen(false);
+          setEditingCategory(null);
+          categoryForm.resetFields();
+        }}
+        footer={null}
+        destroyOnClose
+      >
+        <Form
+          form={categoryForm}
+          layout="vertical"
+          onFinish={handleCreateCategory}
+          initialValues={{ isActive: true }}
+        >
+          <Form.Item
+            name="name"
+            label="Category Name"
+            rules={[{ required: true, message: "Please enter category name" }]}
+          >
+            <Input placeholder="e.g., Raw Materials, Office Supplies" />
+          </Form.Item>
+
+          <Form.Item
+            name="type"
+            label="Type"
+            rules={[{ required: true, message: "Please select type" }]}
+          >
+            <Select placeholder="Select type" disabled={!!editingCategory}>
+              <Option value="DIRECT">Direct</Option>
+              <Option value="INDIRECT">Indirect</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item
+            name="applicableTo"
+            label="Applicable To"
+            rules={[{ required: true, message: "Please select where this category applies" }]}
+          >
+            <Select placeholder="Select applicability">
+              <Option value="EXPENSE">Expense Only</Option>
+              <Option value="INCOME">Income Only</Option>
+              <Option value="BOTH">Both</Option>
+            </Select>
+          </Form.Item>
+
+          <Form.Item name="description" label="Description">
+            <Input.TextArea
+              rows={3}
+              placeholder="Optional description for this category"
+            />
+          </Form.Item>
+
+          <Form.Item name="isActive" label="Active" valuePropName="checked">
+            <Switch />
+          </Form.Item>
+
+          <div className="flex justify-end">
+            <Button
+              type="primary"
+              htmlType="submit"
+              icon={<PlusOutlined />}
+              loading={creatingCategory || updatingCategory}
+            >
+              {editingCategory ? "Update Category" : "Create Category"}
+            </Button>
+          </div>
+        </Form>
       </Modal>
 
       <Divider orientation="left" className="mt-8">

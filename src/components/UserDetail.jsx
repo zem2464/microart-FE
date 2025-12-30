@@ -28,6 +28,11 @@ const UserDetail = ({ user, onClose }) => {
     return 'Not specified';
   };
 
+  const calculateHourlyRate = (salaryAmount, monthlyHours) => {
+    if (!salaryAmount || !monthlyHours || monthlyHours === 0) return null;
+    return (salaryAmount / monthlyHours).toFixed(2);
+  };
+
   return (
     <div style={{ padding: '0 8px' }}>
       {/* Header */}
@@ -155,6 +160,14 @@ const UserDetail = ({ user, onClose }) => {
               <Descriptions.Item label="Compensation">
                 {formatPayType(user.payType, user.salaryAmount, user.salaryType, user.hourlyRate)}
               </Descriptions.Item>
+              <Descriptions.Item label="Monthly Hours">
+                {user.monthlyHours ? `${Number(user.monthlyHours).toFixed(2)} hours` : 'Not set'}
+              </Descriptions.Item>
+              {user.payType === 'fixed' && user.salaryAmount && user.monthlyHours && (
+                <Descriptions.Item label="Equivalent Hourly Rate">
+                  ₹{calculateHourlyRate(user.salaryAmount, user.monthlyHours)} per hour
+                </Descriptions.Item>
+              )}
             </>
           )}
         </Descriptions>

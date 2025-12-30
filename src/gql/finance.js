@@ -27,14 +27,22 @@ export const GET_FINANCE_DASHBOARD = gql`
 `;
 
 export const GET_EXPENSES = gql`
-  query GetExpenses($status: FinanceStatus, $isRecurring: Boolean, $limit: Int, $offset: Int) {
-    expenses(status: $status, isRecurring: $isRecurring, limit: $limit, offset: $offset) {
+  query GetExpenses($status: FinanceStatus, $type: ExpenseIncomeType, $categoryId: ID, $isRecurring: Boolean, $limit: Int, $offset: Int) {
+    expenses(status: $status, type: $type, categoryId: $categoryId, isRecurring: $isRecurring, limit: $limit, offset: $offset) {
       total
       items {
         id
         description
         amount
         category
+        type
+        categoryId
+        expenseCategory {
+          id
+          name
+          type
+          description
+        }
         status
         dueDate
         paidDate
@@ -53,14 +61,22 @@ export const GET_EXPENSES = gql`
 `;
 
 export const GET_INCOMES = gql`
-  query GetIncomes($status: FinanceStatus, $isRecurring: Boolean, $limit: Int, $offset: Int) {
-    incomes(status: $status, isRecurring: $isRecurring, limit: $limit, offset: $offset) {
+  query GetIncomes($status: FinanceStatus, $type: ExpenseIncomeType, $categoryId: ID, $isRecurring: Boolean, $limit: Int, $offset: Int) {
+    incomes(status: $status, type: $type, categoryId: $categoryId, isRecurring: $isRecurring, limit: $limit, offset: $offset) {
       total
       items {
         id
         description
         source
         amount
+        type
+        categoryId
+        incomeCategory {
+          id
+          name
+          type
+          description
+        }
         status
         dueDate
         receivedDate
@@ -111,6 +127,13 @@ export const CREATE_EXPENSE = gql`
       id
       description
       amount
+      type
+      categoryId
+      expenseCategory {
+        id
+        name
+        type
+      }
       status
       dueDate
       paidDate
@@ -130,6 +153,13 @@ export const CREATE_INCOME = gql`
       id
       description
       amount
+      type
+      categoryId
+      incomeCategory {
+        id
+        name
+        type
+      }
       status
       dueDate
       receivedDate
@@ -138,6 +168,32 @@ export const CREATE_INCOME = gql`
       paymentType {
         id
         name
+      }
+    }
+  }
+`;
+
+export const UPDATE_EXPENSE = gql`
+  mutation UpdateExpense($id: ID!, $paymentTypeId: ID) {
+    updateExpense(id: $id, paymentTypeId: $paymentTypeId) {
+      id
+      paymentType {
+        id
+        name
+        type
+      }
+    }
+  }
+`;
+
+export const UPDATE_INCOME = gql`
+  mutation UpdateIncome($id: ID!, $paymentTypeId: ID) {
+    updateIncome(id: $id, paymentTypeId: $paymentTypeId) {
+      id
+      paymentType {
+        id
+        name
+        type
       }
     }
   }
@@ -183,6 +239,89 @@ export const MARK_INCOME_RECEIVED = gql`
         dueDate
         receivedDate
       }
+    }
+  }
+`;
+
+// Category Queries and Mutations
+export const GET_EXPENSE_INCOME_CATEGORIES = gql`
+  query GetExpenseIncomeCategories($type: ExpenseIncomeType, $applicableTo: ApplicableTo, $isActive: Boolean) {
+    expenseIncomeCategories(type: $type, applicableTo: $applicableTo, isActive: $isActive) {
+      id
+      name
+      type
+      applicableTo
+      description
+      isActive
+      createdAt
+      updatedAt
+    }
+  }
+`;
+
+export const GET_EXPENSE_INCOME_CATEGORY = gql`
+  query GetExpenseIncomeCategory($id: ID!) {
+    expenseIncomeCategory(id: $id) {
+      id
+      name
+      type
+      applicableTo
+      description
+      isActive
+    }
+  }
+`;
+
+export const CREATE_EXPENSE_INCOME_CATEGORY = gql`
+  mutation CreateExpenseIncomeCategory($input: ExpenseIncomeCategoryInput!) {
+    createExpenseIncomeCategory(input: $input) {
+      id
+      name
+      type
+      applicableTo
+      description
+      isActive
+    }
+  }
+`;
+
+export const UPDATE_EXPENSE_INCOME_CATEGORY = gql`
+  mutation UpdateExpenseIncomeCategory($id: ID!, $input: ExpenseIncomeCategoryInput!) {
+    updateExpenseIncomeCategory(id: $id, input: $input) {
+      id
+      name
+      type
+      applicableTo
+      description
+      isActive
+    }
+  }
+`;
+
+export const DELETE_EXPENSE_INCOME_CATEGORY = gql`
+  mutation DeleteExpenseIncomeCategory($id: ID!) {
+    deleteExpenseIncomeCategory(id: $id)
+  }
+`;
+
+export const GET_CATEGORY_REPORT = gql`
+  query GetCategoryReport($type: ExpenseIncomeType, $dateFrom: String, $dateTo: String) {
+    categoryReport(type: $type, dateFrom: $dateFrom, dateTo: $dateTo) {
+      items {
+        category {
+          id
+          name
+          type
+        }
+        totalExpense
+        totalIncome
+        netBalance
+        expenseCount
+        incomeCount
+      }
+      totalExpense
+      totalIncome
+      netBalance
     }
   }
 `;

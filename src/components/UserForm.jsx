@@ -83,6 +83,8 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           salaryType: user.salaryType || "monthly",
           salaryAmount: user.salaryAmount || 0,
           hourlyRate: user.hourlyRate || 0,
+          monthlyHours: user.monthlyHours || 0,
+          paymentDetails: user.paymentDetails || "",
           canLogin: user.canLogin ?? true,
           isActive: user.isActive ?? true,
           isServiceProvider: user.isServiceProvider ?? false,
@@ -96,6 +98,7 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           salaryType: "monthly",
           salaryAmount: 0,
           hourlyRate: 0,
+          monthlyHours: 0,
           canLogin: true,
           isActive: true,
           isServiceProvider: false,
@@ -210,6 +213,19 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
             autoSize={{ minRows: 2, maxRows: 4 }}
           />
         </Form.Item>
+
+        <Form.Item
+          name="paymentDetails"
+          label="Payment Details"
+          tooltip="Bank account details, UPI ID, or other payment information for salary disbursement"
+        >
+          <TextArea
+            placeholder="Enter bank account details, UPI ID, IFSC code, etc."
+            maxLength={500}
+            size="middle"
+            autoSize={{ minRows: 3, maxRows: 6 }}
+          />
+        </Form.Item>
       </div>
 
       {/* Employment Information */}
@@ -298,6 +314,21 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
                   style={{ width: '100%' }} 
                   size="middle"
                   placeholder="Select joining date"
+                />
+              </Form.Item>
+
+              <Form.Item
+                name="monthlyHours"
+                label="Monthly Hours"
+                rules={[{ required: true, message: "Please enter monthly hours" }]}
+              >
+                <InputNumber
+                  placeholder="Total hours per month"
+                  min={0}
+                  precision={2}
+                  style={{ width: '100%' }}
+                  size="middle"
+                  addonAfter="hours"
                 />
               </Form.Item>
 

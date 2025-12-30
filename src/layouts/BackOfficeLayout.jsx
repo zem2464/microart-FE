@@ -10,11 +10,13 @@ import {
   SearchOutlined,
   DollarOutlined,
   ToolOutlined,
+  GiftOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
+import AdvancePayModal from "../components/AdvancePayModal";
 import {
   hasPermission,
   MODULES,
@@ -36,6 +38,7 @@ import AuditLogs from "../pages/BackOffice/AuditLogs";
 import PaymentTypes from "../pages/BackOffice/PaymentTypes";
 import UserGradingRateManagement from "../pages/Admin/UserGradingRateManagement";
 import HolidayManagement from "../pages/BackOffice/HolidayManagement";
+import SalaryManagement from "../pages/BackOffice/SalaryManagement";
 import Finance from "../pages/BackOffice/Finance";
 
 const { Header, Content } = Layout;
@@ -45,6 +48,7 @@ const BackOfficeLayout = () => {
   const { logout } = useAuth();
   const location = useLocation();
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+  const [advancePayModalOpen, setAdvancePayModalOpen] = useState(false);
 
   // Keyboard shortcut for global search (Ctrl+K or Cmd+K)
   useEffect(() => {
@@ -111,6 +115,10 @@ const BackOfficeLayout = () => {
         {
           key: "/payment-types",
           label: <Link to="/payment-types">Payment Types</Link>,
+        },
+        canManageUsers && {
+          key: "/salary-management",
+          label: <Link to="/salary-management">Salary Management</Link>,
         },
       ].filter(Boolean),
     },
@@ -227,6 +235,17 @@ const BackOfficeLayout = () => {
 
         {/* User Controls */}
         <div className="flex items-center space-x-4 ml-8">
+          {/* Advance Pay Button */}
+          <Button
+            type="primary"
+            shape="round"
+            icon={<GiftOutlined />}
+            onClick={() => setAdvancePayModalOpen(true)}
+            className="hover:bg-blue-600"
+          >
+            Advance Pay
+          </Button>
+
           {/* Global Search Button */}
           <Button
             type="text"
@@ -274,6 +293,7 @@ const BackOfficeLayout = () => {
             <Route path="/audit-logs" element={<AuditLogs />} />
             <Route path="/user-rates" element={<UserGradingRateManagement />} />
             <Route path="/holidays" element={<HolidayManagement />} />
+            <Route path="/salary-management" element={<SalaryManagement />} />
             <Route path="/reports" element={<Reports />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>
@@ -285,6 +305,13 @@ const BackOfficeLayout = () => {
         open={searchModalOpen}
         onClose={() => setSearchModalOpen(false)}
       />
+
+      {/* Advance Pay Modal */}
+      <AdvancePayModal
+        open={advancePayModalOpen}
+        onClose={() => setAdvancePayModalOpen(false)}
+      />
+
     </Layout>
   );
 };
