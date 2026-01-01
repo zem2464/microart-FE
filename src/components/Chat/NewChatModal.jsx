@@ -1,9 +1,15 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
-import { Modal, Input, List, Avatar, Spin, message } from 'antd';
+import { Modal, Input, List, Avatar, Spin, message, Badge, Typography } from 'antd';
 import { UserOutlined } from '@ant-design/icons';
 import { SEARCH_USERS_FOR_CHAT, CREATE_DIRECT_ROOM } from '../../graphql/chat';
 import { useChatContext } from '../../contexts/ChatContext';
+import dayjs from 'dayjs';
+import relativeTime from 'dayjs/plugin/relativeTime';
+
+dayjs.extend(relativeTime);
+
+const { Text } = Typography;
 
 const NewChatModal = ({ visible, onClose }) => {
     const [searchQuery, setSearchQuery] = useState('');
@@ -68,20 +74,49 @@ const NewChatModal = ({ visible, onClose }) => {
                 {data?.searchUsersForChat && data.searchUsersForChat.length > 0 && (
                     <List
                         dataSource={data.searchUsersForChat}
-                        renderItem={(user) => (
-                            <List.Item
-                                key={user.id}
-                                onClick={() => !creating && handleUserSelect(user.id)}
-                                className="cursor-pointer hover:bg-gray-50 px-4 py-2 rounded transition-colors"
-                                style={{ cursor: creating ? 'wait' : 'pointer' }}
-                            >
-                                <List.Item.Meta
-                                    avatar={<Avatar icon={<UserOutlined />} />}
-                                    title={`${user.firstName} ${user.lastName}`}
-                                    description={user.email}
-                                />
-                            </List.Item>
-                        )}
+                        renderItem={(user) => {
+                            const isOnline = user.isOnline;
+                            const lastSeenText = !isOnline && user.lastSeen 
+                                ? `Last seen ${dayjs(user.lastSeen).fromNow()}` 
+                                : user.email;
+                            
+                            return (
+                                <List.Item
+                                    key={user.id}
+                                    onClick={() => !creating && handleUserSelect(user.id)}
+                                    className="cursor-pointer hover:bg-gray-50 px-4 py-2 rounded transition-colors"
+                                    style={{ cursor: creating ? 'wait' : 'pointer' }}
+                                >
+                                    <List.Item.Meta
+                                        avatar={
+                                            <Badge 
+                                                dot 
+                                                status={isOnline ? 'success' : 'default'}
+                                                offset={[-5, 35]}
+                                                style={{ 
+                                                    backgroundColor: isOnline ? '#52c41a' : '#d9d9d9',
+                                                    width: 10,
+                                                    height: 10
+                                                }}
+                                            >
+                                                <Avatar icon={<UserOutlined />} />
+                                            </Badge>
+                                        }
+                                        title={
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                <span>{`${user.firstName} ${user.lastName}`}</span>
+                                                {isOnline && (
+                                                    <Text type="success" style={{ fontSize: '12px' }}>
+                                                        • Online
+                                                    </Text>
+                                                )}
+                                            </div>
+                                        }
+                                        description={lastSeenText}
+                                    />
+                                </List.Item>
+                            );
+                        }}
                     />
                 )}
 

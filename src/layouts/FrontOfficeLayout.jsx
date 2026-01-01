@@ -63,6 +63,7 @@ import UserDashboard from "../pages/FrontOffice/UserDashboard";
 import Messages from "../pages/FrontOffice/Messages";
 import MyLeaves from "../pages/FrontOffice/MyLeaves";
 import LeaveApprovals from "../pages/FrontOffice/LeaveApprovals";
+import AllUsersLeaves from "../pages/FrontOffice/AllUsersLeaves";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -158,6 +159,12 @@ const FrontOfficeLayout = () => {
       icon: <CalendarOutlined />,
       label: <Link to="/leaves">Leave Applied</Link>,
     },
+    // Leave Calendar for Admins only
+    user?.role?.roleType === "ADMIN" && {
+      key: "/all-users-leaves",
+      icon: <CalendarOutlined />,
+      label: <Link to="/all-users-leaves">Leave Calendar</Link>,
+    },
     {
       key: "/messages",
       icon: <MessageOutlined />,
@@ -231,6 +238,12 @@ const FrontOfficeLayout = () => {
       icon: <CalendarOutlined />,
       label: "My Leaves",
       onClick: () => navigate("/leaves"),
+    },
+    user?.role?.roleType === "ADMIN" && {
+      key: "all-users-leaves",
+      icon: <CalendarOutlined />,
+      label: "Leave Calendar",
+      onClick: () => navigate("/all-users-leaves"),
     },
     (user?.role?.roleType === "ADMIN" ||
       user?.role?.roleType === "MANAGER") && {
@@ -374,6 +387,7 @@ const FrontOfficeLayout = () => {
             <Route path="/messages/:roomId" element={<Messages />} />
             <Route path="/leaves" element={<MyLeaves />} />
             <Route path="/leave-approvals" element={<LeaveApprovals />} />
+            <Route path="/all-users-leaves" element={<AllUsersLeaves />} />
           </Routes>
         </div>
       </Content>

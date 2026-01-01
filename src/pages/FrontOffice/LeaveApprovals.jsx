@@ -27,9 +27,22 @@ import {
   REJECT_LEAVE,
 } from '../../graqhql/leave';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+// Configure dayjs with IST timezone
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault('Asia/Kolkata');
 
 const { Title, Text } = Typography;
 const { TextArea } = Input;
+
+// Helper to extract date from ISO string without timezone conversion
+const getDateOnly = (isoString) => {
+  if (!isoString) return null;
+  return isoString.split('T')[0];
+};
 
 const LeaveApprovals = () => {
   const [page, setPage] = useState(1);
@@ -170,13 +183,24 @@ const LeaveApprovals = () => {
       title: 'Start Date',
       dataIndex: 'startDate',
       key: 'startDate',
-      render: (date) => dayjs(date).format('MMM DD, YYYY HH:mm'),
+      render: (date, record) => {
+        if (record.leaveType === 'SHORT') {
+          return dayjs(date).format('MMM DD, YYYY HH:mm');
+        }
+        return dayjs.utc(date).format('MMM DD, YYYY');
+      },
     },
     {
       title: 'End Date',
       dataIndex: 'endDate',
       key: 'endDate',
-      render: (date) => dayjs(date).format('MMM DD, YYYY HH:mm'),
+      render: (date, record) => {
+        if (record.leaveType === 'SHORT') {
+          return dayjs(date).format('MMM DD, YYYY HH:mm');
+        }
+        // For full/half day leaves, parse in UTC to get actual stored date
+        return dayjs.utc(date).format('MMM DD, YYYY');
+      },
     },
     {
       title: 'Duration',
@@ -188,6 +212,19 @@ const LeaveApprovals = () => {
         const days = dayjs(record.endDate).diff(dayjs(record.startDate), 'day') + 1;
         return `${days} day${days > 1 ? 's' : ''}`;
       },
+    },
+    {
+      title: 'Positive Leave',
+      dataIndex: 'isPositiveLeave',
+      key: 'isPositiveLeave',
+      render: (isPositive) => (
+        isPositive ? (
+          <Tag color="green">Yes</Tag>
+        ) : (
+          <Tag color="default">No</Tag>
+        )
+      ),
+      width: 120,
     },
     {
       title: 'Status',
@@ -326,10 +363,14 @@ const LeaveApprovals = () => {
               {getLeaveTypeTag(selectedLeave.leaveType, selectedLeave.durationType)}
             </Descriptions.Item>
             <Descriptions.Item label="Start Date">
-              {dayjs(selectedLeave.startDate).format('MMMM DD, YYYY HH:mm')}
+              {selectedLeave.leaveType === 'SHORT'
+                ? dayjs(selectedLeave.startDate).format('MMMM DD, YYYY HH:mm')
+                : dayjs.utc(selectedLeave.startDate).format('MMMM DD, YYYY')}
             </Descriptions.Item>
             <Descriptions.Item label="End Date">
-              {dayjs(selectedLeave.endDate).format('MMMM DD, YYYY HH:mm')}
+              {selectedLeave.leaveType === 'SHORT'
+                ? dayjs(selectedLeave.endDate).format('MMMM DD, YYYY HH:mm')
+                : dayjs.utc(selectedLeave.endDate).format('MMMM DD, YYYY')}
             </Descriptions.Item>
             {selectedLeave.hours && (
               <Descriptions.Item label="Hours">{selectedLeave.hours}</Descriptions.Item>
@@ -342,6 +383,13 @@ const LeaveApprovals = () => {
             <Descriptions.Item label="Reason">{selectedLeave.reason}</Descriptions.Item>
             <Descriptions.Item label="Status">
               {getStatusTag(selectedLeave.status)}
+            </Descriptions.Item>
+            <Descriptions.Item label="Positive Leave">
+              {selectedLeave.isPositiveLeave ? (
+                <Tag color="green">Yes</Tag>
+              ) : (
+                <Tag color="default">No</Tag>
+              )}
             </Descriptions.Item>
             {selectedLeave.isBackDated && (
               <Descriptions.Item label="Back-dated">

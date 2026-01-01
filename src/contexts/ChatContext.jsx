@@ -113,14 +113,15 @@ export const ChatProvider = ({ children }) => {
                 // Check if chat window is already open for this room
                 const isChatWindowOpen = openChats.some(chat => chat.roomId === roomId);
                 
-                // Check if user is on the Messages page
-                const isOnMessagesPage = location.pathname.startsWith('/messages');
+                // Check if user is on the Messages page viewing THIS specific room
+                const isViewingThisRoom = location.pathname === `/messages/${roomId}`;
                 
-                // Don't send notifications if chat window is open OR user is on Messages page
-                const shouldSendNotification = !isChatWindowOpen && !isOnMessagesPage;
+                // Don't send notifications only if user is actively viewing this specific chat
+                const shouldSendNotification = !isChatWindowOpen && !isViewingThisRoom;
                 
                 console.log('[ChatContext] Is chat window open?', isChatWindowOpen);
-                console.log('[ChatContext] Is on Messages page?', isOnMessagesPage);
+                console.log('[ChatContext] Is viewing this room?', isViewingThisRoom);
+                console.log('[ChatContext] Current path:', location.pathname);
                 console.log('[ChatContext] Should send notification?', shouldSendNotification);
 
                 if (shouldSendNotification) {
@@ -146,21 +147,32 @@ export const ChatProvider = ({ children }) => {
                         }
                     });
 
-                    // Show browser notification if window is not focused
-                    if (document.hidden) {
-                        notificationService.showBrowserNotification({
-                            title: `New message from ${sender?.firstName || 'Unknown'} ${sender?.lastName || ''}`,
-                            body: messageContent,
-                            icon: '/logo192.png'
-                        });
-                    }
+                    // ALWAYS show browser notification for messages when user isn't viewing the specific chat
+                    // This ensures notifications work when:
+                    // - Tab is minimized
+                    // - Browser is in background
+                    // - User is on different tab
+                    // - User is on different page in app
+                    // - User is on Messages page but viewing a DIFFERENT chat room
+                    notificationService.showBrowserNotification({
+                        title: `New message from ${sender?.firstName || 'Unknown'} ${sender?.lastName || ''}`,
+                        body: messageContent,
+                        icon: '/images/logo192.png',
+                        badge: '/images/favicon-96x96.png',
+                        tag: `chat-${roomId}`, // Group notifications by room
+                        requireInteraction: false,
+                        data: {
+                            url: `/messages/${roomId}`,
+                            roomId: roomId
+                        }
+                    });
 
                     // Increment unread count
                     if (roomId) {
                         incrementUnreadCount(roomId);
                     }
                 } else {
-                    console.log('[ChatContext] Skipping notifications - chat window open or on Messages page');
+                    console.log('[ChatContext] Skipping notifications - user is actively viewing this chat room');
                 }
             }
         }

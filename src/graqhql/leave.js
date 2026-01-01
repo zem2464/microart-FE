@@ -18,6 +18,7 @@ export const GET_LEAVES = gql`
         approvedAt
         rejectionReason
         isBackDated
+        isPositiveLeave
         createdAt
         updatedAt
         user {
@@ -58,6 +59,7 @@ export const GET_MY_LEAVES = gql`
         approvedAt
         rejectionReason
         isBackDated
+        isPositiveLeave
         createdAt
         updatedAt
         user {
@@ -95,6 +97,7 @@ export const GET_PENDING_LEAVE_APPROVALS = gql`
         reason
         status
         isBackDated
+        isPositiveLeave
         createdAt
         user {
           id
@@ -127,6 +130,7 @@ export const GET_LEAVE = gql`
       approvedAt
       rejectionReason
       isBackDated
+      isPositiveLeave
       createdAt
       updatedAt
       user {
@@ -159,6 +163,7 @@ export const APPLY_LEAVE = gql`
       reason
       status
       isBackDated
+      isPositiveLeave
       createdAt
       user {
         id
@@ -183,6 +188,7 @@ export const UPDATE_LEAVE = gql`
       reason
       status
       isBackDated
+      isPositiveLeave
       updatedAt
     }
   }

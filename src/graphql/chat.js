@@ -163,6 +163,8 @@ export const SEARCH_USERS_FOR_CHAT = gql`
       firstName
       lastName
       email
+      isOnline
+      lastSeen
     }
   }
 `;

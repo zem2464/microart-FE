@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Layout, Input, List, Avatar, Badge, Typography, Empty, Spin, Divider } from 'antd';
-import { SearchOutlined, UserOutlined, TeamOutlined } from '@ant-design/icons';
+import { Layout, Input, List, Avatar, Badge, Typography, Empty, Spin, Divider, Button } from 'antd';
+import { SearchOutlined, UserOutlined, TeamOutlined, PlusOutlined } from '@ant-design/icons';
 import { useQuery, useSubscription } from '@apollo/client';
 import { GET_MY_CHAT_ROOMS, CHAT_READ_UPDATED } from '../../graphql/chat';
 import MessageList from '../../components/Chat/MessageList';
 import MessageInput from '../../components/Chat/MessageInput';
+import NewChatModal from '../../components/Chat/NewChatModal';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -21,6 +22,7 @@ const Messages = () => {
     const [selectedRoom, setSelectedRoom] = useState(null);
     const [replyingTo, setReplyingTo] = useState(null);
     const [editingMessage, setEditingMessage] = useState(null);
+    const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
 
     const { data, loading, refetch } = useQuery(GET_MY_CHAT_ROOMS, {
         fetchPolicy: 'cache-and-network',
@@ -28,6 +30,7 @@ const Messages = () => {
     });
 
     const chatRooms = data?.myChatRooms || [];
+    const currentUser = data?.me;
 
     // Subscribe to read receipt updates for selected room
     useSubscription(CHAT_READ_UPDATED, {
@@ -78,8 +81,9 @@ const Messages = () => {
     };
 
     const getOtherUser = (room) => {
-        if (room.type === 'direct' && room.members) {
-            const otherMember = room.members.find(m => m.user);
+        if (room.type === 'direct' && room.members && currentUser) {
+            // Find the member who is NOT the current user
+            const otherMember = room.members.find(m => m.user && m.user.id !== currentUser.id);
             return otherMember?.user;
         }
         return null;
@@ -102,11 +106,27 @@ const Messages = () => {
         }
         
         const otherUser = getOtherUser(room);
-        if (otherUser?.profilePicture) {
-            return <Avatar src={otherUser.profilePicture} />;
-        }
+        const isOnline = otherUser?.isOnline;
         
-        return <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }} />;
+        const avatar = otherUser?.profilePicture 
+            ? <Avatar src={otherUser.profilePicture} />
+            : <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }} />;
+        
+        // Add online status badge for direct chats
+        return (
+            <Badge 
+                dot 
+                status={isOnline ? 'success' : 'default'}
+                offset={[-5, 35]}
+                style={{ 
+                    backgroundColor: isOnline ? '#52c41a' : '#d9d9d9',
+                    width: 10,
+                    height: 10
+                }}
+            >
+                {avatar}
+            </Badge>
+        );
     };
 
     const getLastMessagePreview = (room) => {
@@ -141,9 +161,20 @@ const Messages = () => {
                 <div style={{
                     padding: '16px',
                     background: '#fff',
-                    borderBottom: '1px solid #e0e0e0'
+                    borderBottom: '1px solid #e0e0e0',
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center'
                 }}>
                     <Text style={{ fontSize: '20px', fontWeight: 600 }}>Messages</Text>
+                    <Button 
+                        type="primary" 
+                        icon={<PlusOutlined />}
+                        onClick={() => setIsNewChatModalOpen(true)}
+                        size="small"
+                    >
+                        New Chat
+                    </Button>
                 </div>
 
                 {/* Search */}
@@ -198,11 +229,7 @@ const Messages = () => {
                                         }}
                                     >
                                         <List.Item.Meta
-                                            avatar={
-                                                <Badge count={unreadCount} size="small" offset={[-5, 5]}>
-                                                    {getRoomAvatar(room)}
-                                                </Badge>
-                                            }
+                                            avatar={getRoomAvatar(room)}
                                             title={
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                     <Text strong style={{ fontSize: '15px' }}>
@@ -214,17 +241,28 @@ const Messages = () => {
                                                 </div>
                                             }
                                             description={
-                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
                                                     <Text
                                                         type="secondary"
+                                                        ellipsis
                                                         style={{
                                                             fontSize: '13px',
                                                             fontWeight: unreadCount > 0 ? 600 : 400,
-                                                            color: unreadCount > 0 ? '#000' : undefined
+                                                            color: unreadCount > 0 ? '#000' : undefined,
+                                                            flex: 1
                                                         }}
                                                     >
                                                         {getLastMessagePreview(room)}
                                                     </Text>
+                                                    {unreadCount > 0 && (
+                                                        <Badge 
+                                                            count={unreadCount} 
+                                                            style={{ 
+                                                                backgroundColor: '#52c41a',
+                                                                flexShrink: 0
+                                                            }} 
+                                                        />
+                                                    )}
                                                 </div>
                                             }
                                         />
@@ -254,11 +292,31 @@ const Messages = () => {
                                 <Text strong style={{ fontSize: '16px', display: 'block' }}>
                                     {getRoomDisplayName(selectedRoom)}
                                 </Text>
-                                {selectedRoom.type === 'direct' && (
-                                    <Text type="secondary" style={{ fontSize: '12px' }}>
-                                        {getOtherUser(selectedRoom)?.isOnline ? 'Online' : 'Offline'}
-                                    </Text>
-                                )}
+                                {selectedRoom.type === 'direct' && (() => {
+                                    const otherUser = getOtherUser(selectedRoom);
+                                    const isOnline = otherUser?.isOnline;
+                                    const lastSeen = otherUser?.lastSeen;
+                                    
+                                    if (isOnline) {
+                                        return (
+                                            <Text type="success" style={{ fontSize: '12px' }}>
+                                                Online
+                                            </Text>
+                                        );
+                                    } else if (lastSeen) {
+                                        return (
+                                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                                                Last seen {dayjs(lastSeen).fromNow()}
+                                            </Text>
+                                        );
+                                    } else {
+                                        return (
+                                            <Text type="secondary" style={{ fontSize: '12px' }}>
+                                                Offline
+                                            </Text>
+                                        );
+                                    }
+                                })()}
                             </div>
                         </div>
 
@@ -314,6 +372,16 @@ const Messages = () => {
                     </div>
                 )}
             </Content>
+            
+            {/* New Chat Modal */}
+            <NewChatModal 
+                visible={isNewChatModalOpen} 
+                onClose={() => {
+                    setIsNewChatModalOpen(false);
+                    // Refetch chat rooms to show the newly created room
+                    refetch();
+                }}
+            />
         </Layout>
     );
 };

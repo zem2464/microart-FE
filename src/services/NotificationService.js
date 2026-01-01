@@ -16,36 +16,64 @@ class NotificationService {
 
     /**
      * Initialize or resume AudioContext (must be called after user gesture)
+     * Handles all AudioContext states: running, suspended, closed
+     * Creates new context if closed or failed
      */
     async initAudioContext() {
-        // Return early if already initialized and running
-        if (this.audioContext) {
-            try {
-                if (this.audioContext.state === 'suspended') {
+        try {
+            // Check if AudioContext exists and handle its state
+            if (this.audioContext) {
+                const state = this.audioContext.state;
+                
+                // If closed, we need to create a new one
+                if (state === 'closed') {
+                    console.log('[NotificationService] AudioContext closed, creating new one');
+                    this.audioContext = null;
+                    this.isAudioContextInitialized = false;
+                    // Fall through to create new context
+                } 
+                // If suspended, try to resume
+                else if (state === 'suspended') {
+                    console.log('[NotificationService] Resuming suspended AudioContext');
                     await this.audioContext.resume();
+                    
+                    // Verify it actually resumed
+                    if (this.audioContext.state === 'running') {
+                        return this.audioContext;
+                    } else {
+                        console.warn('[NotificationService] AudioContext failed to resume, recreating');
+                        this.audioContext = null;
+                        this.isAudioContextInitialized = false;
+                    }
                 }
-                return this.audioContext;
-            } catch (error) {
-                console.log('Could not resume AudioContext:', error);
+                // If running, return it
+                else if (state === 'running') {
+                    return this.audioContext;
+                }
+            }
+
+            // Create new AudioContext
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (!AudioContext) {
+                console.warn('[NotificationService] AudioContext not supported in this browser');
                 return null;
             }
-        }
-
-        try {
-            const AudioContext = window.AudioContext || window.webkitAudioContext;
-            if (!AudioContext) return null;
 
             this.audioContext = new AudioContext();
-            this.isAudioContextInitialized = true;
-
-            // Only try to resume if suspended
+            console.log('[NotificationService] AudioContext created, state:', this.audioContext.state);
+            
+            // Resume if it starts suspended (some browsers do this)
             if (this.audioContext.state === 'suspended') {
                 await this.audioContext.resume();
             }
 
+            this.isAudioContextInitialized = true;
             return this.audioContext;
+            
         } catch (error) {
-            console.log('Could not initialize AudioContext:', error);
+            console.error('[NotificationService] AudioContext initialization failed:', error);
+            this.audioContext = null;
+            this.isAudioContextInitialized = false;
             return null;
         }
     }
@@ -53,14 +81,16 @@ class NotificationService {
     /**
      * Play notification sound
      * Implements a professional "Glass" / "Pop" sound
+     * With robust fallback mechanisms
      */
     async playSound() {
         if (!this.soundEnabled) return;
 
         try {
             const audioContext = await this.initAudioContext();
-            if (!audioContext) {
-                console.log('AudioContext not available, notification will be silent');
+            if (!audioContext || audioContext.state !== 'running') {
+                console.warn('[NotificationService] AudioContext not available, trying fallback');
+                this.playFallbackSound();
                 return;
             }
 
@@ -88,21 +118,41 @@ class NotificationService {
             oscillator.start(now);
             oscillator.stop(now + 0.3);
         } catch (error) {
-            console.log('Could not play notification sound:', error);
+            console.warn('[NotificationService] AudioContext playSound failed, using fallback:', error);
+            this.playFallbackSound();
+        }
+    }
+
+    /**
+     * Fallback sound using HTML5 Audio API
+     * More reliable but less customizable
+     */
+    playFallbackSound() {
+        try {
+            // Create a short beep sound using data URI
+            const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZSA0PVqzn77BdGAg+ltzy0H8pBS18y/DbjUALEmK37OmkUhELTKXh8bllHAU2jdXzxoExBSF2xPDblEILFGG37eeiUhIKSqPi8bllHQU2jNbzxoExBSF2xPDbk0ILFGK27eehUhELTKPi8bhmHAU1jdXzxoExBSF2xPDblEILFGG37OiiUhELTKPi8bhkHAU2jdXzxoAxBSF2xO/bk0ILFGG37OiiUhILTKPi8bdmHAU2jNXzxoExBSJ2xO/bk0MKFGCx7eiiUhELSqPi8bhlHQU2jNXzxoAxBSF2xO/bkkMLFGG37OiiUhILTKPi8bhmHAU2jNXzxoExBSF2xO/bk0MKFGCw7eijUhELSqPi8bhlHAU3jNXzxoAxBSF2xO/bk0MKFGCw7eijUhELSqPi8bhlHQU2jNXzxoExBSF2xO/bk0MKFGCw7OijUhELSqPi8bhlHAU3jNXzxoAxBSF2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoAxBSF2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoAxBSJ2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoExBSF2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoExBSF2xO/bk0ILFGCx7OiiUhILSqPi8bhlHQU2jNXzxoAxBSF2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoExBSF2xO/bk0ILFGCx7OijUhELSqPi8bhlHQU2jNXzxoExBSJ2xO/bk0ILFGCx7OijUhILSqPi8bhlHQU2jNXzxoExBSF2xO/bk0ILFGCw7eijUhELSqPi8bhlHQU2jNXzxoExBSF2xO/bk0ILFGCw7eijUhELSqPi8bhlHQU2jNXzxoExBSJ2xO/bk0ILFGCw7eijUhELSqPi8bhlHQU2jNXzxoExBSJ2xO/bk0ILFGCw7eijUhELSqPi8bhlHQU2jNXzxoExBSJ2xO/bk0ILFGCw7eijUhELSqPi8bhlHQU2jNXzxoExBSF2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoExBSF2xO/bk0ILFGCx7OijUhELSqPi8bhlHQU2jNXzxoAxBSF2xO/bk0ILFGCx7OijUhELSqPi8bhlHQU2jNXzxoExBSF2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoExBSF2xO/bk0ILFGCx7OijUhELSqPi8bhlHQU2jNXzxoExBSF2xO/bk0ILFGCx7OijUhELSqPi8bhlHQU2jNXzxoAxBSF2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoAxBSF2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoAxBSF2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoAxBSF2xO/bk0ILFGCx7OiiUhELSqPi8bhlHQU2jNXzxoAxBSF2xO/bk0ILFGCx7OijUhELSqPi8bhlHQU2jNXzxoAxBSF2xO/bk0ILFGCx7OijUhELSqPi8bhlHQU2jNXzxoAxBSF2xO/bk0ILFGCx7OijUhELSqPi8bhlHQU2jNXz');
+            audio.volume = 0.3;
+            audio.play().catch(err => {
+                console.warn('[NotificationService] Fallback sound also failed:', err);
+            });
+        } catch (error) {
+            console.warn('[NotificationService] Fallback sound failed:', error);
         }
     }
 
     /**
      * Play task notification sound
      * Implements a distinct "Success Chime" sound for task notifications
+     * With robust fallback mechanisms
      */
     async playTaskSound() {
         if (!this.soundEnabled) return;
 
         try {
             const audioContext = await this.initAudioContext();
-            if (!audioContext) {
-                console.log('AudioContext not available, notification will be silent');
+            if (!audioContext || audioContext.state !== 'running') {
+                console.warn('[NotificationService] AudioContext not available for task sound, trying fallback');
+                this.playFallbackSound();
                 return;
             }
 
@@ -138,7 +188,8 @@ class NotificationService {
             osc2.start(now + 0.08);
             osc2.stop(now + 0.5);
         } catch (error) {
-            console.log('Could not play task notification sound:', error);
+            console.warn('[NotificationService] Task sound failed, using fallback:', error);
+            this.playFallbackSound();
         }
     }
 
@@ -214,21 +265,69 @@ class NotificationService {
     /**
      * Show system notification (browser notification API)
      * Requires user permission
+     * Works even when tab is not focused, minimized, or in background
      */
-    async showBrowserNotification({ title, body, icon }) {
-        if (!this.isEnabled || !('Notification' in window)) return;
+    async showBrowserNotification({ title, body, icon, badge, tag, requireInteraction, data }) {
+        if (!this.isEnabled) return;
 
-        // Request permission if not granted
-        if (Notification.permission === 'default') {
-            await Notification.requestPermission();
-        }
+        try {
+            // Request permission if not granted
+            if (Notification.permission === 'default') {
+                const permission = await Notification.requestPermission();
+                console.log('[NotificationService] Permission requested:', permission);
+            }
 
-        if (Notification.permission === 'granted') {
-            new Notification(title, {
+            if (Notification.permission !== 'granted') {
+                console.warn('[NotificationService] Notification permission not granted');
+                return;
+            }
+
+            // Try to use Service Worker notification API first (more reliable for background)
+            if ('serviceWorker' in navigator) {
+                try {
+                    const registration = await navigator.serviceWorker.ready;
+                    if (registration) {
+                        console.log('[NotificationService] Showing notification via Service Worker');
+                        await registration.showNotification(title, {
+                            body,
+                            icon: icon || '/images/logo192.png',
+                            badge: badge || '/images/favicon-96x96.png',
+                            tag: tag || `notification-${Date.now()}`,
+                            requireInteraction: requireInteraction || false,
+                            vibrate: [200, 100, 200],
+                            renotify: true,
+                            silent: false,
+                            data: data || {}
+                        });
+                        return;
+                    }
+                } catch (swError) {
+                    console.warn('[NotificationService] Service Worker notification failed:', swError);
+                    // Fall back to regular Notification API
+                }
+            }
+
+            // Fallback to regular Notification API
+            console.log('[NotificationService] Showing notification via Notification API');
+            const notification = new Notification(title, {
                 body,
                 icon: icon || '/images/logo192.png',
-                badge: '/images/favicon-96x96.png'
+                badge: badge || '/images/favicon-96x96.png',
+                tag: tag || `notification-${Date.now()}`,
+                requireInteraction: requireInteraction || false,
+                data: data || {}
             });
+
+            // Handle notification click
+            notification.onclick = () => {
+                window.focus();
+                if (data?.url) {
+                    window.location.href = data.url;
+                }
+                notification.close();
+            };
+        } catch (error) {
+            console.error('[NotificationService] Error showing browser notification:', error);
         }
     }
 
@@ -282,18 +381,23 @@ class NotificationService {
 
     /**
      * Register Service Worker and Push Subscription
+     * CRITICAL: This enables notifications even when browser is closed
      * @param {ApolloClient} client - Apollo Client instance to save subscription
      */
     async registerPushSubscription(client) {
-        console.log('[NotificationService] Starting push subscription registration...');
+        console.log('[NotificationService] 🔔 Starting push subscription registration...');
+        console.log('[NotificationService] Timestamp:', new Date().toISOString());
         
         if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-            console.warn('[NotificationService] Push messaging is not supported in this browser.');
+            console.error('[NotificationService] ✗ Push messaging is NOT supported in this browser.');
+            console.error('[NotificationService] Browser:', navigator.userAgent);
             return;
         }
 
+        console.log('[NotificationService] ✓ Browser supports Service Worker and Push API');
+
         try {
-            // Register or get existing service worker
+            // Step 1: Register or get existing service worker
             let registration = await navigator.serviceWorker.getRegistration();
             
             if (!registration) {
@@ -301,54 +405,69 @@ class NotificationService {
                 registration = await navigator.serviceWorker.register('/sw.js', {
                     scope: '/'
                 });
-                console.log('[NotificationService] Service Worker registered, waiting for ready state...');
+                console.log('[NotificationService] ✓ Service Worker registered');
+            } else {
+                console.log('[NotificationService] ✓ Service Worker already registered');
             }
             
-            // Wait for service worker to be ready
-            await navigator.serviceWorker.ready;
-            console.log('[NotificationService] Service Worker ready with scope:', registration.scope);
+            // Step 2: Wait for service worker to be ready
+            console.log('[NotificationService] Waiting for SW to be ready...');
+            registration = await navigator.serviceWorker.ready;
+            console.log('[NotificationService] ✓ Service Worker ready, scope:', registration.scope);
 
             // Ensure SW is active
             if (registration.installing) {
-                console.log('[NotificationService] Service Worker is installing...');
+                console.log('[NotificationService] Service Worker is installing, waiting...');
                 await new Promise((resolve) => {
                     registration.installing.addEventListener('statechange', function() {
                         if (this.state === 'activated') {
+                            console.log('[NotificationService] ✓ Service Worker activated');
                             resolve();
                         }
                     });
                 });
             } else if (registration.waiting) {
-                console.log('[NotificationService] Service Worker is waiting...');
+                console.log('[NotificationService] Service Worker is waiting, activating...');
                 registration.waiting.postMessage({ type: 'SKIP_WAITING' });
             } else if (registration.active) {
-                console.log('[NotificationService] Service Worker is active');
+                console.log('[NotificationService] ✓ Service Worker is active');
             }
 
-            // Request Permission first
-            const permission = await this.requestPermission();
-            console.log('[NotificationService] Notification permission:', permission);
+            // Step 3: Request Notification Permission (CRITICAL)
+            console.log('[NotificationService] Current permission:', Notification.permission);
+            
+            if (Notification.permission === 'default') {
+                console.log('[NotificationService] Requesting notification permission...');
+                const permission = await Notification.requestPermission();
+                console.log('[NotificationService] Permission result:', permission);
+            }
 
-            if (permission !== 'granted') {
-                console.warn('[NotificationService] Notification permission was denied or dismissed');
+            if (Notification.permission !== 'granted') {
+                console.error('[NotificationService] ✗ Notification permission DENIED or dismissed');
+                console.error('[NotificationService] Push notifications will NOT work!');
+                console.error('[NotificationService] Please grant permission in browser settings');
                 return;
             }
 
-            // Get VAPID key
+            console.log('[NotificationService] ✓ Notification permission GRANTED');
+
+            // Step 4: Get VAPID key
             const vapidPublicKey = process.env.REACT_APP_VAPID_PUBLIC_KEY;
             console.log('[NotificationService] VAPID key present:', !!vapidPublicKey);
 
             if (!vapidPublicKey) {
-                console.error('[NotificationService] VAPID Public Key not found. Set REACT_APP_VAPID_PUBLIC_KEY in .env file.');
+                console.error('[NotificationService] ✗ VAPID Public Key NOT found!');
+                console.error('[NotificationService] Set REACT_APP_VAPID_PUBLIC_KEY in frontend .env file');
+                console.error('[NotificationService] Push notifications will NOT work!');
                 return;
             }
 
-            // Check for existing subscription
+            // Step 5: Subscribe to push notifications
             let subscription = await registration.pushManager.getSubscription();
             
             if (subscription) {
-                console.log('[NotificationService] Existing push subscription found:', subscription.endpoint);
-                console.log('[NotificationService] Re-verifying subscription with backend...');
+                console.log('[NotificationService] ✓ Existing push subscription found');
+                console.log('[NotificationService] Endpoint:', subscription.endpoint);
             } else {
                 console.log('[NotificationService] Creating new push subscription...');
                 const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
@@ -357,27 +476,40 @@ class NotificationService {
                     userVisibleOnly: true,
                     applicationServerKey: convertedVapidKey
                 });
-                console.log('[NotificationService] Push subscription created:', subscription.endpoint);
+                console.log('[NotificationService] ✓ Push subscription created!');
+                console.log('[NotificationService] Endpoint:', subscription.endpoint);
             }
 
-            // Always send/update subscription to backend (in case it was cleared from DB)
+            // Step 6: Save subscription to backend (CRITICAL)
             if (client && subscription) {
-                await client.mutate({
+                console.log('[NotificationService] Saving subscription to backend...');
+                const result = await client.mutate({
                     mutation: SAVE_PUSH_SUBSCRIPTION,
                     variables: {
                         subscription: subscription
                     }
                 });
-                console.log('[NotificationService] Push subscription saved to backend successfully');
+                
+                if (result.data?.savePushSubscription) {
+                    console.log('[NotificationService] ✓✓✓ Push subscription saved to backend SUCCESSFULLY!');
+                    console.log('[NotificationService] ✓ Notifications will work even when browser is closed');
+                } else {
+                    console.error('[NotificationService] ✗ Failed to save subscription to backend');
+                    console.error('[NotificationService] Push notifications may not work properly');
+                }
             } else if (!subscription) {
-                console.error('[NotificationService] Failed to create subscription!');
+                console.error('[NotificationService] ✗ CRITICAL: Failed to create subscription!');
             }
 
+            console.log('[NotificationService] ✓ Push notification setup COMPLETE');
+            console.log('[NotificationService] ========================================');
+
         } catch (error) {
-            console.error('[NotificationService] Error registering push subscription:', error);
-            if (error.message) {
-                console.error('[NotificationService] Error message:', error.message);
-            }
+            console.error('[NotificationService] ✗✗✗ CRITICAL ERROR during push subscription:', error);
+            console.error('[NotificationService] Error name:', error.name);
+            console.error('[NotificationService] Error message:', error.message);
+            console.error('[NotificationService] Error stack:', error.stack);
+            console.error('[NotificationService] Push notifications will NOT work!');
         }
     }
 }
@@ -427,16 +559,84 @@ if (document.readyState === 'loading') {
 // Expose for debugging
 window.notificationService = notificationService;
 
+// Debugging utilities
 window.testNotification = () => {
     notificationService.showBrowserNotification({
         title: 'Test Notification',
         body: 'If you see this, browser notifications are working!',
-        icon: '/logo192.png'
+        icon: '/images/logo192.png'
     });
 };
 
 window.testSound = () => {
     notificationService.playSound();
 };
+
+window.checkPushSubscription = async () => {
+    try {
+        const registration = await navigator.serviceWorker.ready;
+        const subscription = await registration.pushManager.getSubscription();
+        
+        if (subscription) {
+            console.log('✓ Push subscription EXISTS');
+            console.log('Endpoint:', subscription.endpoint);
+            console.log('Keys:', { p256dh: !!subscription.getKey('p256dh'), auth: !!subscription.getKey('auth') });
+            return true;
+        } else {
+            console.error('✗ NO push subscription found');
+            console.error('Please reload the page and grant notification permission');
+            return false;
+        }
+    } catch (error) {
+        console.error('✗ Error checking subscription:', error);
+        return false;
+    }
+};
+
+window.testPushFromConsole = async (apolloClient) => {
+    console.log('🔔 Testing push notification...');
+    console.log('Make sure Apollo Client is available');
+    
+    if (!apolloClient) {
+        console.error('✗ Apollo Client not provided');
+        console.error('Usage: window.testPushFromConsole(client)');
+        return;
+    }
+
+    const hasSubscription = await window.checkPushSubscription();
+    if (!hasSubscription) {
+        return;
+    }
+
+    try {
+        const { default: client } = apolloClient;
+        const mutation = await import('../graphql/testPush.js');
+        
+        const result = await client.mutate({
+            mutation: mutation.TEST_PUSH_NOTIFICATION,
+            variables: {
+                title: 'Test from Console',
+                body: 'This is a test push notification'
+            }
+        });
+
+        if (result.data?.testPushNotification) {
+            console.log('✓ Test push notification sent successfully!');
+            console.log('Check if you received a notification');
+        } else {
+            console.error('✗ Failed to send test notification');
+        }
+    } catch (error) {
+        console.error('✗ Error sending test notification:', error);
+    }
+};
+
+console.log('');
+console.log('🔔 Push Notification Debug Utilities:');
+console.log('  window.testNotification()           - Test browser notification');
+console.log('  window.testSound()                  - Test notification sound');
+console.log('  window.checkPushSubscription()      - Check if push subscription exists');
+console.log('  window.testPushFromConsole(client)  - Send test push (needs Apollo Client)');
+console.log('');
 
 export default notificationService;

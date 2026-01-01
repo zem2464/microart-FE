@@ -152,7 +152,7 @@ export const GET_CLIENT_TRANSACTIONS = gql`
 `;
 
 export const GET_CLIENT_LEDGER_RANGE = gql`
-  query GetClientLedgerRange($clientId: ID!, $dateFrom: String!, $dateTo: String!, $pagination: PaginationInput) {
+  query GetClientLedgerRange($clientId: ID, $dateFrom: String!, $dateTo: String!, $pagination: PaginationInput) {
     clientLedgerRange(clientId: $clientId, dateFrom: $dateFrom, dateTo: $dateTo, pagination: $pagination) {
       openingBalance
       closingBalance

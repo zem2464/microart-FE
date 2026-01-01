@@ -25,8 +25,21 @@ import { useQuery, useMutation } from '@apollo/client';
 import { GET_MY_LEAVES, CANCEL_LEAVE } from '../../graqhql/leave';
 import ApplyLeaveModal from '../../components/Leave/ApplyLeaveModal';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+// Configure dayjs with IST timezone
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.tz.setDefault('Asia/Kolkata');
 
 const { Title, Text } = Typography;
+
+// Helper to extract date from ISO string without timezone conversion
+const getDateOnly = (isoString) => {
+  if (!isoString) return null;
+  return isoString.split('T')[0];
+};
 
 const MyLeaves = () => {
   const currentYear = dayjs().year();
@@ -149,11 +162,20 @@ const MyLeaves = () => {
           return start.format('DD MMM YYYY (ddd)');
         }
         
+        // For full day leaves, parse in UTC to get actual stored dates
+        const startDateUTC = dayjs.utc(record.startDate).format('YYYY-MM-DD');
+        const endDateUTC = dayjs.utc(record.endDate).format('YYYY-MM-DD');
+        
+        // If same date, show as single day
+        if (startDateUTC === endDateUTC) {
+          return dayjs(startDateUTC).format('DD MMM YYYY (ddd)');
+        }
+        
         return (
           <div>
-            <div>{start.format('DD MMM YYYY')}</div>
+            <div>{dayjs(startDateUTC).format('DD MMM YYYY')}</div>
             <Text type="secondary" style={{ fontSize: '12px' }}>
-              to {end.format('DD MMM YYYY')}
+              to {dayjs(endDateUTC).format('DD MMM YYYY')}
             </Text>
           </div>
         );
@@ -172,6 +194,24 @@ const MyLeaves = () => {
           </Text>
         </Tooltip>
       ),
+    },
+    {
+      title: 'Positive Leave',
+      dataIndex: 'isPositiveLeave',
+      key: 'isPositiveLeave',
+      render: (isPositive) => (
+        isPositive ? (
+          <Tag color="green">Yes</Tag>
+        ) : (
+          <Tag color="default">No</Tag>
+        )
+      ),
+      width: 120,
+      filters: [
+        { text: 'Yes', value: true },
+        { text: 'No', value: false },
+      ],
+      onFilter: (value, record) => record.isPositiveLeave === value,
     },
     {
       title: 'Status',
@@ -323,8 +363,9 @@ const MyLeaves = () => {
               <Text strong>Period:</Text>
               <br />
               <Text>
-                {dayjs(selectedLeave.startDate).format('DD MMM YYYY HH:mm')} -{' '}
-                {dayjs(selectedLeave.endDate).format('DD MMM YYYY HH:mm')}
+                {selectedLeave.leaveType === 'SHORT'
+                  ? `${dayjs(selectedLeave.startDate).format('DD MMM YYYY HH:mm')} - ${dayjs(selectedLeave.endDate).format('DD MMM YYYY HH:mm')}`
+                  : `${dayjs.utc(selectedLeave.startDate).format('DD MMM YYYY')} - ${dayjs.utc(selectedLeave.endDate).format('DD MMM YYYY')}`}
               </Text>
               {selectedLeave.hours && (
                 <Text type="secondary"> ({selectedLeave.hours} hours)</Text>
@@ -339,6 +380,15 @@ const MyLeaves = () => {
 
             <div>
               <Text strong>Status:</Text> {getStatusTag(selectedLeave.status)}
+            </div>
+
+            <div>
+              <Text strong>Positive Leave:</Text>{' '}
+              {selectedLeave.isPositiveLeave ? (
+                <Tag color="green">Yes</Tag>
+              ) : (
+                <Tag color="default">No</Tag>
+              )}
             </div>
 
             {selectedLeave.approver && (

@@ -7,6 +7,7 @@ import {
   TimePicker,
   Radio,
   InputNumber,
+  Select,
   Space,
   message,
   Alert,
@@ -15,6 +16,7 @@ import {
   Card,
   Tag,
   Empty,
+  Checkbox,
 } from 'antd';
 import {
   CalendarOutlined,
@@ -22,12 +24,18 @@ import {
   InfoCircleOutlined,
 } from '@ant-design/icons';
 import { useMutation, useQuery } from '@apollo/client';
-import { APPLY_LEAVE } from '../../graqhql/leave';
+import { APPLY_LEAVE, GET_MY_LEAVES } from '../../graqhql/leave';
 import { GET_HOLIDAYS } from '../../graqhql/holiday';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import isBetween from 'dayjs/plugin/isBetween';
 
+// Configure dayjs with IST timezone
+dayjs.extend(utc);
+dayjs.extend(timezone);
 dayjs.extend(isBetween);
+dayjs.tz.setDefault('Asia/Kolkata');
 
 const { TextArea } = Input;
 const { Title, Text } = Typography;
@@ -42,6 +50,16 @@ const ApplyLeaveModal = ({ visible, onClose, onSuccess }) => {
   // Get holidays for the current year
   const { data: holidaysData } = useQuery(GET_HOLIDAYS, {
     variables: { year: currentYear, isActive: true },
+    fetchPolicy: 'cache-and-network',
+  });
+
+  // Get user's leaves to check for same-day short leaves
+  const { data: myLeavesData } = useQuery(GET_MY_LEAVES, {
+    variables: { 
+      year: currentYear,
+      page: 1,
+      limit: 1000,
+    },
     fetchPolicy: 'cache-and-network',
   });
 
@@ -68,29 +86,63 @@ const ApplyLeaveModal = ({ visible, onClose, onSuccess }) => {
       let startDate, endDate, hours = null;
 
       if (leaveType === 'SHORT') {
-        // For short leave, combine date and time
-        const combinedDateTime = values.shortLeaveDate
-          .hour(values.shortLeaveTime.hour())
-          .minute(values.shortLeaveTime.minute())
+        // Check total hours for the selected date
+        const selectedDate = dayjs(values.shortLeaveDate);
+        const myLeaves = myLeavesData?.myLeaves?.leaves || [];
+        
+        // Find all short leaves on the same date
+        const sameDayLeaves = myLeaves.filter(leave => {
+          if (leave.leaveType !== 'SHORT') return false;
+          const leaveDate = dayjs(leave.startDate);
+          return leaveDate.isSame(selectedDate, 'day');
+        });
+
+        // Calculate total hours already applied for this date
+        const totalHoursOnDate = sameDayLeaves.reduce((sum, leave) => {
+          return sum + (leave.hours || 0);
+        }, 0);
+
+        // Check if adding new leave would exceed 3.5 hours
+        const newTotalHours = totalHoursOnDate + values.duration;
+        if (newTotalHours > 3.5) {
+          message.error(
+            `Cannot apply. You already have ${totalHoursOnDate} hours of leave on this date. ` +
+            `Adding ${values.duration} hours would exceed the 3.5-hour daily limit. ` +
+            `You can apply for up to ${3.5 - totalHoursOnDate} more hours on this date.`
+          );
+          return;
+        }
+
+        // For short leave, use date with a static start time (9:00 AM)
+        const shortLeaveDateValue = dayjs(values.shortLeaveDate);
+        const startDateTime = shortLeaveDateValue
+          .hour(9)
+          .minute(0)
           .second(0);
         
-        startDate = combinedDateTime.format('YYYY-MM-DD HH:mm:ss');
-        endDate = combinedDateTime
-          .add(values.hours, 'hour')
+        startDate = startDateTime.format('YYYY-MM-DD HH:mm:ss');
+        endDate = startDateTime
+          .add(values.duration, 'hour')
           .format('YYYY-MM-DD HH:mm:ss');
-        hours = values.hours;
+        hours = values.duration;
       } else {
         // For long leave
-        const [start, end] = values.dateRange;
-        
         if (durationType === 'HALF_DAY') {
-          // For half day, set specific times
-          startDate = start.hour(9).minute(0).second(0).format('YYYY-MM-DD HH:mm:ss');
-          endDate = start.hour(13).minute(0).second(0).format('YYYY-MM-DD HH:mm:ss');
+          // For half day, use single date
+          const date = dayjs(values.dateRange);
+          startDate = date.hour(9).minute(0).second(0).format('YYYY-MM-DD HH:mm:ss');
+          endDate = date.hour(13).minute(0).second(0).format('YYYY-MM-DD HH:mm:ss');
         } else {
-          // For full day
-          startDate = start.startOf('day').format('YYYY-MM-DD HH:mm:ss');
-          endDate = end.endOf('day').format('YYYY-MM-DD HH:mm:ss');
+          // For full day, use date range
+          const [start, end] = Array.isArray(values.dateRange) 
+            ? values.dateRange 
+            : [values.dateRange, values.dateRange];
+          // Use start of day for start date and end of day for end date
+          const startDayjs = dayjs(start);
+          const endDayjs = dayjs(end);
+          startDate = startDayjs.startOf('day').format('YYYY-MM-DD HH:mm:ss');
+          // For end date, use the same day at 23:59:59 to keep it within the same day
+          endDate = endDayjs.hour(23).minute(59).second(59).format('YYYY-MM-DD HH:mm:ss');
         }
       }
 
@@ -101,6 +153,7 @@ const ApplyLeaveModal = ({ visible, onClose, onSuccess }) => {
         endDate,
         hours,
         reason: values.reason,
+        isPositiveLeave: values.isPositiveLeave || false,
       };
 
       await applyLeave({ variables: { input } });
@@ -208,53 +261,40 @@ const ApplyLeaveModal = ({ visible, onClose, onSuccess }) => {
               style={{ marginBottom: 16 }}
             />
 
-            <Space direction="horizontal" style={{ width: '100%', display: 'flex' }}>
-              <Form.Item
-                name="shortLeaveDate"
-                label="Date"
-                rules={[{ required: true, message: 'Please select date' }]}
-                style={{ flex: 1, marginBottom: 0 }}
-              >
-                <DatePicker
-                  format="DD MMM YYYY"
-                  style={{ width: '100%' }}
-                  disabledDate={disabledDate}
-                />
-              </Form.Item>
-
-              <Form.Item
-                name="shortLeaveTime"
-                label="Start Time"
-                rules={[{ required: true, message: 'Please select time' }]}
-                style={{ flex: 1, marginBottom: 0 }}
-              >
-                <TimePicker
-                  format="HH:mm"
-                  style={{ width: '100%' }}
-                  minuteStep={15}
-                />
-              </Form.Item>
-            </Space>
+            <Form.Item
+              name="shortLeaveDate"
+              label="Date"
+              rules={[{ required: true, message: 'Please select date' }]}
+              initialValue={dayjs()}
+            >
+              <DatePicker
+                format="DD MMM YYYY"
+                style={{ width: '100%' }}
+                disabledDate={disabledDate}
+              />
+            </Form.Item>
 
             <Form.Item
-              name="hours"
-              label="Duration (Hours)"
+              name="duration"
+              label="Duration"
               rules={[
-                { required: true, message: 'Please enter duration' },
-                {
-                  type: 'number',
-                  min: 0.5,
-                  max: 4,
-                  message: 'Duration must be between 0.5 and 4 hours',
-                },
+                { required: true, message: 'Please select duration' },
               ]}
             >
-              <InputNumber
-                min={0.5}
-                max={4}
-                step={0.5}
+              <Select
+                placeholder="Select duration"
                 style={{ width: '100%' }}
-                placeholder="Enter hours (max 4)"
+                options={[
+                  { label: '15 minutes', value: 0.25 },
+                  { label: '30 minutes', value: 0.5 },
+                  { label: '45 minutes', value: 0.75 },
+                  { label: '1 hour', value: 1 },
+                  { label: '1.5 hours', value: 1.5 },
+                  { label: '2 hours', value: 2 },
+                  { label: '2.5 hours', value: 2.5 },
+                  { label: '3 hours', value: 3 },
+                  { label: '3.5 hours', value: 3.5 },
+                ]}
               />
             </Form.Item>
           </>
@@ -284,6 +324,7 @@ const ApplyLeaveModal = ({ visible, onClose, onSuccess }) => {
                 name="dateRange"
                 label="Select Date"
                 rules={[{ required: true, message: 'Please select date' }]}
+                initialValue={dayjs()}
               >
                 <DatePicker
                   format="DD MMM YYYY"
@@ -297,6 +338,7 @@ const ApplyLeaveModal = ({ visible, onClose, onSuccess }) => {
                 name="dateRange"
                 label="Date Range"
                 rules={[{ required: true, message: 'Please select date range' }]}
+                initialValue={[dayjs(), dayjs()]}
               >
                 <RangePicker
                   format="DD MMM YYYY"
@@ -323,6 +365,18 @@ const ApplyLeaveModal = ({ visible, onClose, onSuccess }) => {
             maxLength={500}
             showCount
           />
+        </Form.Item>
+
+        <Form.Item
+          name="isPositiveLeave"
+          valuePropName="checked"
+        >
+          <Checkbox>
+            <Space>
+              <InfoCircleOutlined />
+              <Text>Positive Leave</Text>
+            </Space>
+          </Checkbox>
         </Form.Item>
 
         {/* Display holidays */}

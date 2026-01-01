@@ -13,95 +13,168 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('push', function (event) {
-    console.log('[SW] Push event received', event);
+    console.log('[SW] 🔔 Push event received at', new Date().toISOString());
     
     let data = {};
+    let notificationTitle = 'New Message';
+    let notificationOptions = {};
     
     try {
         if (event.data) {
             data = event.data.json();
-            console.log('[SW] Push data:', data);
+            console.log('[SW] Push data parsed:', JSON.stringify(data));
+            notificationTitle = data.title || 'New Message';
         } else {
-            console.log('[SW] Push event has no data');
+            console.warn('[SW] Push event has no data, using defaults');
             data = {
-                title: 'New Notification',
+                title: 'New Message',
                 body: 'You have a new message',
             };
         }
     } catch (error) {
-        console.error('[SW] Error parsing push data:', error);
+        console.error('[SW] ⚠️ Error parsing push data:', error);
         data = {
-            title: 'New Notification',
+            title: 'New Message',
             body: 'You have a new message',
         };
+        notificationTitle = 'New Message';
     }
     
     // Get the origin from the service worker location
     const origin = self.location.origin;
+    console.log('[SW] Origin:', origin);
     
-    const options = {
+    // Prepare notification options with all required fields
+    notificationOptions = {
         body: data.body || 'You have a new message',
         icon: data.icon || `${origin}/images/logo192.png`,
         badge: data.badge || `${origin}/images/favicon-96x96.png`,
         vibrate: [200, 100, 200],
-        tag: data.data?.roomId || `notification-${Date.now()}`,
-        requireInteraction: false,
-        silent: false,
-        renotify: true,
+        tag: data.data?.roomId ? `chat-${data.data.roomId}` : `notification-${Date.now()}`,
+        requireInteraction: false, // Auto-dismiss after a few seconds
+        silent: false, // Play system sound
+        renotify: true, // Notify even if same tag exists
+        timestamp: Date.now(),
+        actions: [
+            {
+                action: 'open',
+                title: 'Open Chat'
+            },
+            {
+                action: 'close',
+                title: 'Dismiss'
+            }
+        ],
         data: {
             dateOfArrival: Date.now(),
-            url: data.data?.url || '/',
-            roomId: data.data?.roomId
+            url: data.data?.url || '/messages',
+            roomId: data.data?.roomId,
+            timestamp: data.data?.timestamp
         }
     };
 
+    console.log('[SW] Showing notification:', notificationTitle);
+    console.log('[SW] Notification options:', JSON.stringify(notificationOptions));
+
+    // CRITICAL: Use event.waitUntil to ensure notification is shown even if browser is closed
     event.waitUntil(
-        self.registration.showNotification(data.title || 'New Notification', options)
-            .then(() => console.log('[SW] Notification shown successfully'))
-            .catch(error => console.error('[SW] Error showing notification:', error))
+        self.registration.showNotification(notificationTitle, notificationOptions)
+            .then(() => {
+                console.log('[SW] ✓ Notification shown successfully at', new Date().toISOString());
+            })
+            .catch(error => {
+                console.error('[SW] ✗ CRITICAL: Failed to show notification:', error);
+                console.error('[SW] Error details:', error.message, error.stack);
+                
+                // Fallback: Try showing a basic notification
+                return self.registration.showNotification('New Message', {
+                    body: 'You have a new message',
+                    icon: `${origin}/images/logo192.png`,
+                    tag: 'fallback-notification'
+                }).catch(fallbackError => {
+                    console.error('[SW] ✗ Even fallback notification failed:', fallbackError);
+                });
+            })
     );
 });
 
 self.addEventListener('notificationclick', function (event) {
+    console.log('[SW] 👆 Notification clicked at', new Date().toISOString());
+    console.log('[SW] Action:', event.action);
+    console.log('[SW] Notification data:', event.notification.data);
+    
+    // Close notification
     event.notification.close();
 
-    const urlToOpen = new URL(event.notification.data.url || '/', self.location.origin).href;
-    const roomId = event.notification.data.roomId;
+    // Handle different actions
+    if (event.action === 'close') {
+        console.log('[SW] User dismissed notification');
+        return;
+    }
 
-    const promiseChain = self.clients.matchAll({
-        type: 'window',
-        includeUncontrolled: true
-    }).then((windowClients) => {
-        // Try to find an existing window
-        let clientToUse = null;
-        
-        for (let i = 0; i < windowClients.length; i++) {
-            const client = windowClients[i];
-            // Focus any window from our app
-            if (client.url.includes(self.location.origin)) {
-                clientToUse = client;
-                break;
-            }
-        }
+    // Determine URL to open
+    const urlToOpen = event.notification.data?.url 
+        ? new URL(event.notification.data.url, self.location.origin).href
+        : new URL('/messages', self.location.origin).href;
+    const roomId = event.notification.data?.roomId;
 
-        if (clientToUse) {
-            // Focus the window and send message to open chat
-            return clientToUse.focus().then(client => {
-                if (roomId) {
-                    client.postMessage({
-                        type: 'OPEN_CHAT',
-                        roomId: roomId
-                    });
+    console.log('[SW] Target URL:', urlToOpen);
+    console.log('[SW] Room ID:', roomId);
+
+    // CRITICAL: Use event.waitUntil to ensure window opens even if browser was closed
+    event.waitUntil(
+        self.clients.matchAll({
+            type: 'window',
+            includeUncontrolled: true
+        }).then((windowClients) => {
+            console.log('[SW] Found', windowClients.length, 'window client(s)');
+            
+            // Try to find an existing window from our app
+            let clientToUse = null;
+            
+            for (let i = 0; i < windowClients.length; i++) {
+                const client = windowClients[i];
+                console.log('[SW] Checking client:', client.url);
+                // Focus any window from our app
+                if (client.url.includes(self.location.origin)) {
+                    clientToUse = client;
+                    break;
                 }
-                return client;
-            });
-        } else {
-            // Open new window
-            return self.clients.openWindow(urlToOpen);
-        }
-    });
+            }
 
-    event.waitUntil(promiseChain);
+            if (clientToUse) {
+                console.log('[SW] ✓ Focusing existing window and navigating to:', urlToOpen);
+                // Focus the window and navigate to the chat
+                return clientToUse.focus().then(client => {
+                    // Navigate to the specific chat room
+                    console.log('[SW] Navigating client to URL');
+                    return client.navigate(urlToOpen).then(() => {
+                        console.log('[SW] ✓ Navigation successful');
+                        return client;
+                    }).catch(navError => {
+                        console.error('[SW] Navigation failed:', navError);
+                        // If navigation fails, try posting a message
+                        client.postMessage({
+                            type: 'OPEN_CHAT',
+                            roomId: roomId,
+                            url: urlToOpen
+                        });
+                        return client;
+                    });
+                });
+            } else {
+                console.log('[SW] ✓ No existing window, opening new one:', urlToOpen);
+                // Open new window
+                return self.clients.openWindow(urlToOpen).then(client => {
+                    console.log('[SW] ✓ New window opened successfully');
+                    return client;
+                }).catch(openError => {
+                    console.error('[SW] ✗ Failed to open window:', openError);
+                    throw openError;
+                });
+            }
+        })
+    );
 });
 
 // Fetch event handler - network-first strategy for API calls, cache-first for static assets

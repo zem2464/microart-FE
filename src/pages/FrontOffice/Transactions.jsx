@@ -92,7 +92,7 @@ const Transactions = () => {
   // Fetch transactions
   const { data: ledgerData, loading, refetch } = useQuery(GET_CLIENT_LEDGER_RANGE, {
     variables: {
-      clientId: selectedClient,
+      clientId: selectedClient === 'all' ? null : selectedClient,
       dateFrom: dateRange[0].format('YYYY-MM-DD'),
       dateTo: dateRange[1].format('YYYY-MM-DD'),
       pagination: { page: 1, limit: 1000 }
@@ -127,7 +127,8 @@ const Transactions = () => {
     .filter(t => t.transactionType === 'payment_received')
     .reduce((sum, t) => sum + parseFloat(t.amount || 0), 0);
 
-  const columns = [
+  // Define all columns including Client column
+  const allColumns = [
     {
       title: 'Date',
       dataIndex: 'transactionDate',
@@ -194,9 +195,32 @@ const Transactions = () => {
       title: 'Client',
       dataIndex: 'client',
       key: 'client',
-      width: 180,
+      width: 200,
       render: (client, record) => {
         if (!client) return 'N/A';
+        
+        // When "All Clients" is selected, show clientCode and displayName together
+        if (selectedClient === 'all') {
+          return (
+            <div>
+              <div>
+                <Text strong style={{ fontSize: '13px', color: '#1890ff' }}>
+                  {client.clientCode}
+                </Text>
+                <Text style={{ fontSize: '13px', marginLeft: '4px' }}>
+                  {client.displayName || `${client.firstName} ${client.lastName}`}
+                </Text>
+              </div>
+              {client.companyName && (
+                <Text type="secondary" style={{ fontSize: '11px' }}>
+                  {client.companyName}
+                </Text>
+              )}
+            </div>
+          );
+        }
+        
+        // For specific client view, show display name and company name
         return (
           <div>
             <div>
@@ -362,6 +386,11 @@ const Transactions = () => {
     },
   ];
 
+  // Filter columns based on selected client - hide Client column if a specific client is selected
+  const columns = selectedClient === 'all' 
+    ? allColumns 
+    : allColumns.filter(col => col.key !== 'client');
+
   const handleRefresh = () => {
     refetch();
   };
@@ -398,9 +427,14 @@ const Transactions = () => {
               value={selectedClient}
               onChange={setSelectedClient}
               optionFilterProp="children"
-              filterOption={filterClients}
+              filterOption={(input, option) => {
+                // Don't filter the "All Clients" option
+                if (option.value === 'all') return true;
+                return filterClients(input, option);
+              }}
               notFoundContent={!clientsData ? "Loading..." : "No clients found"}
               labelRender={(props) => {
+                if (props.value === 'all') return <strong>All Clients</strong>;
                 const client = clientsData?.clients?.find(
                   (c) => c.id === props.value
                 );
@@ -412,6 +446,11 @@ const Transactions = () => {
                 );
               }}
             >
+              <Option key="all" value="all">
+                <div>
+                  <strong>All Clients</strong>
+                </div>
+              </Option>
               {clientsData?.clients?.map(client => (
                 <Option key={client.id} value={client.id}>
                   <div>
@@ -470,22 +509,28 @@ const Transactions = () => {
         <Card>
           <Empty description="Please select a client to view transactions" />
         </Card>
+      ) : loading ? (
+        <Card>
+          <Empty description="Loading transactions..." />
+        </Card>
       ) : (
         <>
           {/* Statistics */}
           <Row gutter={16} style={{ marginBottom: 24 }}>
-            <Col xs={12} sm={6}>
-              <Card>
-                <Statistic
-                  title="Opening Balance"
-                  value={Math.abs(openingBalance)}
-                  prefix="₹"
-                  suffix={openingBalance < 0 ? 'DR' : 'CR'}
-                  valueStyle={{ color: openingBalance < 0 ? '#f5222d' : '#52c41a' }}
-                />
-              </Card>
-            </Col>
-            <Col xs={12} sm={6}>
+            {selectedClient !== 'all' && (
+              <Col xs={12} sm={6}>
+                <Card>
+                  <Statistic
+                    title="Opening Balance"
+                    value={Math.abs(openingBalance)}
+                    prefix="₹"
+                    suffix={openingBalance < 0 ? 'DR' : 'CR'}
+                    valueStyle={{ color: openingBalance < 0 ? '#f5222d' : '#52c41a' }}
+                  />
+                </Card>
+              </Col>
+            )}
+            <Col xs={12} sm={selectedClient === 'all' ? 8 : 6}>
               <Card>
                 <Statistic
                   title="Total Invoiced"
@@ -496,7 +541,7 @@ const Transactions = () => {
                 />
               </Card>
             </Col>
-            <Col xs={12} sm={6}>
+            <Col xs={12} sm={selectedClient === 'all' ? 8 : 6}>
               <Card>
                 <Statistic
                   title="Total Paid"
@@ -507,17 +552,31 @@ const Transactions = () => {
                 />
               </Card>
             </Col>
-            <Col xs={12} sm={6}>
-              <Card>
-                <Statistic
-                  title="Closing Balance"
-                  value={Math.abs(closingBalance)}
-                  prefix="₹"
-                  suffix={closingBalance < 0 ? 'DR' : 'CR'}
-                  valueStyle={{ color: closingBalance < 0 ? '#f5222d' : '#52c41a' }}
-                />
-              </Card>
-            </Col>
+            {selectedClient !== 'all' && (
+              <Col xs={12} sm={6}>
+                <Card>
+                  <Statistic
+                    title="Closing Balance"
+                    value={Math.abs(closingBalance)}
+                    prefix="₹"
+                    suffix={closingBalance < 0 ? 'DR' : 'CR'}
+                    valueStyle={{ color: closingBalance < 0 ? '#f5222d' : '#52c41a' }}
+                  />
+                </Card>
+              </Col>
+            )}
+            {selectedClient === 'all' && (
+              <Col xs={12} sm={8}>
+                <Card>
+                  <Statistic
+                    title="Net Balance"
+                    value={totalPaid - totalInvoiced}
+                    prefix="₹"
+                    valueStyle={{ color: (totalPaid - totalInvoiced) < 0 ? '#f5222d' : '#52c41a' }}
+                  />
+                </Card>
+              </Col>
+            )}
           </Row>
 
           {/* Transactions Table */}
