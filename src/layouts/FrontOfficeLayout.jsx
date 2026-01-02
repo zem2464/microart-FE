@@ -159,8 +159,8 @@ const FrontOfficeLayout = () => {
       icon: <CalendarOutlined />,
       label: <Link to="/leaves">Leave Applied</Link>,
     },
-    // Leave Calendar for Admins only
-    user?.role?.roleType === "ADMIN" && {
+    // Leave Calendar
+    {
       key: "/all-users-leaves",
       icon: <CalendarOutlined />,
       label: <Link to="/all-users-leaves">Leave Calendar</Link>,
@@ -239,7 +239,7 @@ const FrontOfficeLayout = () => {
       label: "My Leaves",
       onClick: () => navigate("/leaves"),
     },
-    user?.role?.roleType === "ADMIN" && {
+    {
       key: "all-users-leaves",
       icon: <CalendarOutlined />,
       label: "Leave Calendar",
