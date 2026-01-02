@@ -476,7 +476,7 @@ const SalaryManagement = () => {
           dataSource={data?.userSalaries || []}
           loading={loading}
           rowKey="id"
-          pagination={{ pageSize: 10 }}
+          pagination={false}
           scroll={{ x: 1500 }}
         />
 
