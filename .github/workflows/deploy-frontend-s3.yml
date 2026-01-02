@@ -31,7 +31,7 @@ jobs:
                   REACT_APP_GRAPHQL_WS_URL: ${{ secrets.REACT_APP_GRAPHQL_WS_URL }}
                   REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
                   REACT_APP_VAPID_PUBLIC_KEY: ${{ secrets.REACT_APP_VAPID_PUBLIC_KEY }}
-                  NODE_OPTIONS: --max-old-space-size=768
+                  NODE_OPTIONS: --max-old-space-size=4096
               run: npm run build
 
             - name: Configure AWS credentials
