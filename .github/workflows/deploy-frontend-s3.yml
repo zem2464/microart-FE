@@ -1,0 +1,129 @@
+name: Deploy Frontend to S3
+
+on:
+    push:
+        branches:
+            - master
+            - main
+    workflow_dispatch:
+
+jobs:
+    deploy-frontend:
+        name: Build and Deploy Frontend to S3
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Setup Node.js
+              uses: actions/setup-node@v4
+              with:
+                  node-version: "18"
+                  cache: "npm"
+                  cache-dependency-path: frontend/package-lock.json
+
+            - name: Install dependencies
+              working-directory: ./frontend
+              run: npm ci
+
+            - name: Build application
+              working-directory: ./frontend
+              env:
+                  REACT_APP_GRAPHQL_URL: ${{ secrets.REACT_APP_GRAPHQL_URL }}
+                  REACT_APP_GRAPHQL_WS_URL: ${{ secrets.REACT_APP_GRAPHQL_WS_URL }}
+                  REACT_APP_API_URL: ${{ secrets.REACT_APP_API_URL }}
+                  REACT_APP_VAPID_PUBLIC_KEY: ${{ secrets.REACT_APP_VAPID_PUBLIC_KEY }}
+                  NODE_OPTIONS: --max-old-space-size=768
+              run: npm run build
+
+            - name: Configure AWS credentials
+              uses: aws-actions/configure-aws-credentials@v4
+              with:
+                  aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+                  aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+                  aws-region: ${{ secrets.AWS_REGION }}
+
+            - name: Deploy to S3
+              working-directory: ./frontend
+              env:
+                  S3_BUCKET: ${{ secrets.S3_BUCKET_FRONTEND }}
+              run: |
+                  echo "🚀 Deploying to S3 bucket: ${S3_BUCKET}"
+
+                  # Sync all files except index.html with long cache
+                  aws s3 sync build/ s3://${S3_BUCKET}/ \
+                    --delete \
+                    --cache-control "public, max-age=31536000, immutable" \
+                    --exclude "index.html" \
+                    --exclude "service-worker.js" \
+                    --exclude "manifest.json"
+
+                  # Upload index.html with no-cache
+                  aws s3 cp build/index.html s3://${S3_BUCKET}/index.html \
+                    --cache-control "no-cache, no-store, must-revalidate" \
+                    --content-type "text/html"
+
+                  # Upload service-worker.js with no-cache (if exists)
+                  if [ -f "build/service-worker.js" ]; then
+                    aws s3 cp build/service-worker.js s3://${S3_BUCKET}/service-worker.js \
+                      --cache-control "no-cache, no-store, must-revalidate" \
+                      --content-type "application/javascript"
+                  fi
+
+                  # Upload manifest.json with short cache (if exists)
+                  if [ -f "build/manifest.json" ]; then
+                    aws s3 cp build/manifest.json s3://${S3_BUCKET}/manifest.json \
+                      --cache-control "public, max-age=3600" \
+                      --content-type "application/json"
+                  fi
+
+                  echo "✅ S3 deployment complete"
+
+            - name: Invalidate CloudFront cache
+              env:
+                  CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+              run: |
+                  if [ -n "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
+                    echo "🔄 Invalidating CloudFront cache..."
+                    
+                    INVALIDATION_ID=$(aws cloudfront create-invalidation \
+                      --distribution-id "$CLOUDFRONT_DISTRIBUTION_ID" \
+                      --paths "/*" \
+                      --query 'Invalidation.Id' \
+                      --output text)
+                    
+                    echo "✅ CloudFront invalidation created: ${INVALIDATION_ID}"
+                  else
+                    echo "⚠️  CLOUDFRONT_DISTRIBUTION_ID not set, skipping cache invalidation"
+                  fi
+
+            - name: Deployment Summary
+              env:
+                  S3_BUCKET: ${{ secrets.S3_BUCKET_FRONTEND }}
+                  CLOUDFRONT_DISTRIBUTION_ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}
+              run: |
+                  echo "═══════════════════════════════════════════════════"
+                  echo "✅ Frontend Deployment Complete!"
+                  echo "═══════════════════════════════════════════════════"
+                  echo ""
+                  echo "📦 S3 Bucket: ${S3_BUCKET}"
+
+                  if [ -n "$CLOUDFRONT_DISTRIBUTION_ID" ]; then
+                    CLOUDFRONT_DOMAIN=$(aws cloudfront get-distribution \
+                      --id "$CLOUDFRONT_DISTRIBUTION_ID" \
+                      --query 'Distribution.DomainName' \
+                      --output text 2>/dev/null || echo "")
+                    
+                    if [ -n "$CLOUDFRONT_DOMAIN" ]; then
+                      echo "🌐 CloudFront URL: https://${CLOUDFRONT_DOMAIN}"
+                    fi
+                  fi
+
+                  echo ""
+                  echo "✨ Application is live!"
+
+            - name: Notify on failure
+              if: failure()
+              run: |
+                  echo "❌ Frontend deployment failed! Check the logs above for details."
