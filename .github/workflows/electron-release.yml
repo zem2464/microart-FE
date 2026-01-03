@@ -52,6 +52,14 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
+      - name: Validate S3 bucket env
+        shell: bash
+        run: |
+          if [ -z "${S3_BUCKET_ELECTRON}" ]; then
+            echo "::error::S3_BUCKET_ELECTRON secret is empty; set a valid bucket name"; exit 1; fi
+          if [[ ! ${S3_BUCKET_ELECTRON} =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; then
+            echo "::error::S3_BUCKET_ELECTRON='${S3_BUCKET_ELECTRON}' is not a valid S3 bucket name"; exit 1; fi
+
       - name: Build Electron (${{ matrix.build_target }}) and publish to S3
         env:
           AWS_DESKTOP_S3_BUCKET: ${{ secrets.S3_BUCKET_ELECTRON }}
@@ -59,6 +67,7 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: false
           ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
         working-directory: ${{ github.workspace }}
+        shell: bash
         run: |
           if [ "${{ matrix.build_target }}" = "mac" ]; then
             npx electron-builder --mac --publish always

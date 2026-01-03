@@ -64,6 +64,7 @@
   "build": {
     "appId": "com.microart.desktop",
     "productName": "microArt",
+    "icon": "public/assets/icon.png",
     "files": [
       "build/**/*",
       "public/electron.js",
@@ -77,11 +78,12 @@
       {
         "provider": "s3",
         "bucket": "${env.AWS_DESKTOP_S3_BUCKET}",
-        "region": "${env.AWS_DESKTOP_REGION}",
+        "region": "${env.AWS_REGION}",
         "path": "releases"
       }
     ],
     "win": {
+      "icon": "public/assets/icon.png",
       "target": [
         {
           "target": "nsis",
@@ -98,6 +100,7 @@
       "differentialPackage": true
     },
     "mac": {
+      "icon": "public/assets/icon.png",
       "target": ["dmg", "zip"],
       "category": "public.app-category.business"
     },
