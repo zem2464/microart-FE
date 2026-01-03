@@ -77,8 +77,8 @@
     "publish": [
       {
         "provider": "s3",
-        "bucket": "${env.AWS_DESKTOP_S3_BUCKET}",
-        "region": "${env.AWS_REGION}",
+        "bucket": "microart-desktop-releases",
+        "region": "us-east-1",
         "path": "/"
       }
     ],
