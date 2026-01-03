@@ -79,7 +79,7 @@
         "provider": "s3",
         "bucket": "${env.AWS_DESKTOP_S3_BUCKET}",
         "region": "${env.AWS_REGION}",
-        "path": "releases"
+        "path": "/"
       }
     ],
     "win": {

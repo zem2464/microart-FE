@@ -62,7 +62,8 @@ jobs:
             echo "::error::S3_BUCKET_ELECTRON secret is empty; set a valid bucket name"; exit 1; fi
           if [[ ! ${BUCKET_TRIMMED} =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; then
             echo "::error::S3_BUCKET_ELECTRON='${BUCKET_TRIMMED}' is not a valid S3 bucket name"; exit 1; fi
-          echo "BUCKET_TRIMMED=${BUCKET_TRIMMED}" >> "$GITHUB_ENV"
+          echo "AWS_DESKTOP_S3_BUCKET=${BUCKET_TRIMMED}" >> "$GITHUB_ENV"
+          echo "Validated bucket: ${BUCKET_TRIMMED}"
 
       - name: Verify bucket access
         shell: bash
@@ -70,19 +71,21 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
-          BUCKET_TRIMMED: ${{ env.BUCKET_TRIMMED }}
+          AWS_DESKTOP_S3_BUCKET: ${{ env.AWS_DESKTOP_S3_BUCKET }}
         run: |
-          aws s3api head-bucket --bucket "$BUCKET_TRIMMED"
+          echo "Checking bucket: ${AWS_DESKTOP_S3_BUCKET}"
+          aws s3api head-bucket --bucket "${AWS_DESKTOP_S3_BUCKET}"
 
       - name: Build Electron (${{ matrix.build_target }}) and publish to S3
         env:
-          AWS_DESKTOP_S3_BUCKET: ${{ env.BUCKET_TRIMMED }}
-          AWS_DESKTOP_REGION: ${{ secrets.AWS_REGION }}
+          AWS_DESKTOP_S3_BUCKET: ${{ env.AWS_DESKTOP_S3_BUCKET }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
           ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
+          echo "Publishing to bucket: ${AWS_DESKTOP_S3_BUCKET}"
           if [ "${{ matrix.build_target }}" = "mac" ]; then
             npx electron-builder --mac --publish always
           else
