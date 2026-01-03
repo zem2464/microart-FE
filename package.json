@@ -79,7 +79,9 @@
         "provider": "s3",
         "bucket": "microart-desktop-releases",
         "region": "us-east-1",
-        "path": "/"
+        "path": "/",
+        "acl": null,
+        "storageClass": "STANDARD"
       }
     ],
     "win": {
