@@ -39,7 +39,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ github.workspace }}
-        run: npm ci
+        run: npm ci --include=dev
 
       - name: Build React app
         working-directory: ${{ github.workspace }}
