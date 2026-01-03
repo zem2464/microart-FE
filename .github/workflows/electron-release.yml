@@ -57,14 +57,26 @@ jobs:
         env:
           S3_BUCKET_ELECTRON: ${{ secrets.S3_BUCKET_ELECTRON }}
         run: |
-          if [ -z "${S3_BUCKET_ELECTRON}" ]; then
+          BUCKET_TRIMMED=$(echo "${S3_BUCKET_ELECTRON}" | tr -d '[:space:]')
+          if [ -z "${BUCKET_TRIMMED}" ]; then
             echo "::error::S3_BUCKET_ELECTRON secret is empty; set a valid bucket name"; exit 1; fi
-          if [[ ! ${S3_BUCKET_ELECTRON} =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; then
-            echo "::error::S3_BUCKET_ELECTRON='${S3_BUCKET_ELECTRON}' is not a valid S3 bucket name"; exit 1; fi
+          if [[ ! ${BUCKET_TRIMMED} =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; then
+            echo "::error::S3_BUCKET_ELECTRON='${BUCKET_TRIMMED}' is not a valid S3 bucket name"; exit 1; fi
+          echo "BUCKET_TRIMMED=${BUCKET_TRIMMED}" >> "$GITHUB_ENV"
+
+      - name: Verify bucket access
+        shell: bash
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+          BUCKET_TRIMMED: ${{ env.BUCKET_TRIMMED }}
+        run: |
+          aws s3api head-bucket --bucket "$BUCKET_TRIMMED"
 
       - name: Build Electron (${{ matrix.build_target }}) and publish to S3
         env:
-          AWS_DESKTOP_S3_BUCKET: ${{ secrets.S3_BUCKET_ELECTRON }}
+          AWS_DESKTOP_S3_BUCKET: ${{ env.BUCKET_TRIMMED }}
           AWS_DESKTOP_REGION: ${{ secrets.AWS_REGION }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
           ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
