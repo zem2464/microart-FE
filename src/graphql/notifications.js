@@ -78,6 +78,12 @@ export const DELETE_ALL_READ_NOTIFICATIONS = gql`
   }
 `;
 
+export const REMOVE_PUSH_SUBSCRIPTION = gql`
+  mutation RemovePushSubscription($endpoint: String!) {
+    removePushSubscription(endpoint: $endpoint)
+  }
+`;
+
 export const NOTIFICATION_CREATED_SUBSCRIPTION = gql`
   subscription NotificationCreated {
     notificationCreated {

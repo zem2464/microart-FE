@@ -13,6 +13,7 @@ import {
   SET_INITIAL_PASSWORD_MUTATION,
 } from "../gql/auth";
 import { ME_QUERY } from "../gql/me";
+import { REMOVE_PUSH_SUBSCRIPTION } from "../graphql/notifications";
 import {
   isApplicationLoading,
   isLoggedIn,
@@ -336,6 +337,34 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // Step 1: Remove push subscriptions before logout
+      try {
+        if ('serviceWorker' in navigator) {
+          const registration = await navigator.serviceWorker.ready;
+          const subscription = await registration.pushManager.getSubscription();
+          
+          if (subscription) {
+            console.log('[AuthContext] Removing push subscription on logout...');
+            // Call backend to remove subscription
+            await client.mutate({
+              mutation: REMOVE_PUSH_SUBSCRIPTION,
+              variables: {
+                endpoint: subscription.endpoint
+              }
+            });
+            console.log('[AuthContext] ✓ Push subscription removed from backend');
+            
+            // Unsubscribe locally
+            await subscription.unsubscribe();
+            console.log('[AuthContext] ✓ Push subscription unsubscribed locally');
+          }
+        }
+      } catch (subError) {
+        console.error('[AuthContext] Error removing push subscription:', subError);
+        // Don't block logout if subscription removal fails
+      }
+
+      // Step 2: Perform backend logout
       const { data } = await client.query({
         query: LOGOUT_QUERY,
       });
