@@ -2,6 +2,42 @@ import { notification } from 'antd';
 import { MessageOutlined } from '@ant-design/icons';
 import { SAVE_PUSH_SUBSCRIPTION } from '../graphql/userQueries';
 
+// Centralized Electron detection so all call sites agree
+export const isElectronEnv = () => {
+    if (typeof window === 'undefined') return false;
+
+    const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+
+    const detected = Boolean(
+        // Explicit flag exposed by preload
+        window.isElectron ||
+        // Preload bridge object
+        window.electron ||
+        window.electron?.isElectron ||
+        // User agent fallback
+        /Electron/i.test(ua) ||
+        // process.versions is available when nodeIntegration is on
+        window.process?.versions?.electron ||
+        // Fallback: try require if exposed (defensive)
+        (() => {
+            try {
+                // Some builds expose require in sandbox=false; ignore errors otherwise
+                const electron = typeof window.require === 'function' ? window.require('electron') : null;
+                return Boolean(electron?.ipcRenderer);
+            } catch (err) {
+                return false;
+            }
+        })()
+    );
+
+    console.log('[NotificationService] isElectronEnv detected:', detected, {
+        hasWindowElectron: !!window.electron,
+        hasWindowIsElectron: !!window.isElectron,
+        ua
+    });
+    return detected;
+};
+
 /**
  * Notification Service
  * Handles all notification-related functionality for the chat system
@@ -374,6 +410,13 @@ class NotificationService {
     showNotification({ sender, message, onClick, roomId, title, description, type, icon }) {
         if (!this.isEnabled) return;
 
+        // Skip in-app notifications when running in Electron
+        // Electron will show native OS notifications instead
+        if (isElectronEnv()) {
+            console.log('[NotificationService] Skipping in-app notification in Electron mode');
+            return;
+        }
+
         notification.open({
             message: title || `New message from ${sender?.firstName || 'Unknown'}`,
             description: description || message?.content || message,
@@ -398,6 +441,13 @@ class NotificationService {
      */
     showTaskNotification({ title, message, projectId, onNavigate }) {
         if (!this.isEnabled) return;
+
+        // Skip in-app notifications when running in Electron
+        // Electron will show native OS notifications instead
+        if (isElectronEnv()) {
+            console.log('[NotificationService] Skipping in-app task notification in Electron mode');
+            return;
+        }
 
         notification.open({
             message: title || 'Task Assignment',
@@ -429,6 +479,60 @@ class NotificationService {
         if (!this.isEnabled) return;
 
         try {
+            // Detect Electron environment (prefer preload flag, fall back to user agent)
+            const isElectron = isElectronEnv();
+            const electronBridge = window?.electron;
+            const hasNativeBridge = Boolean(electronBridge?.showNotification);
+
+            console.log('[NotificationService] showBrowserNotification env check', {
+                isElectron,
+                hasBridge: !!electronBridge,
+                hasShowNotification: hasNativeBridge,
+                windowIsElectron: !!window.isElectron,
+                ua: (typeof navigator !== 'undefined' && navigator.userAgent) || ''
+            });
+
+            // If we are in Electron but have no bridge, do not fall back to SW/browser
+            if (isElectron || window.isElectron) {
+                if (!hasNativeBridge) {
+                    console.warn('[NotificationService] Electron detected but showNotification bridge missing; skipping browser/SW notification');
+                    return;
+                }
+            }
+
+            // Use Electron native notifications if available
+            if (hasNativeBridge) {
+                console.log('[NotificationService] ===== ELECTRON NOTIFICATION =====');
+                console.log('[NotificationService] Electron detected:', isElectron);
+                console.log('[NotificationService] Title:', title);
+                console.log('[NotificationService] Body:', body);
+                console.log('[NotificationService] Icon:', icon);
+                console.log('[NotificationService] Data:', data);
+                
+                try {
+                    // Call Electron's native notification API
+                    electronBridge.showNotification(title, {
+                        body: body,
+                        icon: icon || '/images/logo192.png',
+                        silent: false,
+                        data: data || {}
+                    });
+                    console.log('[NotificationService] ✓ Electron notification sent to main process');
+                    console.log('[NotificationService] ===================================');
+                    return; // Exit early - Electron handles it
+                } catch (error) {
+                    console.error('[NotificationService] ✗ Failed to send Electron notification:', error);
+                    console.error('[NotificationService] Error stack:', error.stack);
+                    console.log('[NotificationService] Will fall back to browser notifications');
+                    // Don't return - fall through to browser notification fallback
+                }
+            } else if (isElectron) {
+                console.warn('[NotificationService] Electron detected but showNotification API not available');
+                console.warn('[NotificationService] window.electron:', electronBridge);
+                // Avoid double popups in Electron; if bridge missing we still skip browser toast
+                return;
+            }
+
             // Request permission if not granted
             if (Notification.permission === 'default') {
                 const permission = await Notification.requestPermission();
@@ -496,7 +600,24 @@ class NotificationService {
         // Play sound
         this.playSound();
 
-        // Show Ant Design notification
+        const title = `New message from ${sender?.firstName || 'Unknown'}`;
+        const body = message?.content || message;
+        const targetUrl = roomId ? `/messages/${roomId}` : undefined;
+
+        // Prefer native Electron notification when available
+        const isElectron = isElectronEnv();
+        if (isElectron) {
+            console.log('[NotificationService] Using native notification path for message');
+            this.showBrowserNotification({
+                title,
+                body,
+                icon: '/images/logo192.png',
+                data: targetUrl ? { url: targetUrl } : {}
+            });
+            return; // Skip AntD toast in Electron
+        }
+
+        // Show Ant Design notification (web)
         this.showNotification({
             sender,
             message,
@@ -504,11 +625,13 @@ class NotificationService {
             onClick: onOpen
         });
 
-        // Show browser notification if user is not on the page
+        // Show browser notification if user is not on the page (web)
         if (document.hidden) {
             this.showBrowserNotification({
-                title: `New message from ${sender?.firstName || 'Unknown'}`,
-                body: message?.content || message
+                title,
+                body,
+                icon: '/images/logo192.png',
+                data: targetUrl ? { url: targetUrl } : {}
             });
         }
     }
@@ -543,6 +666,14 @@ class NotificationService {
      * @param {ApolloClient} client - Apollo Client instance to save subscription
      */
     async registerPushSubscription(client) {
+        // Skip entirely if running in Electron - native notifications are used instead
+        const electronEnv = isElectronEnv();
+
+        if (electronEnv) {
+            console.log('[NotificationService] Skipping push subscription - running in Electron with native notifications');
+            return;
+        }
+
         console.log('[NotificationService] 🔔 Starting push subscription registration...');
         console.log('[NotificationService] Timestamp:', new Date().toISOString());
         
@@ -791,10 +922,47 @@ window.testPushFromConsole = async (apolloClient) => {
 
 console.log('');
 console.log('🔔 Push Notification Debug Utilities:');
-console.log('  window.testNotification()           - Test browser notification');
-console.log('  window.testSound()                  - Test notification sound');
-console.log('  window.checkPushSubscription()      - Check if push subscription exists');
-console.log('  window.testPushFromConsole(client)  - Send test push (needs Apollo Client)');
+console.log('  window.testNotification()            - Test browser notification');
+console.log('  window.testSound()                   - Test notification sound');
+console.log('  window.checkPushSubscription()       - Check if push subscription exists');
+console.log('  window.testPushFromConsole(client)   - Send test push (needs Apollo Client)');
+console.log('  window.testElectronNotification()    - Test Electron native notification');
 console.log('');
+
+// Test Electron notification (guarded to avoid overwriting read-only bindings from preload)
+if (!Object.getOwnPropertyDescriptor(window, 'testElectronNotification')?.writable) {
+    console.warn('[Test] Skipping testElectronNotification assignment: property is read-only');
+} else {
+    window.testElectronNotification = () => {
+    console.log('[Test] Testing Electron native notification...');
+    console.log('[Test] window.electron exists:', !!window.electron);
+    console.log('[Test] window.electron.isElectron:', window.electron?.isElectron);
+    console.log('[Test] window.electron.showNotification exists:', !!window.electron?.showNotification);
+    
+    if (!window.electron || !window.electron.isElectron) {
+        console.error('[Test] ✗ Not running in Electron environment');
+        return;
+    }
+    
+    if (!window.electron.showNotification) {
+        console.error('[Test] ✗ Electron showNotification API not available');
+        return;
+    }
+    
+    console.log('[Test] Sending test notification...');
+    
+    try {
+        window.electron.showNotification('Test Notification from Console', {
+            body: 'If you see this, Electron native notifications are working! ✓',
+            icon: '/images/logo192.png',
+            silent: false,
+            data: { test: true }
+        });
+        console.log('[Test] ✓ Notification sent successfully - check your system notifications');
+    } catch (error) {
+        console.error('[Test] ✗ Failed to send notification:', error);
+    }
+};
+}
 
 export default notificationService;

@@ -33,8 +33,16 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "electron": "electron .",
+    "electron-dev": "concurrently \"npm start\" \"wait-on http://localhost:3000 && npm run electron\"",
+    "electron-build": "npm run build && electron-builder",
+    "electron-build-win": "npm run build && electron-builder --win",
+    "electron-build-mac": "npm run build && electron-builder --mac",
+    "electron-build-linux": "npm run build && electron-builder --linux"
   },
+  "homepage": "./",
+  "main": "public/electron.js",
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -53,9 +61,62 @@
       "last 1 safari version"
     ]
   },
+  "build": {
+    "appId": "com.microart.desktop",
+    "productName": "microArt",
+    "files": [
+      "build/**/*",
+      "public/electron.js",
+      "public/preload.js",
+      "public/assets/**/*"
+    ],
+    "directories": {
+      "buildResources": "public/assets"
+    },
+    "publish": [
+      {
+        "provider": "s3",
+        "bucket": "${env.AWS_DESKTOP_S3_BUCKET}",
+        "region": "${env.AWS_DESKTOP_REGION}",
+        "path": "releases"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "microArt",
+      "differentialPackage": true
+    },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": ["AppImage", "deb"],
+      "category": "Utility"
+    }
+  },
   "devDependencies": {
     "autoprefixer": "^10.4.15",
     "postcss": "^8.4.29",
-    "tailwindcss": "^3.3.3"
+    "tailwindcss": "^3.3.3",
+    "electron": "^27.0.0",
+    "electron-builder": "^24.6.4",
+    "electron-is-dev": "^2.0.0",
+    "electron-log": "^4.4.8",
+    "electron-store": "^8.1.0",
+    "electron-updater": "^6.1.1",
+    "concurrently": "^8.2.1",
+    "wait-on": "^7.1.0"
   }
 }
