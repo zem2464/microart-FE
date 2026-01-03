@@ -37,7 +37,14 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ github.workspace }}
-        run: npm install
+        run: npm install --legacy-peer-deps
+
+      - name: Verify electron installation
+        working-directory: ${{ github.workspace }}
+        run: |
+          echo "Checking electron..."
+          npx electron --version
+          ls -la node_modules/.bin/electron || echo "electron binary not found"
 
       - name: Build React app
         working-directory: ${{ github.workspace }}
