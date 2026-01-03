@@ -115,6 +115,9 @@ const NotificationDropdown = () => {
     if (notification.type === 'assignment' && notification.metadata?.projectId) {
       // For task assignment notifications, open project drawer
       showProjectDetailDrawerV2(notification.metadata.projectId);
+    } else if (notification.type === 'reminder') {
+      // For reminder notifications, navigate to reminders page
+      navigate('/reminders');
     } else if (notification.actionUrl) {
       // For other notifications, navigate to action URL
       navigate(notification.actionUrl);

@@ -39,8 +39,12 @@ const Messages = () => {
     useSubscription(CHAT_READ_UPDATED, {
         variables: { roomId: selectedRoom?.id },
         skip: !selectedRoom?.id,
-        onData: () => {
-            refetch();
+        onData: ({ client }) => {
+            // Update cache directly instead of refetch to avoid loader flashing
+            client.cache.updateQuery({ query: GET_MY_CHAT_ROOMS }, (existingData) => {
+                if (!existingData) return existingData;
+                return { ...existingData };
+            });
         },
     });
 
