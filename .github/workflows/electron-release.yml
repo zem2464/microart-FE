@@ -57,11 +57,7 @@ jobs:
           AWS_DESKTOP_S3_BUCKET: ${{ secrets.S3_BUCKET_ELECTRON }}
           AWS_DESKTOP_REGION: ${{ secrets.AWS_REGION }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-          WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
-          # Uncomment for mac signing/notarization when configured
-          # CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          # CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          ELECTRON_BUILDER_DISABLE_CODE_SIGNING: true
         working-directory: ${{ github.workspace }}
         run: |
           if [ "${{ matrix.build_target }}" = "mac" ]; then
