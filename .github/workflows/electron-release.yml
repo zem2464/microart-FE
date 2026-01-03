@@ -54,6 +54,8 @@ jobs:
 
       - name: Validate S3 bucket env
         shell: bash
+        env:
+          S3_BUCKET_ELECTRON: ${{ secrets.S3_BUCKET_ELECTRON }}
         run: |
           if [ -z "${S3_BUCKET_ELECTRON}" ]; then
             echo "::error::S3_BUCKET_ELECTRON secret is empty; set a valid bucket name"; exit 1; fi
