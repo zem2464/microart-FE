@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: 18
+  NODE_VERSION: 20
   CI: false
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ${{ github.workspace }}
-        run: npm ci --include=dev
+        run: npm install
 
       - name: Build React app
         working-directory: ${{ github.workspace }}
