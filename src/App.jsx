@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
-  BrowserRouter as Router,
+  BrowserRouter,
+  HashRouter,
   Routes,
   Route,
   Navigate,
@@ -262,8 +263,14 @@ function AppContent() {
 }
 
 function App() {
+  const RouterComponent =
+    typeof window !== "undefined" &&
+    (window.electron || window.isElectron || window.process?.versions?.electron)
+      ? HashRouter
+      : BrowserRouter;
+
   return (
-    <Router>
+    <RouterComponent>
       <AuthProvider>
         <ViewModeProvider>
           <AppDrawerProvider>
@@ -276,7 +283,7 @@ function App() {
           </AppDrawerProvider>
         </ViewModeProvider>
       </AuthProvider>
-    </Router>
+    </RouterComponent>
   );
 }
 
