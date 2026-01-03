@@ -194,6 +194,164 @@ class NotificationService {
     }
 
     /**
+     * Play mention notification sound
+     * Short high-pitched alert for mentions
+     */
+    async playMentionSound() {
+        if (!this.soundEnabled) return;
+
+        try {
+            const audioContext = await this.initAudioContext();
+            if (!audioContext || audioContext.state !== 'running') {
+                console.warn('[NotificationService] AudioContext not available for mention sound, trying fallback');
+                this.playFallbackSound();
+                return;
+            }
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            // High-pitched alert sound
+            oscillator.type = 'sine';
+            const now = audioContext.currentTime;
+
+            // Quick double beep: 1000Hz -> 1200Hz
+            oscillator.frequency.setValueAtTime(1000, now);
+            oscillator.frequency.setValueAtTime(1200, now + 0.08);
+
+            // Quick attack/decay for alert effect
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(0.2, now + 0.01);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+            gainNode.gain.linearRampToValueAtTime(0.2, now + 0.09);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+            oscillator.start(now);
+            oscillator.stop(now + 0.15);
+        } catch (error) {
+            console.warn('[NotificationService] Mention sound failed, using fallback:', error);
+            this.playFallbackSound();
+        }
+    }
+
+    /**
+     * Play reminder notification sound
+     * Gentle but persistent for reminders
+     */
+    async playReminderSound() {
+        if (!this.soundEnabled) return;
+
+        try {
+            const audioContext = await this.initAudioContext();
+            if (!audioContext || audioContext.state !== 'running') {
+                console.warn('[NotificationService] AudioContext not available for reminder sound, trying fallback');
+                this.playFallbackSound();
+                return;
+            }
+
+            const now = audioContext.currentTime;
+
+            // Three gentle rising notes
+            const notes = [440, 493.88, 523.25]; // A, B, C
+            
+            notes.forEach((freq, index) => {
+                const osc = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                osc.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                osc.type = 'triangle'; // Softer than sine
+                osc.frequency.setValueAtTime(freq, now + (index * 0.15));
+
+                gainNode.gain.setValueAtTime(0, now + (index * 0.15));
+                gainNode.gain.linearRampToValueAtTime(0.12, now + (index * 0.15) + 0.02);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + (index * 0.15) + 0.25);
+
+                osc.start(now + (index * 0.15));
+                osc.stop(now + (index * 0.15) + 0.25);
+            });
+        } catch (error) {
+            console.warn('[NotificationService] Reminder sound failed, using fallback:', error);
+            this.playFallbackSound();
+        }
+    }
+
+    /**
+     * Play system notification sound
+     * Low-pitched professional sound for system notifications
+     */
+    async playSystemSound() {
+        if (!this.soundEnabled) return;
+
+        try {
+            const audioContext = await this.initAudioContext();
+            if (!audioContext || audioContext.state !== 'running') {
+                console.warn('[NotificationService] AudioContext not available for system sound, trying fallback');
+                this.playFallbackSound();
+                return;
+            }
+
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            // Deep professional tone
+            oscillator.type = 'sine';
+            const now = audioContext.currentTime;
+
+            // Single low note: 200Hz with slight pitch rise
+            oscillator.frequency.setValueAtTime(200, now);
+            oscillator.frequency.linearRampToValueAtTime(250, now + 0.3);
+
+            // Slow fade for professional feel
+            gainNode.gain.setValueAtTime(0, now);
+            gainNode.gain.linearRampToValueAtTime(0.15, now + 0.05);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+            oscillator.start(now);
+            oscillator.stop(now + 0.5);
+        } catch (error) {
+            console.warn('[NotificationService] System sound failed, using fallback:', error);
+            this.playFallbackSound();
+        }
+    }
+
+    /**
+     * Play sound based on notification type
+     * @param {string} type - Notification type: 'message', 'mention', 'assignment', 'reminder', 'system'
+     */
+    async playSoundByType(type) {
+        if (!this.soundEnabled) return;
+
+        console.log('[NotificationService] Playing sound for type:', type);
+
+        switch (type) {
+            case 'assignment':
+                await this.playTaskSound();
+                break;
+            case 'mention':
+                await this.playMentionSound();
+                break;
+            case 'reminder':
+                await this.playReminderSound();
+                break;
+            case 'system':
+                await this.playSystemSound();
+                break;
+            case 'message':
+            default:
+                await this.playSound();
+                break;
+        }
+    }
+
+    /**
      * Play custom sound from file
      * @param {string} soundUrl - URL to sound file
      */

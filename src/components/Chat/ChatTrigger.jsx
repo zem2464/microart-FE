@@ -1,10 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useQuery } from '@apollo/client';
+import { useNavigate } from 'react-router-dom';
 import { Button, Dropdown, Badge, Spin } from 'antd';
 import { MessageOutlined, UserOutlined, TeamOutlined, FolderOutlined } from '@ant-design/icons';
 import { useChatContext } from '../../contexts/ChatContext';
 import { GET_MY_CHAT_ROOMS } from '../../graphql/chat';
-import NewChatModal from './NewChatModal';
 
 const ChatTrigger = () => {
     const {
@@ -16,7 +16,7 @@ const ChatTrigger = () => {
         chatLoading,
         currentUser
     } = useChatContext();
-    const [showNewChatModal, setShowNewChatModal] = useState(false);
+    const navigate = useNavigate();
 
     const getIcon = (type) => {
         switch (type) {
@@ -32,6 +32,11 @@ const ChatTrigger = () => {
     };
 
     const handleChatClick = (room) => {
+        // Navigate to the full chat page with the specific room
+        navigate(`/messages/${room.id}`);
+    };
+
+    const handleChatSmallWindow = (room) => {
         const otherMember = room.type === 'direct'
             ? room.members?.find(m => m.user.id !== currentUser?.id)?.user
             : null;
@@ -40,6 +45,7 @@ const ChatTrigger = () => {
             roomId: room.id,
             name: room.name || (otherMember ? `${otherMember.firstName} ${otherMember.lastName}` : 'Chat'),
             type: room.type,
+            isSmallWindow: true,
         });
     };
 
@@ -55,28 +61,40 @@ const ChatTrigger = () => {
 
             return {
                 key: room.id,
-                icon: getIcon(room.type),
                 label: (
-                    <div className="flex items-center justify-between w-full">
-                        <span className="flex-1 truncate">{displayName}</span>
-                        {(unreadCounts[room.id] || 0) > 0 && (
-                            <Badge
-                                count={unreadCounts[room.id]}
-                                style={{ marginLeft: 8 }}
-                                overflowCount={99}
-                            />
-                        )}
+                    <div className="flex items-center justify-between w-full gap-4">
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                            {getIcon(room.type)}
+                            <span className="flex-1 truncate">{displayName}</span>
+                            {(unreadCounts[room.id] || 0) > 0 && (
+                                <Badge
+                                    count={unreadCounts[room.id]}
+                                    overflowCount={99}
+                                />
+                            )}
+                        </div>
                     </div>
                 ),
-                onClick: () => handleChatClick(room),
+                children: [
+                    {
+                        key: `${room.id}-full`,
+                        label: 'Open',
+                        onClick: () => handleChatClick(room),
+                    },
+                    {
+                        key: `${room.id}-small`,
+                        label: 'Small Window',
+                        onClick: () => handleChatSmallWindow(room),
+                    },
+                ],
             };
         }),
         ...(chatRooms?.length > 0 ? [{ type: 'divider' }] : []),
         {
-            key: 'new-chat',
+            key: 'all-chats',
             icon: <MessageOutlined />,
-            label: 'New Chat',
-            onClick: () => setShowNewChatModal(true),
+            label: 'All Chats',
+            onClick: () => navigate('/messages'),
         },
     ];
 
@@ -96,10 +114,6 @@ const ChatTrigger = () => {
                     />
                 </Badge>
             </Dropdown>
-            <NewChatModal
-                visible={showNewChatModal}
-                onClose={() => setShowNewChatModal(false)}
-            />
         </>
     );
 };

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useSubscription } from '@apollo/client';
 import { Card, Avatar, Typography, Button, Divider, Badge } from 'antd';
-import { CloseOutlined, MinusOutlined, ExpandOutlined, UserOutlined } from '@ant-design/icons';
+import { CloseOutlined, MinusOutlined, ExpandOutlined } from '@ant-design/icons';
 import { useChatContext } from '../../contexts/ChatContext';
 import { CHAT_READ_UPDATED } from '../../graphql/chat';
+import { getInitials, getAvatarColor } from '../../utils/avatarUtils';
 import MessageList from './MessageList';
 import MessageInput from './MessageInput';
 
@@ -46,10 +47,12 @@ const ChatWindow = ({ roomId, name, type, isMinimized }) => {
 
     let statusText = '';
     let isOnline = false;
+    let otherMemberName = { firstName: '', lastName: '' };
 
     if (type === 'direct' && currentRoom) {
         const otherMember = currentRoom.members?.find(m => m.user.id !== currentUser?.id)?.user;
         if (otherMember) {
+            otherMemberName = { firstName: otherMember.firstName, lastName: otherMember.lastName };
             if (otherMember.isOnline) {
                 isOnline = true;
                 statusText = 'Online';
@@ -121,7 +124,17 @@ const ChatWindow = ({ roomId, name, type, isMinimized }) => {
                 >
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                         <div className="relative">
-                            <Avatar size="small" icon={<UserOutlined />} style={{ backgroundColor: '#1890ff', flexShrink: 0 }} />
+                            <Avatar 
+                                size="small" 
+                                style={{
+                                    backgroundColor: getAvatarColor(otherMemberName.firstName, otherMemberName.lastName),
+                                    flexShrink: 0,
+                                    fontSize: '11px',
+                                    fontWeight: 600,
+                                }}
+                            >
+                                {getInitials(otherMemberName.firstName, otherMemberName.lastName)}
+                            </Avatar>
                             {type === 'direct' && (
                                 <span
                                     style={{

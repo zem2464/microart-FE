@@ -33,11 +33,11 @@ import {
   SearchOutlined,
   CalendarOutlined,
   BarChartOutlined,
-  MessageOutlined,
+  AlertOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { usePayment } from "../contexts/PaymentContext";
-import { useReactiveVar } from "@apollo/client";
+import { useReactiveVar, useQuery, useSubscription } from "@apollo/client";
 import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
 import { useAppDrawer } from "../contexts/DrawerContext";
@@ -50,6 +50,8 @@ import {
   generatePermission,
 } from "../config/permissions";
 import GlobalSearchModal from "../components/GlobalSearchModal";
+import { GET_TODAY_PENDING_REMINDERS_COUNT } from "../gql/reminders";
+import { NOTIFICATION_CREATED_SUBSCRIPTION } from "../graphql/notifications";
 
 // Import pages
 import Dashboard from "../pages/FrontOffice/Dashboard";
@@ -64,6 +66,7 @@ import Messages from "../pages/FrontOffice/Messages";
 import MyLeaves from "../pages/FrontOffice/MyLeaves";
 import LeaveApprovals from "../pages/FrontOffice/LeaveApprovals";
 import AllUsersLeaves from "../pages/FrontOffice/AllUsersLeaves";
+import Reminders from "../pages/FrontOffice/Reminders";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -76,6 +79,45 @@ const FrontOfficeLayout = () => {
   const { showClientFormDrawer, showProjectFormDrawer } = useAppDrawer();
   const { openPaymentModal } = usePayment();
   const [searchModalOpen, setSearchModalOpen] = useState(false);
+
+  // Query for pending reminders count
+  const { data: remindersData, loading: remindersLoading, error: remindersError, refetch: refetchReminderCount } = useQuery(GET_TODAY_PENDING_REMINDERS_COUNT, {
+    fetchPolicy: "cache-and-network",
+    pollInterval: 5 * 60 * 1000, // Poll every 5 minutes as backup
+    skip: !user, // Skip if user is not logged in
+  });
+
+  const pendingRemindersCount = remindersData?.todayPendingRemindersCount || 0;
+
+  // Subscribe to notifications to refetch reminder count in real-time
+  useSubscription(NOTIFICATION_CREATED_SUBSCRIPTION, {
+    onData: ({ data: subData }) => {
+      const notification = subData?.data?.notificationCreated;
+      console.log('[FrontOfficeLayout] Notification received:', {
+        type: notification?.type,
+        title: notification?.title,
+        willRefetch: notification?.type === 'reminder'
+      });
+      
+      // Refetch reminder count when reminder-related notifications arrive
+      if (notification && notification.type === 'reminder') {
+        console.log('[FrontOfficeLayout] Refetching reminder count...');
+        refetchReminderCount();
+      }
+    },
+    onError: (error) => {
+      console.error('[FrontOfficeLayout] Subscription error:', error);
+    },
+    skip: !user, // Skip if user is not logged in
+  });
+
+  // Log for debugging
+  useEffect(() => {
+    if (remindersError) {
+      console.error('Error fetching reminders count:', remindersError);
+    }
+    console.log('Pending reminders count:', pendingRemindersCount);
+  }, [pendingRemindersCount, remindersError]);
 
   // Check permissions for menu items (using MANAGE to show/hide menu)
   const canManageTasks = hasPermission(
@@ -164,11 +206,6 @@ const FrontOfficeLayout = () => {
       key: "/all-users-leaves",
       icon: <CalendarOutlined />,
       label: <Link to="/all-users-leaves">Leave Calendar</Link>,
-    },
-    {
-      key: "/messages",
-      icon: <MessageOutlined />,
-      label: <Link to="/messages">Chat</Link>,
     },
     // Most Used - Direct Access
     canManageTasks && {
@@ -337,6 +374,22 @@ const FrontOfficeLayout = () => {
           </Tooltip>
 
           <ChatTrigger />
+          <Tooltip title="Reminders" placement="bottom">
+            <Badge 
+              count={pendingRemindersCount} 
+              showZero={false}
+              overflowCount={99}
+              style={{ backgroundColor: '#ff4d4f' }}
+            >
+              <Button
+                type="text"
+                shape="circle"
+                icon={<AlertOutlined />}
+                onClick={() => navigate("/reminders")}
+                className="hover:bg-gray-100"
+              />
+            </Badge>
+          </Tooltip>
           <ViewSwitcher size="small" />
           <NotificationDropdown />
 
@@ -362,7 +415,7 @@ const FrontOfficeLayout = () => {
       <Content
         className={
           location.pathname.startsWith("/messages")
-            ? "bg-white min-h-[calc(100vh-64px)]"
+            ? "bg-white h-[calc(100vh-64px)] w-full"
             : "bg-gray-50 min-h-[calc(100vh-64px)]"
         }
         style={{ margin: 0, padding: 0 }}
@@ -370,7 +423,7 @@ const FrontOfficeLayout = () => {
         <div
           className={
             location.pathname.startsWith("/messages")
-              ? "w-full h-full"
+              ? "w-full h-full flex flex-col"
               : "w-full max-w-none"
           }
         >
@@ -378,6 +431,7 @@ const FrontOfficeLayout = () => {
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/" element={<TaskTable />} />
             <Route path="/projects" element={<ProjectManagement />} />
+            <Route path="/reminders" element={<Reminders />} />
             <Route path="/transactions" element={<Transactions />} />
             <Route path="/ledger" element={<LedgerReport />} />
             <Route path="/user-dashboard" element={<UserDashboard />} />

@@ -277,6 +277,28 @@ export const MARK_CHAT_AS_READ = gql`
   }
 `;
 
+// Add members to a chat room
+export const ADD_CHAT_MEMBERS = gql`
+  ${CHAT_ROOM_FRAGMENT}
+  mutation AddChatMembers($roomId: ID!, $userIds: [ID!]!) {
+    addChatMembers(roomId: $roomId, userIds: $userIds) {
+      ...ChatRoomFields
+      members {
+        id
+        user {
+          id
+          firstName
+          lastName
+          email
+          isOnline
+        }
+        role
+        joinedAt
+      }
+    }
+  }
+`;
+
 // Subscribe to new messages
 export const CHAT_MESSAGE_ADDED = gql`
   ${CHAT_MESSAGE_FRAGMENT}
@@ -293,6 +315,43 @@ export const CHAT_MESSAGE_UPDATED = gql`
   subscription ChatMessageUpdated($roomId: ID!) {
     chatMessageUpdated(roomId: $roomId) {
       ...ChatMessageFields
+    }
+  }
+`;
+
+// Get activity logs for a chat room
+export const GET_CHAT_ROOM_ACTIVITY_LOGS = gql`
+  query GetChatRoomActivityLogs($roomId: ID!, $limit: Int) {
+    chatRoomActivityLogs(roomId: $roomId, limit: $limit) {
+      id
+      action
+      userId
+      userEmail
+      userRole
+      description
+      changedUserId
+      timestamp
+      metadata
+    }
+  }
+`;
+
+// Remove a member from a chat room
+export const REMOVE_CHAT_MEMBER = gql`
+  ${CHAT_ROOM_FRAGMENT}
+  mutation RemoveChatMember($roomId: ID!, $userId: ID!) {
+    removeChatMember(roomId: $roomId, userId: $userId) {
+      ...ChatRoomFields
+      members {
+        id
+        user {
+          id
+          firstName
+          lastName
+          email
+        }
+        role
+      }
     }
   }
 `;

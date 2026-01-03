@@ -143,24 +143,24 @@ self.addEventListener('notificationclick', function (event) {
             }
 
             if (clientToUse) {
-                console.log('[SW] ✓ Focusing existing window and navigating to:', urlToOpen);
-                // Focus the window and navigate to the chat
+                console.log('[SW] ✓ Found existing window, focusing it');
+                // Focus the window first
                 return clientToUse.focus().then(client => {
-                    // Navigate to the specific chat room
-                    console.log('[SW] Navigating client to URL');
-                    return client.navigate(urlToOpen).then(() => {
-                        console.log('[SW] ✓ Navigation successful');
-                        return client;
-                    }).catch(navError => {
-                        console.error('[SW] Navigation failed:', navError);
-                        // If navigation fails, try posting a message
-                        client.postMessage({
-                            type: 'OPEN_CHAT',
-                            roomId: roomId,
-                            url: urlToOpen
-                        });
-                        return client;
+                    console.log('[SW] Focused client, posting message to navigate');
+                    // Use postMessage instead of navigate() to avoid service worker activation errors
+                    // The client will handle navigation via message listener
+                    client.postMessage({
+                        type: 'NAVIGATE_TO_URL',
+                        url: urlToOpen,
+                        roomId: roomId
                     });
+                    console.log('[SW] ✓ Message posted to client for navigation');
+                    return client;
+                }).catch(focusError => {
+                    console.error('[SW] Focus failed:', focusError);
+                    // If focus fails, open a new window instead
+                    console.log('[SW] Opening new window as fallback');
+                    return self.clients.openWindow(urlToOpen);
                 });
             } else {
                 console.log('[SW] ✓ No existing window, opening new one:', urlToOpen);

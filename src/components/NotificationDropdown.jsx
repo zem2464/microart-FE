@@ -61,11 +61,7 @@ const NotificationDropdown = () => {
         
         // Play sound based on notification type (for non-message notifications)
         if (playSound) {
-          if (notification.type === 'assignment') {
-            notificationService.playTaskSound();
-          } else {
-            notificationService.playSound();
-          }
+          notificationService.playSoundByType(notification.type);
         }
 
         // Show browser notification if window is not focused

@@ -11,6 +11,7 @@ import {
   DollarOutlined,
   ToolOutlined,
   GiftOutlined,
+  AlertOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
@@ -40,6 +41,7 @@ import UserGradingRateManagement from "../pages/Admin/UserGradingRateManagement"
 import HolidayManagement from "../pages/BackOffice/HolidayManagement";
 import SalaryManagement from "../pages/BackOffice/SalaryManagement";
 import Finance from "../pages/BackOffice/Finance";
+import Reminders from "../pages/BackOffice/Reminders";
 
 const { Header, Content } = Layout;
 
@@ -102,6 +104,11 @@ const BackOfficeLayout = () => {
       key: "/",
       icon: <DashboardOutlined />,
       label: <Link to="/">Dashboard</Link>,
+    },
+    {
+      key: "/reminders",
+      icon: <AlertOutlined />,
+      label: <Link to="/reminders">Reminders</Link>,
     },
     {
       key: "finance",
@@ -283,6 +290,7 @@ const BackOfficeLayout = () => {
         <div className="w-full max-w-none mx-auto px-4">
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/reminders" element={<Reminders />} />
             <Route path="/task-types" element={<TaskTypes />} />
             <Route path="/work-types" element={<WorkTypes />} />
             <Route path="/gradings" element={<Gradings />} />

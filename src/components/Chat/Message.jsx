@@ -1,9 +1,10 @@
 import React, { useState, useMemo } from 'react';
 import { Typography, Avatar, Dropdown, Modal } from 'antd';
-import { UserOutlined, MoreOutlined, RetweetOutlined, EditOutlined, DeleteOutlined, CheckOutlined } from '@ant-design/icons';
+import { MoreOutlined, RetweetOutlined, EditOutlined, DeleteOutlined, CheckOutlined } from '@ant-design/icons';
 import { useReactiveVar, useMutation } from '@apollo/client';
 import { userCacheVar } from '../../cache/userCacheVar';
 import { DELETE_MESSAGE } from '../../graphql/chat';
+import { getInitials, getAvatarColor } from '../../utils/avatarUtils';
 
 const { Text } = Typography;
 
@@ -102,12 +103,15 @@ const Message = ({ message, onReply, onEdit, members }) => {
                 {!isOwn && (
                     <Avatar
                         size={32}
-                        icon={<UserOutlined />}
                         style={{
-                            backgroundColor: '#bbb',
-                            flexShrink: 0
+                            backgroundColor: getAvatarColor(message.sender.firstName, message.sender.lastName),
+                            flexShrink: 0,
+                            fontSize: '12px',
+                            fontWeight: 600,
                         }}
-                    />
+                    >
+                        {getInitials(message.sender.firstName, message.sender.lastName)}
+                    </Avatar>
                 )}
 
                 <div
@@ -163,12 +167,15 @@ const Message = ({ message, onReply, onEdit, members }) => {
             {!isOwn && (
                 <Avatar
                     size={32}
-                    icon={<UserOutlined />}
                     style={{
-                        backgroundColor: '#1890ff',
-                        flexShrink: 0
+                        backgroundColor: getAvatarColor(message.sender.firstName, message.sender.lastName),
+                        flexShrink: 0,
+                        fontSize: '12px',
+                        fontWeight: 600,
                     }}
-                />
+                >
+                    {getInitials(message.sender.firstName, message.sender.lastName)}
+                </Avatar>
             )}
 
             <div

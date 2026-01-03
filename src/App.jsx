@@ -4,6 +4,7 @@ import {
   Routes,
   Route,
   Navigate,
+  useNavigate,
 } from "react-router-dom";
 import { ConfigProvider, theme } from "antd";
 import BackOfficeLayout from "./layouts/BackOfficeLayout";
@@ -32,6 +33,7 @@ function AppContent() {
   const user = useReactiveVar(userCacheVar);
   const { effectiveLayout } = useViewMode();
   const client = useApolloClient();
+  const navigate = useNavigate();
   
   // Listen for task assignment notifications
   useTaskNotifications();
@@ -94,17 +96,29 @@ function AppContent() {
   // Listen for service worker messages (e.g., notification clicks)
   useEffect(() => {
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.addEventListener('message', (event) => {
+      const handleServiceWorkerMessage = (event) => {
         console.log('[App] Received message from service worker:', event.data);
         
-        if (event.data.type === 'OPEN_CHAT' && event.data.roomId) {
-          // Handle opening chat when notification is clicked
-          // This could be expanded to navigate to the chat room
+        if (event.data.type === 'NAVIGATE_TO_URL' && event.data.url) {
+          // Handle navigation when notification is clicked
+          console.log('[App] Navigating to:', event.data.url);
+          const urlObj = new URL(event.data.url, window.location.origin);
+          const path = urlObj.pathname + urlObj.search + urlObj.hash;
+          navigate(path);
+        } else if (event.data.type === 'OPEN_CHAT' && event.data.roomId) {
+          // Legacy handler for backward compatibility
           console.log('[App] Should open chat room:', event.data.roomId);
+          navigate(`/messages?room=${event.data.roomId}`);
         }
-      });
+      };
+
+      navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
+
+      return () => {
+        navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
+      };
     }
-  }, []);
+  }, [navigate]);
 
   console.log(user);
 

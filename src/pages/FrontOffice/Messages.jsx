@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout, Input, List, Avatar, Badge, Typography, Empty, Spin, Divider, Button } from 'antd';
-import { SearchOutlined, UserOutlined, TeamOutlined, PlusOutlined } from '@ant-design/icons';
+import { SearchOutlined, UserOutlined, TeamOutlined, PlusOutlined, InfoOutlined } from '@ant-design/icons';
 import { useQuery, useSubscription } from '@apollo/client';
 import { GET_MY_CHAT_ROOMS, CHAT_READ_UPDATED } from '../../graphql/chat';
+import { getInitials, getAvatarColor } from '../../utils/avatarUtils';
 import MessageList from '../../components/Chat/MessageList';
 import MessageInput from '../../components/Chat/MessageInput';
 import NewChatModal from '../../components/Chat/NewChatModal';
+import GroupInfoModal from '../../components/Chat/GroupInfoModal';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 
@@ -23,6 +25,7 @@ const Messages = () => {
     const [replyingTo, setReplyingTo] = useState(null);
     const [editingMessage, setEditingMessage] = useState(null);
     const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+    const [isGroupInfoModalOpen, setIsGroupInfoModalOpen] = useState(false);
 
     const { data, loading, refetch } = useQuery(GET_MY_CHAT_ROOMS, {
         fetchPolicy: 'cache-and-network',
@@ -110,7 +113,13 @@ const Messages = () => {
         
         const avatar = otherUser?.profilePicture 
             ? <Avatar src={otherUser.profilePicture} />
-            : <Avatar icon={<UserOutlined />} style={{ backgroundColor: '#87d068' }} />;
+            : (
+                <Avatar 
+                  style={{ backgroundColor: getAvatarColor(otherUser?.firstName, otherUser?.lastName) }}
+                >
+                  {getInitials(otherUser?.firstName, otherUser?.lastName)}
+                </Avatar>
+              );
         
         // Add online status badge for direct chats
         return (
@@ -145,7 +154,21 @@ const Messages = () => {
     };
 
     return (
-        <Layout style={{ height: 'calc(100vh - 64px)', background: '#fff' }}>
+        <>
+            <style>{`
+                .messages-layout.ant-layout {
+                    min-height: auto !important;
+                }
+                .messages-layout .ant-layout-sider {
+                    padding: 0 !important;
+                    margin: 0 !important;
+                }
+                .messages-layout .ant-layout-content {
+                    padding: 0 !important;
+                    margin: 0 !important;
+                }
+            `}</style>
+            <Layout className="messages-layout" style={{ height: '100%', background: '#fff', overflow: 'hidden', minHeight: 'auto' }}>
             {/* Left Sidebar - Chat List */}
             <Sider
                 width={350}
@@ -154,7 +177,9 @@ const Messages = () => {
                     borderRight: '1px solid #e0e0e0',
                     overflow: 'hidden',
                     display: 'flex',
-                    flexDirection: 'column'
+                    flexDirection: 'column',
+                    padding: 0,
+                    margin: 0
                 }}
             >
                 {/* Header */}
@@ -275,9 +300,9 @@ const Messages = () => {
             </Sider>
 
             {/* Right Content - Chat Window */}
-            <Content style={{ background: '#e5ddd5', position: 'relative' }}>
+            <Content style={{ background: '#e5ddd5', position: 'relative', padding: '0 !important', margin: 0, overflow: 'hidden' }}>
                 {selectedRoom ? (
-                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
                         {/* Chat Header */}
                         <div style={{
                             padding: '12px 16px',
@@ -285,39 +310,52 @@ const Messages = () => {
                             borderBottom: '1px solid #d9d9d9',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '12px'
+                            gap: '12px',
+                            justifyContent: 'space-between',
+                            flexShrink: 0,
+                            boxSizing: 'border-box'
                         }}>
-                            {getRoomAvatar(selectedRoom)}
-                            <div style={{ flex: 1 }}>
-                                <Text strong style={{ fontSize: '16px', display: 'block' }}>
-                                    {getRoomDisplayName(selectedRoom)}
-                                </Text>
-                                {selectedRoom.type === 'direct' && (() => {
-                                    const otherUser = getOtherUser(selectedRoom);
-                                    const isOnline = otherUser?.isOnline;
-                                    const lastSeen = otherUser?.lastSeen;
-                                    
-                                    if (isOnline) {
-                                        return (
-                                            <Text type="success" style={{ fontSize: '12px' }}>
-                                                Online
-                                            </Text>
-                                        );
-                                    } else if (lastSeen) {
-                                        return (
-                                            <Text type="secondary" style={{ fontSize: '12px' }}>
-                                                Last seen {dayjs(lastSeen).fromNow()}
-                                            </Text>
-                                        );
-                                    } else {
-                                        return (
-                                            <Text type="secondary" style={{ fontSize: '12px' }}>
-                                                Offline
-                                            </Text>
-                                        );
-                                    }
-                                })()}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                                {getRoomAvatar(selectedRoom)}
+                                <div style={{ flex: 1 }}>
+                                    <Text strong style={{ fontSize: '16px', display: 'block' }}>
+                                        {getRoomDisplayName(selectedRoom)}
+                                    </Text>
+                                    {selectedRoom.type === 'direct' && (() => {
+                                        const otherUser = getOtherUser(selectedRoom);
+                                        const isOnline = otherUser?.isOnline;
+                                        const lastSeen = otherUser?.lastSeen;
+                                        
+                                        if (isOnline) {
+                                            return (
+                                                <Text type="success" style={{ fontSize: '12px' }}>
+                                                    Online
+                                                </Text>
+                                            );
+                                        } else if (lastSeen) {
+                                            return (
+                                                <Text type="secondary" style={{ fontSize: '12px' }}>
+                                                    Last seen {dayjs(lastSeen).fromNow()}
+                                                </Text>
+                                            );
+                                        } else {
+                                            return (
+                                                <Text type="secondary" style={{ fontSize: '12px' }}>
+                                                    Offline
+                                                </Text>
+                                            );
+                                        }
+                                    })()}
+                                </div>
                             </div>
+                            {selectedRoom.type === 'group' && (
+                                <Button
+                                    type="text"
+                                    icon={<InfoOutlined />}
+                                    onClick={() => setIsGroupInfoModalOpen(true)}
+                                    title="Group Info"
+                                />
+                            )}
                         </div>
 
                         {/* Chat Messages */}
@@ -325,9 +363,11 @@ const Messages = () => {
                             flex: 1, 
                             overflow: 'hidden',
                             display: 'flex',
-                            flexDirection: 'column'
+                            flexDirection: 'column',
+                            boxSizing: 'border-box',
+                            minHeight: 0
                         }}>
-                            <div style={{ flex: 1, overflow: 'hidden' }}>
+                            <div style={{ flex: 1, overflow: 'hidden', minHeight: 0 }}>
                                 <MessageList
                                     roomId={selectedRoom.id}
                                     members={selectedRoom.members || []}
@@ -341,14 +381,16 @@ const Messages = () => {
                                     }}
                                 />
                             </div>
-                            <Divider style={{ margin: 0 }} />
-                            <MessageInput
-                                roomId={selectedRoom.id}
-                                replyingTo={replyingTo}
-                                onCancelReply={() => setReplyingTo(null)}
-                                editingMessage={editingMessage}
-                                onCancelEdit={() => setEditingMessage(null)}
-                            />
+                            <Divider style={{ margin: 0, padding: 0, minHeight: '1px' }} />
+                            <div style={{ flexShrink: 0, boxSizing: 'border-box' }}>
+                                <MessageInput
+                                    roomId={selectedRoom.id}
+                                    replyingTo={replyingTo}
+                                    onCancelReply={() => setReplyingTo(null)}
+                                    editingMessage={editingMessage}
+                                    onCancelEdit={() => setEditingMessage(null)}
+                                />
+                            </div>
                         </div>
                     </div>
                 ) : (
@@ -382,7 +424,18 @@ const Messages = () => {
                     refetch();
                 }}
             />
+
+            {/* Group Info Modal */}
+            {selectedRoom && (
+                <GroupInfoModal 
+                    roomId={selectedRoom.id}
+                    visible={isGroupInfoModalOpen}
+                    onClose={() => setIsGroupInfoModalOpen(false)}
+                    isOwner={selectedRoom.membership?.role === 'owner'}
+                />
+            )}
         </Layout>
+        </>
     );
 };
 
