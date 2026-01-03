@@ -68,7 +68,6 @@
   "build": {
     "appId": "com.imagecare.desktop",
     "productName": "Image Care",
-    "description": "Image Care - Precision for image editing",
     "icon": "public/assets/icon.png",
     "files": [
       "build/**/*",
