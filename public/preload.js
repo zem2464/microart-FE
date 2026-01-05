@@ -97,6 +97,9 @@ expose('electron', {
   getPlatform: () => process.platform,
   isElectron: true,
 
+  // Badge count for dock/taskbar
+  setBadgeCount: (count) => ipcRenderer.invoke('set-badge-count', count),
+
   // Cookie management APIs for Electron
   getCookies: (url) => ipcRenderer.invoke('get-cookies', url),
   setCookie: (details) => ipcRenderer.invoke('set-cookie', details),

@@ -30,9 +30,9 @@ jobs:
             - name: Auto bump version
               id: version_bump
               run: |
-                  echo "📦 Current version: $(node -p \"require('./package.json').version\")"
+                  echo "📦 Current version: $(node -p 'require("./package.json").version')"
                   npm version patch --no-git-tag-version
-                  NEW_VERSION=$(node -p "require('./package.json').version")
+                  NEW_VERSION=$(node -p 'require("./package.json").version')
                   echo "✨ Bumped to version: $NEW_VERSION"
                   echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
                   echo "NEW_APP_VERSION=$NEW_VERSION" >> $GITHUB_ENV

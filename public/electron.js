@@ -537,6 +537,45 @@ ipcMain.handle('get-auto-launch', () => {
   return store.get('autoLaunch', true);
 });
 
+// Badge count for dock/taskbar icon
+ipcMain.handle('set-badge-count', (event, count) => {
+  try {
+    const badgeCount = parseInt(count) || 0;
+    
+    if (process.platform === 'darwin') {
+      // macOS - set dock badge
+      app.dock.setBadge(badgeCount > 0 ? String(badgeCount) : '');
+      log.info(`[Badge] macOS dock badge set to: ${badgeCount}`);
+    } else if (process.platform === 'win32') {
+      // Windows - set overlay icon
+      if (mainWindow) {
+        if (badgeCount > 0) {
+          // Simple text overlay for Windows taskbar
+          // Note: This requires a proper icon, so we'll just flash the window instead
+          mainWindow.flashFrame(true);
+          setTimeout(() => mainWindow.flashFrame(false), 3000);
+          log.info(`[Badge] Windows notification count: ${badgeCount} (flashed window)`);
+        } else {
+          mainWindow.flashFrame(false);
+          log.info('[Badge] Windows notification cleared');
+        }
+      }
+    } else if (process.platform === 'linux') {
+      // Linux - set badge using libnotify or app indicator (if supported)
+      // Most Linux DEs support badge count through Unity launcher API
+      if (app.setBadgeCount) {
+        app.setBadgeCount(badgeCount);
+        log.info(`[Badge] Linux badge set to: ${badgeCount}`);
+      }
+    }
+    
+    return { success: true, count: badgeCount };
+  } catch (error) {
+    log.error('[Badge] Error setting badge count:', error);
+    return { success: false, error: error.message };
+  }
+});
+
 // Update events
 autoUpdater.on('checking-for-update', () => {
   log.info('Checking for updates...');

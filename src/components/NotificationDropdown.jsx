@@ -85,6 +85,15 @@ const NotificationDropdown = () => {
   const notifications = data?.myNotifications || [];
   const unreadCount = countData?.unreadNotificationCount || 0;
 
+  // Update Electron badge count when unread count changes
+  useEffect(() => {
+    if (window.electron?.isElectron && window.electron?.setBadgeCount) {
+      window.electron.setBadgeCount(unreadCount).catch(err => {
+        console.error('[NotificationDropdown] Failed to set badge count:', err);
+      });
+    }
+  }, [unreadCount]);
+
   const handleNotificationClick = async (notification) => {
     // Close dropdown first for better UX
     setOpen(false);
