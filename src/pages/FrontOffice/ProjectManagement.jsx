@@ -249,7 +249,6 @@ const ProjectManagement = () => {
   const [activateProject] = useMutation(ACTIVATE_PROJECT, {
     oncompleted: () => {
       message.success("Project activated successfully!");
-      refetchProjects();
     },
     onError: (error) => {
       message.error(`Error activating project: ${error.message}`);
@@ -259,7 +258,6 @@ const ProjectManagement = () => {
   const [updateProjectStatus] = useMutation(UPDATE_PROJECT, {
     onCompleted: () => {
       message.success("Project status updated successfully!");
-      refetchProjects();
     },
     onError: (error) => {
       message.error(`Error updating project status: ${error.message}`);
@@ -269,7 +267,6 @@ const ProjectManagement = () => {
   const [completeProject] = useMutation(UPDATE_PROJECT, {
     oncompleted: () => {
       message.success("Project marked as completed — generating invoice...");
-      refetchProjects();
       // refresh clients so any client balances / credit limits reflect the invoice
       try {
         refetchClients && refetchClients();
@@ -336,14 +333,11 @@ const ProjectManagement = () => {
         }
 
         try {
-          refetchProjects();
-        } catch (e) {}
-        try {
           refetchClients && refetchClients();
-        } catch (e) {}
+        } catch (e) { }
         try {
           refetchStats && refetchStats();
-        } catch (e) {}
+        } catch (e) { }
       } else {
         message.error(
           data?.generateProjectInvoice?.message || "Failed to generate invoice"
@@ -363,7 +357,6 @@ const ProjectManagement = () => {
       setCreditApprovalModalVisible(false);
       setSelectedCreditRequest(null);
       setApprovalNotes("");
-      refetchProjects();
     },
     onError: (error) => {
       message.error(`Error approving credit request: ${error.message}`);
@@ -378,7 +371,6 @@ const ProjectManagement = () => {
       setCreditApprovalModalVisible(false);
       setSelectedCreditRequest(null);
       setApprovalNotes("");
-      refetchProjects();
     },
     onError: (error) => {
       message.error(`Error rejecting credit request: ${error.message}`);
@@ -1262,14 +1254,14 @@ const ProjectManagement = () => {
             record.invoiceId ||
             record.invoice?.id ||
             invoicedProjectIds.has(record.id)) && (
-            <Tooltip title="View Invoice">
-              <Button
-                type="text"
-                icon={<FileTextOutlined />}
-                onClick={() => handleViewProject(record)}
-              />
-            </Tooltip>
-          )}
+              <Tooltip title="View Invoice">
+                <Button
+                  type="text"
+                  icon={<FileTextOutlined />}
+                  onClick={() => handleViewProject(record)}
+                />
+              </Tooltip>
+            )}
 
           {(record.status || "").toString().toUpperCase() !== "COMPLETED" &&
             canDeleteProjects && (
@@ -1917,8 +1909,8 @@ const ProjectManagement = () => {
                     projectToInvoice.status === "completed"
                       ? "green"
                       : projectToInvoice.status === "active"
-                      ? "blue"
-                      : "default"
+                        ? "blue"
+                        : "default"
                   }
                 >
                   {projectToInvoice.status?.toUpperCase()}
@@ -1927,7 +1919,7 @@ const ProjectManagement = () => {
 
               {/* Show grading details */}
               {projectToInvoice.projectGradings &&
-              projectToInvoice.projectGradings.length > 0 ? (
+                projectToInvoice.projectGradings.length > 0 ? (
                 <>
                   <Descriptions.Item label="Gradings">
                     <Space
@@ -2116,8 +2108,8 @@ const ProjectDetails = ({ project, tasks, tasksLoading, onBack }) => {
                           status === "completed"
                             ? "green"
                             : status === "IN_PROGRESS"
-                            ? "blue"
-                            : "orange"
+                              ? "blue"
+                              : "orange"
                         }
                       >
                         {status}

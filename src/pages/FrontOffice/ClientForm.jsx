@@ -1003,27 +1003,19 @@ const ClientForm = ({
   }, [currentStep]); // Re-run when step changes
 
   console.log("workTypes", selectedWorkTypes);
-  // Step configurations - dynamic based on client type
+  // Step configurations - both client types now have 2 steps
   const steps = useMemo(
-    () =>
-      clientType === "walkIn"
-        ? [
-            {
-              title: "Client Information",
-              icon: <UserOutlined />,
-            },
-          ]
-        : [
-            {
-              title: "Client Information",
-              icon: <UserOutlined />,
-            },
-            {
-              title: "Business Details",
-              icon: <BankOutlined />,
-            },
-          ],
-    [clientType]
+    () => [
+      {
+        title: "Client Information",
+        icon: <UserOutlined />,
+      },
+      {
+        title: "Business Details",
+        icon: <BankOutlined />,
+      },
+    ],
+    []
   );
 
   // Step content components

@@ -17,6 +17,7 @@ import { useAuth } from "../contexts/AuthContext";
 import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../cache/userCacheVar";
 import ViewSwitcher from "../components/ViewSwitcher";
+import UpdateNotification from "../components/UpdateNotification";
 import AdvancePayModal from "../components/AdvancePayModal";
 import {
   hasPermission,
@@ -217,7 +218,7 @@ const BackOfficeLayout = () => {
         <div className="flex items-center w-full min-w-0">
           <div className="flex items-center mr-8">
             <img
-              src="/images/images.png"
+              src={`${process.env.PUBLIC_URL}/images/images.png`}
               alt="MicroArt Logo"
               style={{ height: "130px", marginRight: "12px" }}
             />
@@ -262,6 +263,8 @@ const BackOfficeLayout = () => {
             className="hover:bg-gray-100"
             title="Search Projects (Ctrl+K)"
           />
+
+          <UpdateNotification />
 
           <ViewSwitcher size="small" />
           <Badge count={5} size="small">

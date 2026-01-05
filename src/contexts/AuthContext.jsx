@@ -408,8 +408,14 @@ export const AuthProvider = ({ children }) => {
       navigate("/login");
     } catch (error) {
       console.error("Error during authentication error handling:", error);
-      // Force navigation even if other operations fail
-      window.location.href = "/login";
+      // Still try to navigate even if clearStore fails
+      try {
+        navigate("/login");
+      } catch (navError) {
+        console.error("Navigation also failed:", navError);
+        // Last resort: reload to login
+        window.location.hash = "#/login";
+      }
     }
   }, [client, navigate]);
 

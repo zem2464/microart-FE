@@ -43,6 +43,7 @@ import ViewSwitcher from "../components/ViewSwitcher";
 import { useAppDrawer } from "../contexts/DrawerContext";
 import ChatTrigger from "../components/Chat/ChatTrigger";
 import NotificationDropdown from "../components/NotificationDropdown";
+import UpdateNotification from "../components/UpdateNotification";
 import {
   hasPermission,
   MODULES,
@@ -307,7 +308,7 @@ const FrontOfficeLayout = () => {
         <div className="flex items-center w-full min-w-0">
           <div className="flex items-center">
             <img
-              src="/images/images.png"
+              src={`${process.env.PUBLIC_URL}/images/images.png`}
               alt="MicroArt Logo"
               style={{ height: "130px", marginRight: "12px" }}
             />
@@ -372,7 +373,8 @@ const FrontOfficeLayout = () => {
               className="hover:bg-gray-100"
             />
           </Tooltip>
-
+          <UpdateNotification />
+          <UpdateNotification />
           <ChatTrigger />
           <Tooltip title="Reminders" placement="bottom">
             <Badge 

@@ -1,12 +1,63 @@
-const { contextBridge, ipcRenderer, Notification, nativeImage } = require('electron');
-const path = require('path');
-const fs = require('fs');
+// Guard requires so this file can be safely copied into web builds
+let contextBridge;
+let ipcRenderer;
+let NotificationApi;
+let nativeImage;
+let nodePath;
+let fsApi;
+
+try {
+  const electron = require('electron');
+  console.log('[Preload] electron module loaded:', !!electron);
+  console.log('[Preload] electron keys:', electron ? Object.keys(electron).join(', ') : 'none');
+  contextBridge = electron.contextBridge;
+  ipcRenderer = electron.ipcRenderer;
+  NotificationApi = electron.Notification;
+  nativeImage = electron.nativeImage;
+  console.log('[Preload] contextBridge extracted:', !!contextBridge);
+  console.log('[Preload] ipcRenderer extracted:', !!ipcRenderer);
+} catch (e) {
+  // Not running in Electron preload environment (or Node builtin not available)
+  // Keep values undefined — we'll fallback to no-op behavior below.
+  // This prevents bundlers or browsers from failing when copying this file.
+  console.error('[Preload] Failed to require electron:', e);
+}
+
+try {
+  nodePath = require('path');
+} catch (e) {
+  nodePath = null;
+}
+
+try {
+  fsApi = require('fs');
+} catch (e) {
+  fsApi = null;
+}
 
 console.log('[Preload] Script loading...');
-console.log('[Preload] __dirname:', __dirname);
+console.log('[Preload] __dirname:', typeof __dirname !== 'undefined' ? __dirname : '(browser)');
 console.log('[Preload] contextBridge available:', !!contextBridge);
 
-contextBridge.exposeInMainWorld('electron', {
+const expose = (name, value) => {
+  if (contextBridge && contextBridge.exposeInMainWorld) {
+    try {
+      contextBridge.exposeInMainWorld(name, value);
+      return;
+    } catch (e) {
+      console.warn('[Preload] contextBridge.exposeInMainWorld failed:', e);
+    }
+  }
+
+  // Fallback for environments where contextBridge isn't present (shouldn't happen in real Electron preload)
+  try {
+    window[name] = value;
+  } catch (e) {
+    // ignore
+  }
+};
+
+expose('electron', {
   // App control
   minimize: () => ipcRenderer.send('app-minimize'),
   maximize: () => ipcRenderer.send('app-maximize'),
@@ -36,6 +87,11 @@ contextBridge.exposeInMainWorld('electron', {
   // Platform info
   getPlatform: () => process.platform,
   isElectron: true,
+
+  // Cookie management APIs for Electron
+  getCookies: (url) => ipcRenderer.invoke('get-cookies', url),
+  setCookie: (details) => ipcRenderer.invoke('set-cookie', details),
+  removeCookie: (url, name) => ipcRenderer.invoke('remove-cookie', url, name),
 
   // Request notification permission (for macOS)
   requestNotificationPermission: () => {
@@ -69,24 +125,26 @@ contextBridge.exposeInMainWorld('electron', {
 
   // Navigation from main process
   onNavigateTo: (callback) => {
-    ipcRenderer.on('navigate-to', (event, url) => callback(url));
+    if (ipcRenderer?.on) ipcRenderer.on('navigate-to', (event, url) => callback(url));
   },
 });
 
 // Simple global flag for detection in renderer
-contextBridge.exposeInMainWorld('isElectron', true);
+expose('isElectron', !!ipcRenderer);
 
 // Also expose a top-level helper for convenience: window.testElectronNotification()
-contextBridge.exposeInMainWorld('testElectronNotification', () => {
+expose('testElectronNotification', () => {
   console.log('[Preload] global testElectronNotification invoked');
-  ipcRenderer.send('show-notification', {
-    title: 'Test Notification from Preload (global)',
-    body: 'If you see this, Electron native notifications are working globally! \u2713',
-    icon: '/images/logo192.png',
-    silent: false,
-    data: { test: true, scope: 'global' }
-  });
+  if (ipcRenderer?.send) {
+    ipcRenderer.send('show-notification', {
+      title: 'Test Notification from Preload (global)',
+      body: 'If you see this, Electron native notifications are working globally! \u2713',
+      icon: '/images/logo192.png',
+      silent: false,
+      data: { test: true, scope: 'global' },
+    });
+  }
 });
 
 console.log('[Preload] window.electron exposed successfully');
-console.log('[Preload] window.electron.isElectron:', window.electron?.isElectron);
+console.log('[Preload] ipcRenderer was available:', !!ipcRenderer, '(this is what window.electron.isElectron should be in renderer)');

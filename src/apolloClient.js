@@ -16,6 +16,7 @@ import {
   isApplicationLoading,
 } from "./cache/userCacheVar";
 import { getAuthToken } from "./utils/cookieUtils";
+import { createElectronFetch } from "./utils/electronCookieSync";
 import WebSocketManager from "./utils/websocketManager";
 
 const createErrorLink = (client) =>
@@ -51,7 +52,13 @@ const createErrorLink = (client) =>
 
         localStorage.removeItem("apollo-cache-persist");
         console.warn("Your session has expired. Please login again.");
-        window.location.href = "/login";
+        
+        // Use global handleAuthenticationError if available (works with HashRouter in Electron)
+        if (typeof window.handleAuthenticationError === 'function') {
+          window.handleAuthenticationError();
+        } else {
+          window.location.href = "/login";
+        }
       }
     }
 
@@ -78,7 +85,13 @@ const createErrorLink = (client) =>
             .catch((e) => console.error("Error clearing store:", e));
 
           localStorage.removeItem("apollo-cache-persist");
-          window.location.href = "/login";
+          
+          // Use global handleAuthenticationError if available (works with HashRouter in Electron)
+          if (typeof window.handleAuthenticationError === 'function') {
+            window.handleAuthenticationError();
+          } else {
+            window.location.href = "/login";
+          }
         }
       }
     }
@@ -96,7 +109,10 @@ const httpLink = createHttpLink({
   // uri: "http://192.168.1.8:4000/graphql",
   uri: process.env.REACT_APP_GRAPHQL_URL || "http://localhost:4000/graphql",
   credentials: "include",
+  fetch: window.electron?.isElectron ? createElectronFetch() : undefined, // Use custom fetch for Electron
 });
+
+console.log('[Apollo] HTTP Link configured with', window.electron?.isElectron ? 'Electron cookie sync' : 'standard credentials');
 
 // WebSocket link - works in both development and production with SSL
 // Global WebSocket manager instance

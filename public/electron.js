@@ -45,6 +45,27 @@ function createSplashScreen() {
 }
 
 function createWindow() {
+  // Configure session to handle cookies properly
+  const { session } = require('electron');
+  const sess = session.defaultSession;
+  const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || process.env.REACT_APP_APP_ORIGIN || 'http://localhost:3000';
+  const BACKEND_URL = process.env.REACT_APP_GRAPHQL_URL || 'http://localhost:4000/graphql';
+  
+  // Enable persistent cookie storage
+  sess.setUserAgent(sess.getUserAgent() + ' Electron');
+  
+  // Configure cookies to accept from backend
+  sess.cookies.on('changed', (event, cookie, cause, removed) => {
+    console.log('[Electron] Cookie changed:', { 
+      name: cookie.name, 
+      domain: cookie.domain,
+      path: cookie.path,
+      value: cookie.value ? '***' : undefined,
+      cause, 
+      removed 
+    });
+  });
+
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 900,
@@ -52,18 +73,160 @@ function createWindow() {
     minHeight: 600,
     show: false,
     webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
+      preload: isDev
+        ? path.join(__dirname, 'preload.js')
+        : path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
       enableRemoteModule: false,
       sandbox: false, // Disable sandbox to allow preload script to use Node.js modules
+      partition: 'persist:main', // Use persistent partition for cookies
+      webSecurity: true, // Keep security enabled
+      allowRunningInsecureContent: false,
     },
     icon: path.join(__dirname, 'images', 'logo192.png'),
   });
 
+  // Force Origin/Referer for all http/https requests AND auto-attach stored cookies
+  mainWindow.webContents.session.webRequest.onBeforeSendHeaders(
+    { urls: ['http://*/*', 'https://*/*'] },
+    (details, callback) => {
+      if (!details.url.startsWith('http')) {
+        callback({ requestHeaders: details.requestHeaders });
+        return;
+      }
+
+      const headers = {
+        ...details.requestHeaders,
+        Origin: FRONTEND_ORIGIN,
+        Referer: `${FRONTEND_ORIGIN}/`,
+      };
+
+      // If no Cookie header yet, pull cookies from the Electron session for this URL
+      if (!headers.Cookie) {
+        sess.cookies
+          .get({ url: details.url })
+          .then((cookies) => {
+            if (cookies?.length) {
+              const cookieString = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+              headers.Cookie = cookieString;
+              console.log('[Electron webRequest] Injecting cookies into request for', details.url, cookieString);
+            } else {
+              console.log('[Electron webRequest] No cookies found to inject for', details.url);
+            }
+            callback({ requestHeaders: headers });
+          })
+          .catch((err) => {
+            console.error('[Electron webRequest] Failed to get cookies for', details.url, err);
+            callback({ requestHeaders: headers });
+          });
+      } else {
+        callback({ requestHeaders: headers });
+      }
+    }
+  );
+
+  // Intercept responses to sync cookies from Set-Cookie headers
+  mainWindow.webContents.session.webRequest.onHeadersReceived({ urls: ['http://*/*', 'https://*/*'] }, (details, callback) => {
+    console.log('[Electron webRequest] Intercepted response from:', details.url);
+    const headerKeys = Object.keys(details.responseHeaders || {});
+    console.log('[Electron webRequest] Response header keys:', headerKeys.join(', '));
+    
+    // Extract and store Set-Cookie headers
+    const rawSetCookie = details.responseHeaders['set-cookie'] || details.responseHeaders['Set-Cookie'];
+    const setCookieHeaders = Array.isArray(rawSetCookie)
+      ? rawSetCookie
+      : rawSetCookie
+      ? [rawSetCookie].flat().filter(Boolean)
+      : [];
+    
+    if (!setCookieHeaders || setCookieHeaders.length === 0) {
+      console.log('[Electron] No Set-Cookie headers on response:', details.url);
+    }
+
+    if (setCookieHeaders && setCookieHeaders.length > 0) {
+      console.log('[Electron] Found Set-Cookie headers:', setCookieHeaders.length, 'cookies');
+      
+      // Parse and store each cookie
+      setCookieHeaders.forEach(async (cookieString) => {
+        try {
+          console.log('[Electron] Processing cookie string:', cookieString.substring(0, 100) + '...');
+          
+          // Parse cookie string
+          const parts = cookieString.split(';').map(p => p.trim());
+          const [nameValue] = parts;
+          const [name, value] = nameValue.split('=');
+          
+          if (!name || !value) {
+            console.warn('[Electron] Invalid cookie format:', cookieString);
+            return;
+          }
+          
+          const cookie = { name, value: value || '' };
+          
+          // Parse cookie attributes
+          parts.slice(1).forEach(part => {
+            const [key, val] = part.split('=').map(s => s?.trim());
+            const lowerKey = key?.toLowerCase();
+            
+            if (lowerKey === 'domain') cookie.domain = val;
+            if (lowerKey === 'path') cookie.path = val;
+            if (lowerKey === 'expires') cookie.expirationDate = Math.floor(new Date(val).getTime() / 1000);
+            if (lowerKey === 'max-age') cookie.expirationDate = Math.floor(Date.now() / 1000) + parseInt(val);
+            if (lowerKey === 'secure') cookie.secure = true;
+            if (lowerKey === 'httponly') cookie.httpOnly = true;
+            if (lowerKey === 'samesite') {
+              const normalizedSameSite = (val || '').toLowerCase();
+              cookie.sameSite = normalizedSameSite === 'none' ? 'no_restriction' : normalizedSameSite;
+            }
+          });
+          
+          // Determine URL for cookie
+          const urlObj = new URL(details.url);
+          const cookieUrl = `${urlObj.protocol}//${cookie.domain || urlObj.hostname}${cookie.path || '/'}`;
+
+          // If the response is over http, force secure flag off so Electron can send them back
+          if (urlObj.protocol === 'http:' && cookie.secure) {
+            console.log('[Electron] Stripping secure flag for HTTP response to allow cookie storage');
+            cookie.secure = false;
+          }
+          
+          // Set cookie in Electron session
+          await mainWindow.webContents.session.cookies.set({
+            url: cookieUrl,
+            name: cookie.name,
+            value: cookie.value,
+            domain: cookie.domain || urlObj.hostname,
+            path: cookie.path || '/',
+            secure: cookie.secure || false,
+            httpOnly: cookie.httpOnly || false,
+            expirationDate: cookie.expirationDate,
+            sameSite: cookie.sameSite || 'lax',
+          });
+          
+          console.log('[Electron] Synced cookie:', cookie.name, 'from', details.url);
+          const currentCookies = await mainWindow.webContents.session.cookies.get({ url: cookieUrl });
+          console.log('[Electron] Current cookies for', cookieUrl, ':', currentCookies.map(c => c.name).join(', '));
+        } catch (error) {
+          console.error('[Electron] Failed to parse/store cookie:', error);
+        }
+      });
+    }
+    
+    // Also set CORS headers for file:// protocol (must not use '*' when sending credentials)
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Access-Control-Allow-Origin': [FRONTEND_ORIGIN],
+        'Access-Control-Allow-Credentials': ['true'],
+        'Access-Control-Allow-Headers': ['*'],
+      }
+    });
+  });
+
   const startUrl = isDev
     ? 'http://localhost:3000'
-    : `file://${path.join(__dirname, '../build/index.html')}`;
+    : `file://${path.join(__dirname, 'index.html')}`;
 
   mainWindow.loadURL(startUrl);
 
@@ -253,6 +416,41 @@ ipcMain.handle('get-app-version', () => {
 
 ipcMain.handle('get-app-name', () => {
   return 'microArt';
+});
+
+// Cookie management handlers
+ipcMain.handle('get-cookies', async (event, url) => {
+  try {
+    const cookies = await mainWindow.webContents.session.cookies.get({ url });
+    console.log('[Electron] Retrieved cookies for', url, ':', cookies.map(c => c.name).join(', '));
+    return cookies;
+  } catch (error) {
+    console.error('[Electron] Error getting cookies:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('set-cookie', async (event, details) => {
+  try {
+    // details should include: url, name, value, domain, path, secure, httpOnly, expirationDate
+    await mainWindow.webContents.session.cookies.set(details);
+    console.log('[Electron] Set cookie:', details.name, 'for', details.domain);
+    return true;
+  } catch (error) {
+    console.error('[Electron] Error setting cookie:', error);
+    return false;
+  }
+});
+
+ipcMain.handle('remove-cookie', async (event, url, name) => {
+  try {
+    await mainWindow.webContents.session.cookies.remove(url, name);
+    console.log('[Electron] Removed cookie:', name);
+    return true;
+  } catch (error) {
+    console.error('[Electron] Error removing cookie:', error);
+    return false;
+  }
 });
 
 ipcMain.on('app-minimize', () => {

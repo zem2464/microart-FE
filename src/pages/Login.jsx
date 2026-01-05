@@ -28,7 +28,7 @@ const Login = () => {
       <div className="max-w-md w-full space-y-6 max-h-full overflow-y-auto">
         <div className="flex items-center justify-center flex-col">
           <img
-            src="/images/images.png"
+            src={`${process.env.PUBLIC_URL}/images/images.png`}
             alt="MicroArt Logo"
             style={{
               height: "120px",

@@ -1,6 +1,6 @@
 {
   "name": "microart-frontend",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "dependencies": {
     "@apollo/client": "^3.8.1",
@@ -35,7 +35,8 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "react-scripts build && npm run postbuild",
+    "postbuild": "cp public/preload.js build/preload.js && cp public/electron.js build/electron.js",
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "electron": "electron .",
@@ -46,7 +47,7 @@
     "electron-build-linux": "npm run build && electron-builder --linux"
   },
   "homepage": "./",
-  "main": "public/electron.js",
+  "main": "build/electron.js",
   "eslintConfig": {
     "extends": [
       "react-app",
@@ -71,8 +72,6 @@
     "icon": "public/assets/icon.png",
     "files": [
       "build/**/*",
-      "public/electron.js",
-      "public/preload.js",
       "public/assets/**/*"
     ],
     "directories": {
@@ -93,7 +92,9 @@
       "target": [
         {
           "target": "nsis",
-          "arch": ["x64"]
+          "arch": [
+            "x64"
+          ]
         }
       ]
     },
@@ -107,11 +108,17 @@
     },
     "mac": {
       "icon": "public/assets/icon.png",
-      "target": ["dmg", "zip"],
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "category": "public.app-category.business"
     },
     "linux": {
-      "target": ["AppImage", "deb"],
+      "target": [
+        "AppImage",
+        "deb"
+      ],
       "category": "Utility"
     }
   },
