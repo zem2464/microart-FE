@@ -374,7 +374,6 @@ const FrontOfficeLayout = () => {
             />
           </Tooltip>
           <UpdateNotification />
-          <UpdateNotification />
           <ChatTrigger />
           <Tooltip title="Reminders" placement="bottom">
             <Badge 
