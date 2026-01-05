@@ -634,7 +634,16 @@ autoUpdater.on('error', (error) => {
 });
 
 ipcMain.on('restart-app', () => {
-  autoUpdater.quitAndInstall();
+  log.info('[Update] Restart requested by user');
+  isQuitting = true; // Prevent showing the window again
+  try {
+    autoUpdater.quitAndInstall(false, true); // quitAndInstall(isSilent, isForceRunAfter)
+    log.info('[Update] quitAndInstall called successfully');
+  } catch (error) {
+    log.error('[Update] Failed to quit and install:', error);
+    // Fallback: just quit the app
+    app.quit();
+  }
 });
 
 // Manual check for updates
