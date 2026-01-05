@@ -44,7 +44,7 @@ jobs:
           node-version: ${{ env.NODE_VERSION }}
 
       - name: Install dependencies
-        working-directory: ${{ github.workspace }}/frontend
+        working-directory: ${{ github.workspace }}
         run: npm ci --legacy-peer-deps
 
       - name: Configure AWS credentials
@@ -95,7 +95,7 @@ jobs:
 
       - name: Download React build from S3
         shell: bash
-        working-directory: ${{ github.workspace }}/frontend
+        working-directory: ${{ github.workspace }}
         env:
           S3_BUCKET_FRONTEND: ${{ env.S3_BUCKET_FRONTEND }}
         run: |
@@ -109,7 +109,7 @@ jobs:
           ls -la build | head -n 40
 
       - name: Verify electron installation
-        working-directory: ${{ github.workspace }}/frontend
+        working-directory: ${{ github.workspace }}
         run: |
           echo "Checking electron..."
           npx electron --version
@@ -122,11 +122,11 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_REGION }}
           CSC_IDENTITY_AUTO_DISCOVERY: false
           ELECTRON_BUILDER_DISABLE_CODE_SIGNING: false
-        working-directory: ${{ github.workspace }}/frontend
+        working-directory: ${{ github.workspace }}
         shell: bash
         run: |
           echo "Publishing to bucket: ${AWS_DESKTOP_S3_BUCKET}"
-          echo "Building version: $(node -p \"require('./package.json').version\")"
+          echo "Building version: $(node -p 'require("./package.json").version')"
           if [ "${{ matrix.build_target }}" = "mac" ]; then
             npx electron-builder --mac --publish always
           else
@@ -138,5 +138,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: electron-build-logs-${{ matrix.os }}
-          path: frontend/dist/*
+          path: dist/*
           if-no-files-found: ignore
