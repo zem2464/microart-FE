@@ -105,21 +105,37 @@ const operationNameHeaderLink = setContext((operation, prevContext) => ({
   },
 }));
 
+const GRAPHQL_HTTP_URL = process.env.REACT_APP_GRAPHQL_URL || "http://localhost:4000/graphql";
+
+// Build a sensible WebSocket URL even if REACT_APP_GRAPHQL_WS_URL is missing (e.g., desktop builds)
+const buildWebSocketUrl = (httpUrl) => {
+  try {
+    const parsed = new URL(httpUrl);
+    parsed.protocol = parsed.protocol === "https:" ? "wss:" : "ws:";
+    return parsed.toString();
+  } catch (err) {
+    console.warn("[Apollo] Unable to derive WebSocket URL from HTTP URL", err);
+    return null;
+  }
+};
+
+const GRAPHQL_WS_URL = process.env.REACT_APP_GRAPHQL_WS_URL || buildWebSocketUrl(GRAPHQL_HTTP_URL);
+
 const httpLink = createHttpLink({
-  // uri: "http://192.168.1.8:4000/graphql",
-  uri: process.env.REACT_APP_GRAPHQL_URL || "http://localhost:4000/graphql",
+  uri: GRAPHQL_HTTP_URL,
   credentials: "include",
   fetch: window.electron?.isElectron ? createElectronFetch() : undefined, // Use custom fetch for Electron
 });
 
 console.log('[Apollo] HTTP Link configured with', window.electron?.isElectron ? 'Electron cookie sync' : 'standard credentials');
+console.log('[Apollo] WebSocket URL', GRAPHQL_WS_URL || 'not configured');
 
 // WebSocket link - works in both development and production with SSL
 // Global WebSocket manager instance
 let wsManager = null;
 
-export const wsLink = process.env.REACT_APP_GRAPHQL_WS_URL ? new GraphQLWsLink(createClient({
-  url: process.env.REACT_APP_GRAPHQL_WS_URL,
+export const wsLink = GRAPHQL_WS_URL ? new GraphQLWsLink(createClient({
+  url: GRAPHQL_WS_URL,
   connectionParams: () => {
     const token = getAuthToken();
     return {
@@ -320,7 +336,7 @@ export const reconnectWebSocket = () => {
   // Create new WebSocket link with fresh auth - no connectionParams needed
   const newWsLink = new GraphQLWsLink(
     createClient({
-      url: process.env.REACT_APP_GRAPHQL_WS_URL || "ws://localhost:4000/graphql",
+      url: GRAPHQL_WS_URL || "ws://localhost:4000/graphql",
       connectionParams: () => {
         const token = getAuthToken();
         return {

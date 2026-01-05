@@ -11,6 +11,11 @@ let mainWindow;
 let tray;
 let isQuitting = false;
 let splashWindow;
+let updateStatus = {
+  updateAvailable: false,
+  updateDownloaded: false,
+  lastError: null,
+};
 
 // Configure auto-updater logging
 Object.assign(console, log.functions);
@@ -48,8 +53,10 @@ function createWindow() {
   // Configure session to handle cookies properly
   const { session } = require('electron');
   const sess = session.defaultSession;
-  const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || process.env.REACT_APP_APP_ORIGIN || 'http://localhost:3000';
-  const BACKEND_URL = process.env.REACT_APP_GRAPHQL_URL || 'http://localhost:4000/graphql';
+  const PROD_FRONTEND_ORIGIN = 'https://main.d3ir4tjbgw6dmp.amplifyapp.com';
+  const PROD_GRAPHQL_URL = 'https://api.imagecare.in/graphql';
+  const FRONTEND_ORIGIN = process.env.FRONTEND_ORIGIN || process.env.REACT_APP_APP_ORIGIN || (isDev ? 'http://localhost:3000' : PROD_FRONTEND_ORIGIN);
+  const BACKEND_URL = process.env.REACT_APP_GRAPHQL_URL || (isDev ? 'http://localhost:4000/graphql' : PROD_GRAPHQL_URL);
   
   // Enable persistent cookie storage
   sess.setUserAgent(sess.getUserAgent() + ' Electron');
@@ -390,6 +397,7 @@ app.on('ready', async () => {
       await autoUpdater.checkForUpdatesAndNotify();
     } catch (error) {
       log.error('Error checking for updates:', error);
+      updateStatus.lastError = error?.message || String(error);
     }
   }
 });
@@ -506,15 +514,49 @@ ipcMain.handle('get-auto-launch', () => {
 
 // Update events
 autoUpdater.on('update-available', () => {
+  updateStatus.updateAvailable = true;
+  updateStatus.updateDownloaded = false;
   mainWindow?.webContents.send('update-available');
 });
 
 autoUpdater.on('update-downloaded', () => {
+  updateStatus.updateAvailable = false;
+  updateStatus.updateDownloaded = true;
   mainWindow?.webContents.send('update-downloaded');
+});
+
+autoUpdater.on('error', (error) => {
+  log.error('Auto-updater error:', error);
+  updateStatus.lastError = error?.message || String(error);
 });
 
 ipcMain.on('restart-app', () => {
   autoUpdater.quitAndInstall();
+});
+
+// Allow renderer to query update status and optionally trigger a check
+ipcMain.handle('get-update-status', async () => {
+  const base = {
+    ...updateStatus,
+    version: app.getVersion(),
+    isDev,
+  };
+
+  if (isDev) return base;
+
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    const info = result?.updateInfo;
+    return {
+      ...base,
+      updateInfo: info || null,
+      updateAvailable: !!info && info.version !== app.getVersion(),
+    };
+  } catch (error) {
+    log.error('Manual update check failed:', error);
+    updateStatus.lastError = error?.message || String(error);
+    return { ...base, lastError: updateStatus.lastError };
+  }
 });
 
 // Check update status
