@@ -52,6 +52,48 @@ export async function getCookiesForRequest() {
 }
 
 /**
+ * Remove auth-related cookies from Electron session to force logout
+ */
+export async function clearElectronCookies(cookieNames = ['authToken', 'refreshToken']) {
+  if (!window.electron?.isElectron) return;
+
+  try {
+    const targetUrl = new URL(GRAPHQL_URL);
+    const origins = [targetUrl.origin];
+
+    // Also try HTTPS origin in case secure cookies were stored under https
+    if (targetUrl.protocol === 'http:') {
+      origins.push(`https://${targetUrl.host}`);
+    }
+
+    // Include cookie domain overrides if provided
+    const configuredDomain = process.env.COOKIE_DOMAIN || process.env.REACT_APP_COOKIE_DOMAIN;
+    if (configuredDomain) {
+      const normalized = configuredDomain.startsWith('.')
+        ? configuredDomain.slice(1)
+        : configuredDomain;
+      origins.push(`https://${normalized}`);
+      origins.push(`http://${normalized}`);
+    }
+
+    const uniqueOrigins = Array.from(new Set(origins.filter(Boolean)));
+
+    for (const origin of uniqueOrigins) {
+      for (const name of cookieNames) {
+        try {
+          await window.electron.removeCookie(`${origin}/`, name);
+          console.log(`[ElectronCookieSync] Removed cookie ${name} for ${origin}`);
+        } catch (err) {
+          console.error(`[ElectronCookieSync] Error removing cookie ${name} for ${origin}:`, err);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[ElectronCookieSync] Error clearing cookies:', error);
+  }
+}
+
+/**
  * Create a custom fetch function that adds cookies for Electron
  */
 export function createElectronFetch() {
@@ -93,5 +135,6 @@ export function createElectronFetch() {
 
 export default {
   getCookiesForRequest,
+  clearElectronCookies,
   createElectronFetch,
 };

@@ -5,6 +5,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+  workflow_run:
+    workflows:
+      - Deploy Frontend to S3
+    types:
+      - completed
 
 permissions:
   contents: read
@@ -16,6 +21,7 @@ env:
 jobs:
   build:
     name: Build ${{ matrix.os }}
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -29,27 +35,25 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_commit.id || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Auto patch version (main only)
+        if: ${{ github.ref == 'refs/heads/main' || (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') }}
+        working-directory: ${{ github.workspace }}
+        run: |
+          echo "Bumping patch version on main..."
+          npm version patch --no-git-tag-version
+          echo "New version: $(node -p "require('./package.json').version")"
+
       - name: Install dependencies
         working-directory: ${{ github.workspace }}
         run: npm ci --legacy-peer-deps
-
-      - name: Verify electron installation
-        working-directory: ${{ github.workspace }}
-        run: |
-          echo "Checking electron..."
-          npx electron --version
-          echo "Electron package info:"
-          npm list electron
-
-      - name: Build React app
-        working-directory: ${{ github.workspace }}
-        run: npm run build
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -58,18 +62,31 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Validate S3 bucket env
+      - name: Resolve S3 buckets
         shell: bash
         env:
+          S3_BUCKET_FRONTEND: ${{ secrets.S3_BUCKET_FRONTEND }}
           S3_BUCKET_ELECTRON: ${{ secrets.S3_BUCKET_ELECTRON }}
         run: |
-          BUCKET_TRIMMED=$(echo "${S3_BUCKET_ELECTRON}" | tr -d '[:space:]')
-          if [ -z "${BUCKET_TRIMMED}" ]; then
-            echo "::error::S3_BUCKET_ELECTRON secret is empty; set a valid bucket name"; exit 1; fi
-          if [[ ! ${BUCKET_TRIMMED} =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]]; then
-            echo "::error::S3_BUCKET_ELECTRON='${BUCKET_TRIMMED}' is not a valid S3 bucket name"; exit 1; fi
-          echo "AWS_DESKTOP_S3_BUCKET=${BUCKET_TRIMMED}" >> "$GITHUB_ENV"
-          echo "Validated bucket: ${BUCKET_TRIMMED}"
+          FRONTEND_BUCKET=$(echo "${S3_BUCKET_FRONTEND}" | tr -d '[:space:]')
+          DESKTOP_BUCKET=$(echo "${S3_BUCKET_ELECTRON}" | tr -d '[:space:]')
+
+          BUCKET_REGEX='^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$'
+
+          if [ -z "${FRONTEND_BUCKET}" ]; then
+            echo "::error::S3_BUCKET_FRONTEND is required"; exit 1; fi
+          if [[ ! ${FRONTEND_BUCKET} =~ ${BUCKET_REGEX} ]]; then
+            echo "::error::S3_BUCKET_FRONTEND='${FRONTEND_BUCKET}' is not a valid S3 bucket name"; exit 1; fi
+
+          if [ -z "${DESKTOP_BUCKET}" ]; then
+            echo "::error::S3_BUCKET_ELECTRON is required"; exit 1; fi
+          if [[ ! ${DESKTOP_BUCKET} =~ ${BUCKET_REGEX} ]]; then
+            echo "::error::S3_BUCKET_ELECTRON='${DESKTOP_BUCKET}' is not a valid S3 bucket name"; exit 1; fi
+
+          echo "S3_BUCKET_FRONTEND=${FRONTEND_BUCKET}" >> "$GITHUB_ENV"
+          echo "AWS_DESKTOP_S3_BUCKET=${DESKTOP_BUCKET}" >> "$GITHUB_ENV"
+          echo "Frontend bucket: ${FRONTEND_BUCKET}"
+          echo "Desktop bucket: ${DESKTOP_BUCKET}"
 
       - name: Verify bucket access
         shell: bash
@@ -77,10 +94,34 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_REGION }}
+          S3_BUCKET_FRONTEND: ${{ env.S3_BUCKET_FRONTEND }}
           AWS_DESKTOP_S3_BUCKET: ${{ env.AWS_DESKTOP_S3_BUCKET }}
         run: |
-          echo "Checking bucket: ${AWS_DESKTOP_S3_BUCKET}"
+          echo "Checking buckets: ${S3_BUCKET_FRONTEND} (frontend), ${AWS_DESKTOP_S3_BUCKET} (desktop releases)"
+          aws s3api head-bucket --bucket "${S3_BUCKET_FRONTEND}"
           aws s3api head-bucket --bucket "${AWS_DESKTOP_S3_BUCKET}"
+
+      - name: Download React build from S3
+        shell: bash
+        env:
+          S3_BUCKET_FRONTEND: ${{ env.S3_BUCKET_FRONTEND }}
+        run: |
+          rm -rf build
+          mkdir -p build
+          aws s3 sync "s3://${S3_BUCKET_FRONTEND}/" build/ --delete
+
+          if [ ! -f build/index.html ]; then
+            echo "::error::Downloaded build is missing index.html"; exit 1; fi
+          echo "Downloaded build contents:"
+          ls -la build | head -n 40
+
+      - name: Verify electron installation
+        working-directory: ${{ github.workspace }}
+        run: |
+          echo "Checking electron..."
+          npx electron --version
+          echo "Electron package info:"
+          npm list electron
 
       - name: Build Electron (${{ matrix.build_target }}) and publish to S3
         env:

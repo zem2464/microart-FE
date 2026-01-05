@@ -22,6 +22,7 @@ import {
 } from "../cache/userCacheVar";
 import { getDeviceRegistrationInfo } from "../utils/deviceDetection";
 import { reconnectWebSocket } from "../apolloClient";
+import { clearElectronCookies } from "../utils/electronCookieSync";
 
 const AuthContext = createContext();
 
@@ -370,6 +371,7 @@ export const AuthProvider = ({ children }) => {
       });
       if (data.logout) {
         // Backend logout successful
+        await clearElectronCookies(["authToken", "refreshToken"]);
         isLoggedIn(false);
         meUserData(null);
         userCacheVar(null); // Also clear userCacheVar for App.js routing
@@ -385,6 +387,7 @@ export const AuthProvider = ({ children }) => {
 
       // Even if backend logout fails, clean up frontend state
       // This ensures user can always logout on the frontend
+      await clearElectronCookies(["authToken", "refreshToken"]);
       isLoggedIn(false);
       meUserData(null);
       userCacheVar(null); // Also clear userCacheVar for App.js routing
