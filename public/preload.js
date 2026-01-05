@@ -73,10 +73,19 @@ expose('electron', {
   getAutoLaunch: () => ipcRenderer.invoke('get-auto-launch'),
 
   // Updates
+  onUpdateChecking: (callback) =>
+    ipcRenderer.on('update-checking', () => callback()),
   onUpdateAvailable: (callback) =>
-    ipcRenderer.on('update-available', () => callback()),
+    ipcRenderer.on('update-available', (event, info) => callback(event, info)),
+  onUpdateNotAvailable: (callback) =>
+    ipcRenderer.on('update-not-available', (event, info) => callback(event, info)),
+  onUpdateDownloadProgress: (callback) =>
+    ipcRenderer.on('update-download-progress', (event, progress) => callback(event, progress)),
   onUpdateDownloaded: (callback) =>
-    ipcRenderer.on('update-downloaded', () => callback()),
+    ipcRenderer.on('update-downloaded', (event, info) => callback(event, info)),
+  onUpdateError: (callback) =>
+    ipcRenderer.on('update-error', (event, error) => callback(event, error)),
+  checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   restartApp: () => ipcRenderer.send('restart-app'),
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
 

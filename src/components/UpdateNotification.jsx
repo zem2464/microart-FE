@@ -1,15 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { Button, notification, Badge, Tooltip } from 'antd';
-import { CloudDownloadOutlined, ReloadOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import React, { useState, useEffect, useRef } from 'react';
+import { Button, notification, Badge, Tooltip, Progress, Space, message, Modal } from 'antd';
+import { CloudDownloadOutlined, ReloadOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, ExclamationCircleOutlined } from '@ant-design/icons';
 
 const UpdateNotification = () => {
   const [updateAvailable, setUpdateAvailable] = useState(false);
   const [updateDownloaded, setUpdateDownloaded] = useState(false);
   const [currentVersion, setCurrentVersion] = useState(null);
+  const [downloadProgress, setDownloadProgress] = useState(0);
+  const [isChecking, setIsChecking] = useState(false);
+  const [updateError, setUpdateError] = useState(null);
+  const initializedRef = useRef(false);
+  const downloadTimeoutRef = useRef(null);
 
   useEffect(() => {
     // Only run in Electron
     if (!window.electron?.isElectron) return;
+
+    // Avoid duplicate listeners in React StrictMode/dev double-mount
+    if (initializedRef.current) return;
+    initializedRef.current = true;
 
     // Get current version
     window.electron.getVersion?.().then(version => {
@@ -17,51 +26,180 @@ const UpdateNotification = () => {
       console.log('[UpdateNotification] Current version:', version);
     });
 
+    // Listen for checking for update
+    const handleUpdateChecking = () => {
+      console.log('[UpdateNotification] Checking for updates...');
+      setIsChecking(true);
+    };
+
     // Listen for update available
-    const handleUpdateAvailable = () => {
-      console.log('[UpdateNotification] Update available');
+    const handleUpdateAvailable = (event, info) => {
+      console.log('[UpdateNotification] Update available:', info?.version);
       setUpdateAvailable(true);
+      setIsChecking(false);
+      setDownloadProgress(0);
       
       notification.info({
         message: 'Update Available',
-        description: 'A new version of Image Care is being downloaded in the background.',
+        description: `Version ${info?.version || 'new'} is being downloaded.`,
         icon: <CloudDownloadOutlined style={{ color: '#1890ff' }} />,
         duration: 5,
       });
+
+      // Set a timeout to detect stalled downloads (10 minutes)
+      downloadTimeoutRef.current = setTimeout(() => {
+        console.warn('[UpdateNotification] Download timeout - resetting state');
+        setUpdateAvailable(false);
+        setDownloadProgress(0);
+        setUpdateError('Download timeout');
+        notification.warning({
+          message: 'Update Download Timeout',
+          description: 'The update download is taking longer than expected. Please check your internet connection.',
+          icon: <ExclamationCircleOutlined style={{ color: '#faad14' }} />,
+          duration: 0,
+          btn: (
+            <Space>
+              <Button
+                size="small"
+                type="primary"
+                onClick={() => {
+                  notification.destroy();
+                  handleCheckForUpdates();
+                }}
+              >
+                Retry
+              </Button>
+              <Button
+                size="small"
+                type="text"
+                onClick={() => notification.destroy()}
+              >
+                Dismiss
+              </Button>
+            </Space>
+          ),
+        });
+      }, 10 * 60 * 1000); // 10 minutes
     };
 
-    // Listen for update downloaded
-    const handleUpdateDownloaded = () => {
-      console.log('[UpdateNotification] Update downloaded');
-      setUpdateDownloaded(true);
+    // Listen for update not available
+    const handleUpdateNotAvailable = () => {
+      console.log('[UpdateNotification] No updates available');
+      setIsChecking(false);
       setUpdateAvailable(false);
+    };
+
+    // Listen for download progress
+    const handleDownloadProgress = (event, progressInfo) => {
+      const percent = progressInfo?.percent || 0;
+      console.log('[UpdateNotification] Download progress:', percent + '%');
+      setDownloadProgress(percent);
+    };
+
+    // Listen for update error
+    const handleUpdateError = (event, errorInfo) => {
+      console.error('[UpdateNotification] Update error:', errorInfo?.message);
+      const errorMsg = errorInfo?.message || 'Unknown error occurred';
+      setUpdateError(errorMsg);
+      setIsChecking(false);
+      setUpdateAvailable(false);
+      setDownloadProgress(0);
       
-      notification.success({
-        message: 'Update Ready',
-        description: 'A new version has been downloaded. Restart the app to install it.',
-        icon: <CheckCircleOutlined style={{ color: '#52c41a' }} />,
+      if (downloadTimeoutRef.current) {
+        clearTimeout(downloadTimeoutRef.current);
+        downloadTimeoutRef.current = null;
+      }
+
+      // Show error notification with retry button
+      notification.error({
+        message: 'Update Failed',
+        description: errorMsg,
+        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
         duration: 0, // Don't auto-close
         btn: (
-          <Button
-            type="primary"
-            size="small"
-            onClick={() => {
-              window.electron.restartApp?.();
-            }}
-          >
-            Restart Now
-          </Button>
+          <Space>
+            <Button
+              size="small"
+              onClick={() => {
+                notification.destroy();
+                handleCheckForUpdates();
+              }}
+            >
+              Retry
+            </Button>
+            <Button
+              size="small"
+              type="text"
+              onClick={() => notification.destroy()}
+            >
+              Dismiss
+            </Button>
+          </Space>
         ),
       });
     };
 
-    // Register listeners
-    if (window.electron.onUpdateAvailable) {
-      window.electron.onUpdateAvailable(handleUpdateAvailable);
-    }
-    if (window.electron.onUpdateDownloaded) {
-      window.electron.onUpdateDownloaded(handleUpdateDownloaded);
-    }
+    // Listen for update downloaded
+    const handleUpdateDownloaded = (event, info) => {
+      console.log('[UpdateNotification] Update downloaded:', info?.version);
+      
+      // Clear timeout if download completes
+      if (downloadTimeoutRef.current) {
+        clearTimeout(downloadTimeoutRef.current);
+        downloadTimeoutRef.current = null;
+      }
+
+      setUpdateDownloaded(true);
+      setUpdateAvailable(false);
+      setDownloadProgress(100);
+      setIsChecking(false);
+      setUpdateError(null);
+      
+      // Show modal dialog to force restart
+      Modal.success({
+        title: 'Update Downloaded Successfully!',
+        icon: <CheckCircleOutlined />,
+        content: (
+          <div>
+            <p>Version <strong>{info?.version || 'new'}</strong> has been downloaded.</p>
+            <p>The application needs to restart to complete the installation.</p>
+            <p style={{ marginTop: 16, color: '#ff4d4f', fontWeight: 500 }}>
+              Please save your work and restart now.
+            </p>
+          </div>
+        ),
+        okText: 'Restart Now',
+        cancelText: 'Restart Later',
+        okButtonProps: {
+          size: 'large',
+          type: 'primary',
+        },
+        cancelButtonProps: {
+          size: 'large',
+        },
+        maskClosable: false,
+        closable: false,
+        onOk: () => {
+          window.electron.restartApp?.();
+        },
+        onCancel: () => {
+          // Just close modal, keep the badge visible
+          notification.info({
+            message: 'Restart Reminder',
+            description: 'Don\'t forget to restart the app to complete the update installation.',
+            duration: 5,
+          });
+        },
+      });
+    };
+
+    // Register listeners; store possible unsubscribe handles if provided
+    const offUpdateChecking = window.electron.onUpdateChecking?.(handleUpdateChecking);
+    const offUpdateAvailable = window.electron.onUpdateAvailable?.(handleUpdateAvailable);
+    const offUpdateNotAvailable = window.electron.onUpdateNotAvailable?.(handleUpdateNotAvailable);
+    const offDownloadProgress = window.electron.onUpdateDownloadProgress?.(handleDownloadProgress);
+    const offUpdateDownloaded = window.electron.onUpdateDownloaded?.(handleUpdateDownloaded);
+    const offUpdateError = window.electron.onUpdateError?.(handleUpdateError);
 
     // Check for updates on mount (optional)
     window.electron.getUpdateStatus?.().then(status => {
@@ -69,8 +207,107 @@ const UpdateNotification = () => {
       if (status?.updateAvailable) {
         setUpdateAvailable(true);
       }
+      if (status?.downloadProgress) {
+        setDownloadProgress(status.downloadProgress);
+      }
     });
+
+    return () => {
+      offUpdateChecking?.();
+      offUpdateAvailable?.();
+      offUpdateNotAvailable?.();
+      offDownloadProgress?.();
+      offUpdateDownloaded?.();
+      offUpdateError?.();
+      if (downloadTimeoutRef.current) {
+        clearTimeout(downloadTimeoutRef.current);
+      }
+    };
   }, []);
+
+  const handleCheckForUpdates = async () => {
+    if (isChecking || updateAvailable) return;
+    
+    setIsChecking(true);
+    setUpdateError(null);
+    
+    try {
+      const result = await window.electron.checkForUpdates?.();
+      console.log('[UpdateNotification] Manual check result:', result);
+      
+      if (result?.isDev) {
+        message.info('Update checks are disabled in development mode');
+        setIsChecking(false);
+      } else if (result?.success === false) {
+        const errorMsg = result?.error || 'Failed to check for updates';
+        setUpdateError(errorMsg);
+        notification.error({
+          message: 'Update Check Failed',
+          description: errorMsg,
+          icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+          duration: 0,
+          btn: (
+            <Space>
+              <Button
+                size="small"
+                type="primary"
+                onClick={() => {
+                  notification.destroy();
+                  handleCheckForUpdates();
+                }}
+              >
+                Retry
+              </Button>
+              <Button
+                size="small"
+                type="text"
+                onClick={() => notification.destroy()}
+              >
+                Dismiss
+              </Button>
+            </Space>
+          ),
+        });
+        setIsChecking(false);
+      } else if (!result?.updateInfo) {
+        message.success('You are using the latest version!');
+        setIsChecking(false);
+      }
+      // If update is available, event handlers will manage state
+    } catch (error) {
+      console.error('[UpdateNotification] Check for updates error:', error);
+      const errorMsg = error?.message || 'Failed to check for updates';
+      setUpdateError(errorMsg);
+      notification.error({
+        message: 'Update Check Failed',
+        description: errorMsg,
+        icon: <CloseCircleOutlined style={{ color: '#ff4d4f' }} />,
+        duration: 0,
+        btn: (
+          <Space>
+            <Button
+              size="small"
+              type="primary"
+              onClick={() => {
+                notification.destroy();
+                handleCheckForUpdates();
+              }}
+            >
+              Retry
+            </Button>
+            <Button
+              size="small"
+              type="text"
+              onClick={() => notification.destroy()}
+            >
+              Dismiss
+            </Button>
+          </Space>
+        ),
+      });
+      setIsChecking(false);
+    }
+  };
 
   // Don't render anything if not in Electron or no version
   if (!window.electron?.isElectron || !currentVersion) return null;
@@ -83,26 +320,63 @@ const UpdateNotification = () => {
         </span>
       </Tooltip>
 
+      {/* Check for Updates Button */}
+      {!updateAvailable && !updateDownloaded && (
+        <Tooltip title={updateError ? `Last check failed: ${updateError}. Click to retry.` : 'Check for updates'}>
+          <Button
+            type="text"
+            size="small"
+            icon={isChecking ? <SyncOutlined spin /> : updateError ? <ExclamationCircleOutlined /> : <SyncOutlined />}
+            onClick={handleCheckForUpdates}
+            disabled={isChecking}
+            style={{ 
+              padding: '0 4px', 
+              fontSize: '12px',
+              color: updateError ? '#ff4d4f' : undefined 
+            }}
+          />
+        </Tooltip>
+      )}
+
+      {/* Update Downloaded - Ready to Install */}
       {updateDownloaded && (
-        <Badge dot status="success">
-          <Tooltip title="Update ready - restart to install">
+        <Badge count="!" style={{ backgroundColor: '#52c41a' }}>
+          <Tooltip title="Update ready - Click to restart now">
             <Button
-              type="link"
+              type="primary"
               size="small"
               icon={<ReloadOutlined />}
               onClick={() => window.electron.restartApp?.()}
-              style={{ padding: '0 4px' }}
+              danger
+              style={{ padding: '4px 8px', fontWeight: 600 }}
             >
-              Restart to Update
+              Restart Now
             </Button>
           </Tooltip>
         </Badge>
       )}
 
+      {/* Update Downloading - Show Progress */}
       {updateAvailable && !updateDownloaded && (
         <Badge dot status="processing">
-          <Tooltip title="Downloading update...">
-            <CloudDownloadOutlined style={{ color: '#1890ff', fontSize: '14px' }} />
+          <Tooltip title={
+            <div>
+              <div>Downloading update...</div>
+              <Progress 
+                percent={downloadProgress} 
+                size="small" 
+                status="active"
+                strokeColor="#1890ff"
+                style={{ marginTop: 4, marginBottom: 0 }}
+              />
+            </div>
+          }>
+            <Space size={4} style={{ cursor: 'default' }}>
+              <CloudDownloadOutlined style={{ color: '#1890ff', fontSize: '14px' }} />
+              <span style={{ fontSize: '11px', color: '#1890ff' }}>
+                {downloadProgress}%
+              </span>
+            </Space>
           </Tooltip>
         </Badge>
       )}

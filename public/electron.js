@@ -15,12 +15,30 @@ let updateStatus = {
   updateAvailable: false,
   updateDownloaded: false,
   lastError: null,
+  downloadProgress: 0,
+  isChecking: false,
 };
 
 // Configure auto-updater logging
 Object.assign(console, log.functions);
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
+
+// Configure auto-updater for S3
+if (!isDev) {
+  autoUpdater.setFeedURL({
+    provider: 's3',
+    bucket: 'microart-desktop-releases',
+    region: 'us-east-1',
+    path: '/',
+  });
+  log.info('Auto-updater configured for S3');
+  log.info('Current app version:', app.getVersion());
+}
+
+// Auto-updater will automatically compare versions
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
 
 // Handle Squirrel events on Windows
 if (process.platform === 'win32' && require('electron-squirrel-startup')) {
@@ -394,11 +412,18 @@ app.on('ready', async () => {
   // Check for updates
   if (!isDev) {
     try {
-      await autoUpdater.checkForUpdatesAndNotify();
+      log.info('Checking for updates...');
+      const result = await autoUpdater.checkForUpdatesAndNotify();
+      if (result) {
+        log.info('Update check result:', result?.updateInfo?.version || 'No update available');
+      }
     } catch (error) {
       log.error('Error checking for updates:', error);
       updateStatus.lastError = error?.message || String(error);
+      // Don't set updateAvailable to false here - let update-not-available event handle it
     }
+  } else {
+    log.info('Skipping update check in development mode');
   }
 });
 
@@ -513,25 +538,92 @@ ipcMain.handle('get-auto-launch', () => {
 });
 
 // Update events
-autoUpdater.on('update-available', () => {
-  updateStatus.updateAvailable = true;
-  updateStatus.updateDownloaded = false;
-  mainWindow?.webContents.send('update-available');
+autoUpdater.on('checking-for-update', () => {
+  log.info('Checking for updates...');
+  updateStatus.isChecking = true;
+  mainWindow?.webContents.send('update-checking');
 });
 
-autoUpdater.on('update-downloaded', () => {
+autoUpdater.on('update-available', (info) => {
+  log.info('Update available:', info?.version);
+  updateStatus.updateAvailable = true;
+  updateStatus.updateDownloaded = false;
+  updateStatus.lastError = null;
+  updateStatus.isChecking = false;
+  updateStatus.downloadProgress = 0;
+  mainWindow?.webContents.send('update-available', info);
+});
+
+autoUpdater.on('update-not-available', (info) => {
+  log.info('Update not available. Current version:', info?.version);
+  updateStatus.updateAvailable = false;
+  updateStatus.updateDownloaded = false;
+  updateStatus.isChecking = false;
+  mainWindow?.webContents.send('update-not-available', info);
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  const percent = Math.round(progressObj.percent);
+  log.info(`Download progress: ${percent}% (${progressObj.transferred}/${progressObj.total})`);
+  updateStatus.downloadProgress = percent;
+  mainWindow?.webContents.send('update-download-progress', {
+    percent,
+    transferred: progressObj.transferred,
+    total: progressObj.total,
+    bytesPerSecond: progressObj.bytesPerSecond,
+  });
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('Update downloaded:', info?.version);
   updateStatus.updateAvailable = false;
   updateStatus.updateDownloaded = true;
-  mainWindow?.webContents.send('update-downloaded');
+  updateStatus.lastError = null;
+  updateStatus.downloadProgress = 100;
+  updateStatus.isChecking = false;
+  mainWindow?.webContents.send('update-downloaded', info);
 });
 
 autoUpdater.on('error', (error) => {
   log.error('Auto-updater error:', error);
   updateStatus.lastError = error?.message || String(error);
+  updateStatus.updateAvailable = false;
+  updateStatus.updateDownloaded = false;
+  updateStatus.isChecking = false;
+  updateStatus.downloadProgress = 0;
+  mainWindow?.webContents.send('update-error', { message: error?.message || String(error) });
 });
 
 ipcMain.on('restart-app', () => {
   autoUpdater.quitAndInstall();
+});
+
+// Manual check for updates
+ipcMain.handle('check-for-updates', async () => {
+  if (isDev) {
+    log.info('Skipping update check in development mode');
+    return { success: false, isDev: true, message: 'Update checks disabled in development' };
+  }
+
+  try {
+    log.info('Manual update check triggered');
+    updateStatus.isChecking = true;
+    const result = await autoUpdater.checkForUpdates();
+    return { 
+      success: true, 
+      updateInfo: result?.updateInfo,
+      currentVersion: app.getVersion(),
+    };
+  } catch (error) {
+    log.error('Manual update check failed:', error);
+    updateStatus.lastError = error?.message || String(error);
+    updateStatus.isChecking = false;
+    return { 
+      success: false, 
+      error: error?.message || String(error),
+      currentVersion: app.getVersion(),
+    };
+  }
 });
 
 // Allow renderer to query update status and optionally trigger a check
