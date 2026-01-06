@@ -633,16 +633,97 @@ autoUpdater.on('error', (error) => {
   mainWindow?.webContents.send('update-error', { message: error?.message || String(error) });
 });
 
-ipcMain.on('restart-app', () => {
-  log.info('[Update] Restart requested by user');
-  isQuitting = true; // Prevent showing the window again
+ipcMain.on('restart-app', async () => {
+  log.info('========================================');
+  log.info('[Update] RESTART REQUESTED BY USER');
+  log.info('[Update] Timestamp:', new Date().toISOString());
+  log.info('[Update] Update status:', JSON.stringify(updateStatus, null, 2));
+  log.info('[Update] App version:', app.getVersion());
+  log.info('[Update] Platform:', process.platform);
+  log.info('========================================');
+  
+  // Set quitting flag
+  isQuitting = true;
+  log.info('[Update] isQuitting flag set to true');
+  
+  // Give user feedback
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    log.info('[Update] Sending restart-initiated event to renderer');
+    mainWindow.webContents.send('restart-initiated');
+  }
+  
   try {
-    autoUpdater.quitAndInstall(false, true); // quitAndInstall(isSilent, isForceRunAfter)
-    log.info('[Update] quitAndInstall called successfully');
-  } catch (error) {
-    log.error('[Update] Failed to quit and install:', error);
-    // Fallback: just quit the app
+    log.info('[Update] Attempting to quit and install update...');
+    log.info('[Update] Calling autoUpdater.quitAndInstall(false, true)');
+    
+    // Close all windows first
+    const allWindows = BrowserWindow.getAllWindows();
+    log.info('[Update] Closing', allWindows.length, 'windows');
+    allWindows.forEach((win, index) => {
+      try {
+        log.info(`[Update] Closing window ${index + 1}/${allWindows.length}`);
+        if (!win.isDestroyed()) {
+          win.destroy();
+        }
+      } catch (err) {
+        log.error(`[Update] Error closing window ${index + 1}:`, err);
+      }
+    });
+    
+    // Small delay to ensure windows are closed
+    await new Promise(resolve => setTimeout(resolve, 100));
+    log.info('[Update] Windows closed, proceeding with quitAndInstall');
+    
+    // Try quitAndInstall with different parameter combinations
+    try {
+      log.info('[Update] Attempt 1: quitAndInstall(false, true)');
+      autoUpdater.quitAndInstall(false, true);
+      log.info('[Update] quitAndInstall(false, true) called - waiting for app to quit');
+    } catch (err1) {
+      log.error('[Update] quitAndInstall(false, true) failed:', err1);
+      
+      try {
+        log.info('[Update] Attempt 2: quitAndInstall(true, true)');
+        autoUpdater.quitAndInstall(true, true);
+        log.info('[Update] quitAndInstall(true, true) called');
+      } catch (err2) {
+        log.error('[Update] quitAndInstall(true, true) failed:', err2);
+        
+        try {
+          log.info('[Update] Attempt 3: quitAndInstall() with no params');
+          autoUpdater.quitAndInstall();
+          log.info('[Update] quitAndInstall() called');
+        } catch (err3) {
+          log.error('[Update] quitAndInstall() failed:', err3);
+          throw err3;
+        }
+      }
+    }
+    
+    // If we reach here, give some time for the quit to happen
+    log.info('[Update] Waiting 500ms for quit to process...');
+    await new Promise(resolve => setTimeout(resolve, 500));
+    log.info('[Update] Still running after 500ms, forcing app.quit()');
     app.quit();
+    
+  } catch (error) {
+    log.error('========================================');
+    log.error('[Update] ✗✗✗ CRITICAL ERROR IN RESTART PROCESS');
+    log.error('[Update] Error:', error);
+    log.error('[Update] Error stack:', error.stack);
+    log.error('[Update] Error message:', error.message);
+    log.error('[Update] Error type:', error.constructor.name);
+    log.error('========================================');
+    
+    // Last resort fallback: force quit
+    try {
+      log.info('[Update] Fallback: Forcing app.quit()');
+      app.quit();
+    } catch (quitError) {
+      log.error('[Update] ✗✗✗ Even app.quit() failed:', quitError);
+      log.error('[Update] Attempting app.exit(0)');
+      app.exit(0);
+    }
   }
 });
 

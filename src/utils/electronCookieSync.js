@@ -55,7 +55,18 @@ export async function getCookiesForRequest() {
  * Remove auth-related cookies from Electron session to force logout
  */
 export async function clearElectronCookies(cookieNames = ['authToken', 'refreshToken']) {
-  if (!window.electron?.isElectron) return;
+  console.log('========================================');
+  console.log('[ElectronCookieSync] CLEARING COOKIES FOR LOGOUT');
+  console.log('[ElectronCookieSync] Timestamp:', new Date().toISOString());
+  console.log('[ElectronCookieSync] window.electron available:', !!window.electron);
+  console.log('[ElectronCookieSync] window.electron.isElectron:', window.electron?.isElectron);
+  console.log('[ElectronCookieSync] Cookies to clear:', cookieNames);
+  
+  if (!window.electron?.isElectron) {
+    console.log('[ElectronCookieSync] Not in Electron environment - skipping');
+    console.log('========================================');
+    return;
+  }
 
   try {
     const targetUrl = new URL(GRAPHQL_URL);
@@ -77,19 +88,46 @@ export async function clearElectronCookies(cookieNames = ['authToken', 'refreshT
     }
 
     const uniqueOrigins = Array.from(new Set(origins.filter(Boolean)));
+    console.log('[ElectronCookieSync] Origins to check:', uniqueOrigins);
+
+    let successCount = 0;
+    let failCount = 0;
 
     for (const origin of uniqueOrigins) {
+      console.log(`[ElectronCookieSync] Processing origin: ${origin}`);
       for (const name of cookieNames) {
         try {
+          console.log(`[ElectronCookieSync] Attempting to remove cookie: ${name} from ${origin}`);
+          
+          // Verify removeCookie function exists
+          if (typeof window.electron.removeCookie !== 'function') {
+            console.error(`[ElectronCookieSync] ✗ window.electron.removeCookie is not a function!`);
+            failCount++;
+            continue;
+          }
+          
           await window.electron.removeCookie(`${origin}/`, name);
-          console.log(`[ElectronCookieSync] Removed cookie ${name} for ${origin}`);
+          console.log(`[ElectronCookieSync] ✓ Successfully removed cookie ${name} for ${origin}`);
+          successCount++;
         } catch (err) {
-          console.error(`[ElectronCookieSync] Error removing cookie ${name} for ${origin}:`, err);
+          console.error(`[ElectronCookieSync] ✗ Error removing cookie ${name} for ${origin}:`, err);
+          console.error(`[ElectronCookieSync] Error stack:`, err.stack);
+          failCount++;
         }
       }
     }
+    
+    console.log('[ElectronCookieSync] Cookie clearing summary:');
+    console.log(`[ElectronCookieSync] - Success: ${successCount}`);
+    console.log(`[ElectronCookieSync] - Failed: ${failCount}`);
+    console.log('========================================');
+    
   } catch (error) {
-    console.error('[ElectronCookieSync] Error clearing cookies:', error);
+    console.error('========================================');
+    console.error('[ElectronCookieSync] ✗✗✗ CRITICAL ERROR clearing cookies:', error);
+    console.error('[ElectronCookieSync] Error stack:', error.stack);
+    console.error('========================================');
+    throw error; // Re-throw so logout process knows cookies weren't cleared
   }
 }
 

@@ -85,8 +85,23 @@ expose('electron', {
     ipcRenderer.on('update-downloaded', (event, info) => callback(event, info)),
   onUpdateError: (callback) =>
     ipcRenderer.on('update-error', (event, error) => callback(event, error)),
+  onRestartInitiated: (callback) =>
+    ipcRenderer.on('restart-initiated', () => callback()),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
-  restartApp: () => ipcRenderer.send('restart-app'),
+  restartApp: () => {
+    console.log('[Preload] ========================================');
+    console.log('[Preload] RESTART APP CALLED FROM RENDERER');
+    console.log('[Preload] Timestamp:', new Date().toISOString());
+    console.log('[Preload] Sending restart-app IPC message to main process');
+    console.log('[Preload] ========================================');
+    try {
+      ipcRenderer.send('restart-app');
+      console.log('[Preload] ✓ restart-app IPC message sent successfully');
+    } catch (error) {
+      console.error('[Preload] ✗ Failed to send restart-app IPC message:', error);
+      throw error;
+    }
+  },
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
 
   // Settings

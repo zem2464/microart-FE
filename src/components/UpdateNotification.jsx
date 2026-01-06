@@ -180,7 +180,25 @@ const UpdateNotification = () => {
         maskClosable: false,
         closable: false,
         onOk: () => {
-          window.electron.restartApp?.();
+          console.log('========================================');
+          console.log('[UpdateNotification] USER CLICKED RESTART NOW (Modal)');
+          console.log('[UpdateNotification] Timestamp:', new Date().toISOString());
+          console.log('[UpdateNotification] window.electron available:', !!window.electron);
+          console.log('[UpdateNotification] window.electron.restartApp available:', typeof window.electron?.restartApp);
+          console.log('========================================');
+          try {
+            if (window.electron?.restartApp) {
+              console.log('[UpdateNotification] Calling window.electron.restartApp()');
+              window.electron.restartApp();
+              console.log('[UpdateNotification] ✓ restartApp() called successfully');
+            } else {
+              console.error('[UpdateNotification] ✗ window.electron.restartApp is not available!');
+              message.error('Restart function not available. Please close and reopen the app manually.');
+            }
+          } catch (error) {
+            console.error('[UpdateNotification] ✗ Error calling restartApp():', error);
+            message.error('Failed to restart app: ' + error.message);
+          }
         },
         onCancel: () => {
           // Just close modal, keep the badge visible
@@ -201,6 +219,17 @@ const UpdateNotification = () => {
     const offUpdateDownloaded = window.electron.onUpdateDownloaded?.(handleUpdateDownloaded);
     const offUpdateError = window.electron.onUpdateError?.(handleUpdateError);
 
+    // Listen for restart initiated event
+    const handleRestartInitiated = () => {
+      console.log('[UpdateNotification] Restart initiated - app is restarting now...');
+      message.loading({ content: 'Restarting application...', key: 'restart', duration: 0 });
+    };
+    
+    let offRestartInitiated;
+    if (window.electron?.onRestartInitiated) {
+      offRestartInitiated = window.electron.onRestartInitiated(handleRestartInitiated);
+    }
+
     // Check for updates on mount (optional)
     window.electron.getUpdateStatus?.().then(status => {
       console.log('[UpdateNotification] Update status:', status);
@@ -219,6 +248,7 @@ const UpdateNotification = () => {
       offDownloadProgress?.();
       offUpdateDownloaded?.();
       offUpdateError?.();
+      offRestartInitiated?.();
       if (downloadTimeoutRef.current) {
         clearTimeout(downloadTimeoutRef.current);
       }
@@ -346,7 +376,27 @@ const UpdateNotification = () => {
               type="primary"
               size="small"
               icon={<ReloadOutlined />}
-              onClick={() => window.electron.restartApp?.()}
+              onClick={() => {
+                console.log('========================================');
+                console.log('[UpdateNotification] USER CLICKED RESTART NOW (Badge Button)');
+                console.log('[UpdateNotification] Timestamp:', new Date().toISOString());
+                console.log('[UpdateNotification] window.electron available:', !!window.electron);
+                console.log('[UpdateNotification] window.electron.restartApp available:', typeof window.electron?.restartApp);
+                console.log('========================================');
+                try {
+                  if (window.electron?.restartApp) {
+                    console.log('[UpdateNotification] Calling window.electron.restartApp()');
+                    window.electron.restartApp();
+                    console.log('[UpdateNotification] ✓ restartApp() called successfully');
+                  } else {
+                    console.error('[UpdateNotification] ✗ window.electron.restartApp is not available!');
+                    message.error('Restart function not available. Please close and reopen the app manually.');
+                  }
+                } catch (error) {
+                  console.error('[UpdateNotification] ✗ Error calling restartApp():', error);
+                  message.error('Failed to restart app: ' + error.message);
+                }
+              }}
               danger
               style={{ padding: '4px 8px', fontWeight: 600 }}
             >

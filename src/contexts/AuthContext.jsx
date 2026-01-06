@@ -31,6 +31,7 @@ export const AuthProvider = ({ children }) => {
   const client = useApolloClient();
   const [deviceError, setDeviceError] = useState(null);
   const [deviceInfo, setDeviceInfo] = useState(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false); // Track logout in progress
 
   // Initialize device info on mount
   useEffect(() => {
@@ -347,24 +348,42 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    // Prevent re-entry if logout already in progress
+    if (isLoggingOut) {
+      console.log('[AuthContext] ⚠ Logout already in progress, ignoring duplicate call');
+      return;
+    }
+
+    console.log('======================================== ');
+    console.log('[AuthContext] 🔴 LOGOUT INITIATED');
+    console.log('[AuthContext] Timestamp:', new Date().toISOString());
+    console.log('[AuthContext] Current user:', meUserData()?.email || 'none');
+    console.log('[AuthContext] isElectron:', !!window.electron?.isElectron);
+    console.log('[AuthContext] Current path:', window.location.pathname);
+    console.log('========================================');
+
+    // Set logout in progress flag immediately
+    setIsLoggingOut(true);
+
     try {
-      // CRITICAL: Clear frontend state IMMEDIATELY to prevent infinite redirects
+      // STEP 1: Clear frontend state IMMEDIATELY to prevent infinite redirects
       // This must happen before any async operations
+      console.log('[AuthContext] STEP 1: Clearing frontend state...');
       isLoggedIn(false);
       meUserData(null);
       userCacheVar(null); // Also clear userCacheVar for App.js routing
       isApplicationLoading(false);
-      
-      console.log('[AuthContext] ✓ Frontend state cleared immediately on logout');
+      console.log('[AuthContext] ✓ Frontend state cleared immediately');
 
-      // Step 1: Remove push subscriptions before logout
+      // STEP 2: Remove push subscriptions (non-blocking)
+      console.log('[AuthContext] STEP 2: Removing push subscriptions...');
       try {
-        if ('serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator && !window.electron?.isElectron) {
           const registration = await navigator.serviceWorker.ready;
           const subscription = await registration.pushManager.getSubscription();
           
           if (subscription) {
-            console.log('[AuthContext] Removing push subscription on logout...');
+            console.log('[AuthContext] Found active push subscription, removing...');
             // Call backend to remove subscription
             await client.mutate({
               mutation: REMOVE_PUSH_SUBSCRIPTION,
@@ -377,53 +396,142 @@ export const AuthProvider = ({ children }) => {
             // Unsubscribe locally
             await subscription.unsubscribe();
             console.log('[AuthContext] ✓ Push subscription unsubscribed locally');
+          } else {
+            console.log('[AuthContext] No active push subscription found');
           }
+        } else if (window.electron?.isElectron) {
+          console.log('[AuthContext] Skipping push subscription removal (Electron environment)');
         }
       } catch (subError) {
-        console.error('[AuthContext] Error removing push subscription:', subError);
+        console.error('[AuthContext] ✗ Error removing push subscription:', subError);
         // Don't block logout if subscription removal fails
       }
 
-      // Step 2: Perform backend logout (non-blocking, but don't wait for response)
+      // STEP 3: Perform backend logout (non-blocking, don't wait for response)
+      console.log('[AuthContext] STEP 3: Calling backend logout...');
       try {
-        await client.query({
+        const logoutPromise = client.query({
           query: LOGOUT_QUERY,
+          fetchPolicy: 'network-only', // Don't use cache
         });
+        
+        // Wait for backend logout with timeout
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Backend logout timeout')), 5000)
+        );
+        
+        await Promise.race([logoutPromise, timeoutPromise]);
         console.log('[AuthContext] ✓ Backend logout successful');
       } catch (backendErr) {
-        console.error('[AuthContext] Backend logout failed:', backendErr);
+        console.error('[AuthContext] ✗ Backend logout failed (continuing anyway):', backendErr.message);
         // Continue with frontend cleanup even if backend fails
       }
 
-      // Step 3: Clean up Apollo cache and Electron cookies
-      await clearElectronCookies(["authToken", "refreshToken"]);
-      await client.clearStore();
+      // STEP 4: Clean up Electron cookies (if in Electron)
+      console.log('[AuthContext] STEP 4: Clearing Electron cookies...');
+      try {
+        await clearElectronCookies(["authToken", "refreshToken"]);
+        console.log('[AuthContext] ✓ Electron cookies cleared');
+      } catch (cookieErr) {
+        console.error('[AuthContext] ✗ Error clearing Electron cookies:', cookieErr);
+        // Continue even if cookie clearing fails
+      }
 
-      // Step 4: Reconnect WebSocket to clear authentication
-      reconnectWebSocket();
+      // STEP 5: Clear Apollo cache
+      console.log('[AuthContext] STEP 5: Clearing Apollo cache...');
+      try {
+        await client.clearStore();
+        console.log('[AuthContext] ✓ Apollo cache cleared');
+      } catch (cacheErr) {
+        console.error('[AuthContext] ✗ Error clearing Apollo cache:', cacheErr);
+        // Try to reset store instead
+        try {
+          await client.resetStore();
+          console.log('[AuthContext] ✓ Apollo cache reset instead');
+        } catch (resetErr) {
+          console.error('[AuthContext] ✗ Error resetting Apollo cache:', resetErr);
+        }
+      }
 
-      // Step 5: Navigate to login (this should now work since user state is cleared)
-      navigate("/login");
+      // STEP 6: Reconnect WebSocket to clear authentication
+      console.log('[AuthContext] STEP 6: Reconnecting WebSocket...');
+      try {
+        reconnectWebSocket();
+        console.log('[AuthContext] ✓ WebSocket reconnected');
+      } catch (wsErr) {
+        console.error('[AuthContext] ✗ Error reconnecting WebSocket:', wsErr);
+      }
+
+      // STEP 7: Navigate to login page (this should now work since user state is cleared)
+      console.log('[AuthContext] STEP 7: Navigating to login page...');
+      
+      // Small delay to ensure all cleanup is complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
+      // Use different navigation methods based on environment
+      try {
+        if (window.electron?.isElectron) {
+          // In Electron, use hash navigation
+          console.log('[AuthContext] Using hash navigation for Electron');
+          window.location.hash = '#/login';
+        } else {
+          // In web, use React Router
+          console.log('[AuthContext] Using React Router navigation');
+          navigate("/login", { replace: true });
+        }
+        console.log('[AuthContext] ✓ Navigation to login initiated');
+      } catch (navErr) {
+        console.error('[AuthContext] ✗ Navigation failed, trying fallback:', navErr);
+        // Fallback: direct href change
+        window.location.href = window.electron?.isElectron ? '#/login' : '/login';
+      }
+      
+      console.log('========================================');
+      console.log('[AuthContext] ✓✓✓ LOGOUT COMPLETED SUCCESSFULLY');
+      console.log('========================================');
       
     } catch (err) {
-      console.error("Error during logout:", err);
+      console.error('========================================');
+      console.error('[AuthContext] ✗✗✗ CRITICAL ERROR DURING LOGOUT');
+      console.error('[AuthContext] Error:', err);
+      console.error('[AuthContext] Error stack:', err.stack);
+      console.error('========================================');
 
       // Even if anything fails, ensure frontend state is cleared
       // This ensures user can always logout on the frontend
+      console.log('[AuthContext] Ensuring frontend state is cleared (error recovery)...');
       isLoggedIn(false);
       meUserData(null);
       userCacheVar(null);
       isApplicationLoading(false);
       
+      // Try cleanup operations one more time
       try {
         await clearElectronCookies(["authToken", "refreshToken"]);
         await client.clearStore();
         reconnectWebSocket();
       } catch (cleanupErr) {
-        console.error('Error during cleanup:', cleanupErr);
+        console.error('[AuthContext] Error during error recovery cleanup:', cleanupErr);
       }
 
-      navigate("/login");
+      // Force navigation no matter what
+      try {
+        if (window.electron?.isElectron) {
+          window.location.hash = '#/login';
+        } else {
+          navigate("/login", { replace: true });
+        }
+      } catch (finalNavErr) {
+        console.error('[AuthContext] Final navigation attempt failed:', finalNavErr);
+        // Last resort
+        window.location.href = window.electron?.isElectron ? '#/login' : '/login';
+      }
+    } finally {
+      // Always reset the logout flag after a delay to allow navigation to complete
+      setTimeout(() => {
+        setIsLoggingOut(false);
+        console.log('[AuthContext] Logout flag reset');
+      }, 1000);
     }
   };
 
