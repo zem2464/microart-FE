@@ -219,18 +219,21 @@ function AppContent() {
       }}
     >
       <Routes>
+        {/* Auth Routes - Only accessible when NOT logged in */}
         <Route
           path="/login"
-          element={!user ? <Login /> : <Navigate to="/" />}
+          element={!user ? <Login /> : <Navigate to="/" replace />}
         />
         <Route
           path="/set-initial-password"
-          element={!user ? <SetInitialPassword /> : <Navigate to="/" />}
+          element={!user ? <SetInitialPassword /> : <Navigate to="/" replace />}
         />
         <Route
           path="/change-expire-password"
-          element={!user ? <ChangeExpirePassword /> : <Navigate to="/" />}
+          element={!user ? <ChangeExpirePassword /> : <Navigate to="/" replace />}
         />
+        
+        {/* Protected Routes - Only accessible when logged in */}
         <Route
           path="/*"
           element={
@@ -252,7 +255,7 @@ function AppContent() {
                   </div>
                 </div>
             ) : (
-              <Navigate to="/login" />
+              <Navigate to="/login" replace />
             )
           }
         />

@@ -197,17 +197,6 @@ const FrontOfficeLayout = () => {
       icon: <DashboardOutlined />,
       label: <Link to="/dashboard">Dashboard</Link>,
     },
-    {
-      key: "/leaves",
-      icon: <CalendarOutlined />,
-      label: <Link to="/leaves">Leave Applied</Link>,
-    },
-    // Leave Calendar
-    {
-      key: "/all-users-leaves",
-      icon: <CalendarOutlined />,
-      label: <Link to="/all-users-leaves">Leave Calendar</Link>,
-    },
     // Most Used - Direct Access
     canManageTasks && {
       key: "/",
@@ -260,6 +249,30 @@ const FrontOfficeLayout = () => {
       key: "/user-dashboard",
       icon: <UserOutlined />,
       label: <Link to="/user-dashboard">User Dashboard</Link>,
+    },
+    // Leave Management - Grouped submenu (Last in nav)
+    {
+      key: "leaves",
+      icon: <CalendarOutlined />,
+      label: "Leaves",
+      children: [
+        {
+          key: "/leaves",
+          icon: <CalendarOutlined />,
+          label: <Link to="/leaves">My Leaves</Link>,
+        },
+        {
+          key: "/all-users-leaves",
+          icon: <CalendarOutlined />,
+          label: <Link to="/all-users-leaves">Leave Calendar</Link>,
+        },
+        (user?.role?.roleType === "ADMIN" ||
+          user?.role?.roleType === "MANAGER") && {
+          key: "/leave-approvals",
+          icon: <CheckSquareOutlined />,
+          label: <Link to="/leave-approvals">Leave Approvals</Link>,
+        },
+      ].filter(Boolean),
     },
   ].filter(Boolean); // Remove null/false items
 

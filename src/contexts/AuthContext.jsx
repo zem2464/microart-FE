@@ -96,11 +96,28 @@ export const AuthProvider = ({ children }) => {
     }
   }, [fetchMe, setDeviceError]);
 
-  // Check auth status on mount and route changes
+  // Check auth status on mount only (not on every render to prevent infinite loops)
   useEffect(() => {
     const checkAuth = async () => {
       // Skip auth check if user is already logged in (to prevent unnecessary calls)
       if (isLoggedIn()) {
+        isApplicationLoading(false);
+        return;
+      }
+
+      // PREVENT INFINITE REDIRECT: If we're on auth pages and not logged in, don't check auth
+      // This prevents the checkAuth -> getMe fail -> setLoginState false -> navigate -> checkAuth loop
+      const currentPath = window.location.pathname || window.location.hash.replace('#', '');
+      const authPages = [
+        "/login",
+        "/device-registration",
+        "/set-initial-password",
+        "/change-expire-password",
+      ];
+      
+      // If on an auth page without a user, we're in the expected state - don't check auth
+      if (authPages.some(page => currentPath.includes(page))) {
+        console.log('[AuthContext] On auth page without user - skipping auth check to prevent infinite redirect');
         isApplicationLoading(false);
         return;
       }
@@ -138,14 +155,7 @@ export const AuthProvider = ({ children }) => {
         isApplicationLoading(false);
 
         // Only navigate to login if not already on login page or auth-related pages
-        const currentPath = window.location.pathname;
-        const authPages = [
-          "/login",
-          "/device-registration",
-          "/set-initial-password",
-          "/change-expire-password",
-        ];
-        if (!authPages.includes(currentPath)) {
+        if (!authPages.some(page => currentPath.includes(page))) {
           navigate("/login");
         }
       }
@@ -338,6 +348,15 @@ export const AuthProvider = ({ children }) => {
 
   const logout = async () => {
     try {
+      // CRITICAL: Clear frontend state IMMEDIATELY to prevent infinite redirects
+      // This must happen before any async operations
+      isLoggedIn(false);
+      meUserData(null);
+      userCacheVar(null); // Also clear userCacheVar for App.js routing
+      isApplicationLoading(false);
+      
+      console.log('[AuthContext] ✓ Frontend state cleared immediately on logout');
+
       // Step 1: Remove push subscriptions before logout
       try {
         if ('serviceWorker' in navigator) {
@@ -365,36 +384,44 @@ export const AuthProvider = ({ children }) => {
         // Don't block logout if subscription removal fails
       }
 
-      // Step 2: Perform backend logout
-      const { data } = await client.query({
-        query: LOGOUT_QUERY,
-      });
-      if (data.logout) {
-        // Backend logout successful
-        await clearElectronCookies(["authToken", "refreshToken"]);
-        isLoggedIn(false);
-        meUserData(null);
-        userCacheVar(null); // Also clear userCacheVar for App.js routing
-        await client.clearStore();
-
-        // Reconnect WebSocket to clear authentication
-        reconnectWebSocket();
-
-        navigate("/login");
+      // Step 2: Perform backend logout (non-blocking, but don't wait for response)
+      try {
+        await client.query({
+          query: LOGOUT_QUERY,
+        });
+        console.log('[AuthContext] ✓ Backend logout successful');
+      } catch (backendErr) {
+        console.error('[AuthContext] Backend logout failed:', backendErr);
+        // Continue with frontend cleanup even if backend fails
       }
+
+      // Step 3: Clean up Apollo cache and Electron cookies
+      await clearElectronCookies(["authToken", "refreshToken"]);
+      await client.clearStore();
+
+      // Step 4: Reconnect WebSocket to clear authentication
+      reconnectWebSocket();
+
+      // Step 5: Navigate to login (this should now work since user state is cleared)
+      navigate("/login");
+      
     } catch (err) {
       console.error("Error during logout:", err);
 
-      // Even if backend logout fails, clean up frontend state
+      // Even if anything fails, ensure frontend state is cleared
       // This ensures user can always logout on the frontend
-      await clearElectronCookies(["authToken", "refreshToken"]);
       isLoggedIn(false);
       meUserData(null);
-      userCacheVar(null); // Also clear userCacheVar for App.js routing
-      await client.clearStore();
-
-      // Reconnect WebSocket to clear authentication
-      reconnectWebSocket();
+      userCacheVar(null);
+      isApplicationLoading(false);
+      
+      try {
+        await clearElectronCookies(["authToken", "refreshToken"]);
+        await client.clearStore();
+        reconnectWebSocket();
+      } catch (cleanupErr) {
+        console.error('Error during cleanup:', cleanupErr);
+      }
 
       navigate("/login");
     }
