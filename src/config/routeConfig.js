@@ -236,3 +236,35 @@ export const frontOfficeRoutes = [
     exact: true,
   },
 ];
+
+/**
+ * Helper function to check if a path is valid for a given layout
+ * @param {string} path - The path to check
+ * @param {string} layout - The layout type ('backoffice' or 'frontoffice')
+ * @returns {boolean} - True if path is valid for the layout
+ */
+export const isPathValidForLayout = (path, layout) => {
+  const routes = layout === 'backoffice' ? backOfficeRoutes : frontOfficeRoutes;
+  
+  // Check if path matches any of the route paths
+  return routes.some(route => {
+    if (route.exact) {
+      return path === route.path;
+    }
+    // Handle paths with dynamic segments (e.g., /path/:id)
+    const pathRegex = new RegExp(`^${route.path.replace(/:[^\s/]+/g, '[^/]+')}(\\?.*)?$`);
+    return pathRegex.test(path);
+  });
+};
+
+/**
+ * Get the default route for a layout
+ * @param {string} layout - The layout type ('backoffice' or 'frontoffice')
+ * @returns {string} - The default route path
+ */
+export const getDefaultRouteForLayout = (layout) => {
+  if (layout === 'backoffice') {
+    return BACKOFFICE_ROUTES.DASHBOARD;
+  }
+  return FRONTOFFICE_ROUTES.DASHBOARD;
+};

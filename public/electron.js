@@ -5,6 +5,9 @@ const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 const path = require('path');
 const fs = require('fs');
+const { execFile } = require('child_process');
+const util = require('util');
+const execFilePromise = util.promisify(execFile);
 
 const store = new Store();
 let mainWindow;
@@ -43,6 +46,46 @@ autoUpdater.autoInstallOnAppQuit = true;
 // Handle Squirrel events on Windows
 if (process.platform === 'win32' && require('electron-squirrel-startup')) {
   app.quit();
+}
+
+/**
+ * Remove macOS Gatekeeper quarantine attributes from the app bundle
+ * This fixes code signature validation errors after updates
+ * @returns {Promise<void>}
+ */
+async function removeQuarantineAttributes() {
+  if (process.platform !== 'darwin') {
+    log.info('[Quarantine] Not macOS, skipping quarantine attribute removal');
+    return;
+  }
+
+  const appPath = app.getAppPath();
+  const appBundlePath = path.resolve(appPath, '..', '..');
+  
+  log.info('[Quarantine] Attempting to remove quarantine attributes from:', appBundlePath);
+  
+  try {
+    // Try to remove quarantine attributes using xattr command
+    const { stdout, stderr } = await execFilePromise('xattr', ['-dr', 'com.apple.quarantine', appBundlePath]);
+    
+    if (stderr) {
+      log.warn('[Quarantine] xattr stderr:', stderr);
+    }
+    
+    log.info('[Quarantine] Successfully removed quarantine attributes from app bundle');
+    return true;
+  } catch (error) {
+    // It's okay if xattr fails - the app might not have quarantine attributes
+    // This is common for freshly built apps
+    if (error.code === 'ENOENT') {
+      log.warn('[Quarantine] xattr command not found - this is normal on older macOS versions');
+    } else if (error.message?.includes('No such file or directory')) {
+      log.info('[Quarantine] Quarantine attributes not found or already removed');
+    } else {
+      log.warn('[Quarantine] Failed to remove quarantine attributes:', error.message);
+    }
+    return false;
+  }
 }
 
 function createSplashScreen() {
@@ -368,6 +411,17 @@ app.on('ready', async () => {
     console.log('[Electron] Notification.isSupported():', Notification.isSupported());
     console.log('[Electron] Dev mode:', isDev);
   
+  // Remove quarantine attributes on macOS (both for fresh installs and after updates)
+  if (process.platform === 'darwin') {
+    log.info('[Electron] macOS detected - removing quarantine attributes for code signature validation');
+    try {
+      await removeQuarantineAttributes();
+    } catch (error) {
+      log.error('[Electron] Error removing quarantine attributes:', error);
+      // Don't fail the app startup if this fails
+    }
+  }
+  
   // Request notification permission on macOS
   if (process.platform === 'darwin') {
     console.log('[Electron] macOS detected - will request notification permissions');
@@ -620,6 +674,17 @@ autoUpdater.on('update-downloaded', (info) => {
   updateStatus.lastError = null;
   updateStatus.downloadProgress = 100;
   updateStatus.isChecking = false;
+  
+  // Remove quarantine attributes immediately after update download on macOS
+  // This prevents code signature validation errors when the app is restarted
+  if (process.platform === 'darwin') {
+    log.info('[Update] macOS detected - removing quarantine attributes after download');
+    removeQuarantineAttributes().catch(error => {
+      log.error('[Update] Error removing quarantine attributes after update:', error);
+      // Don't fail the update process if this fails
+    });
+  }
+  
   mainWindow?.webContents.send('update-downloaded', info);
 });
 
@@ -777,20 +842,6 @@ ipcMain.handle('get-update-status', async () => {
     log.error('Manual update check failed:', error);
     updateStatus.lastError = error?.message || String(error);
     return { ...base, lastError: updateStatus.lastError };
-  }
-});
-
-// Check update status
-ipcMain.handle('get-update-status', async () => {
-  try {
-    const result = await autoUpdater.checkForUpdates();
-    return {
-      updateAvailable: result?.updateInfo ? true : false,
-      version: app.getVersion(),
-    };
-  } catch (error) {
-    log.error('Error checking updates:', error);
-    return { updateAvailable: false, version: app.getVersion() };
   }
 });
 

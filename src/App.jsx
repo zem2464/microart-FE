@@ -6,6 +6,7 @@ import {
   Route,
   Navigate,
   useNavigate,
+  useLocation,
 } from "react-router-dom";
 import { ConfigProvider, theme, Layout } from "antd";
 import BackOfficeLayout from "./layouts/BackOfficeLayout";
@@ -13,6 +14,7 @@ import FrontOfficeLayout from "./layouts/FrontOfficeLayout";
 import Login from "./pages/Login";
 import SetInitialPassword from "./pages/SetInitialPassword";
 import ChangeExpirePassword from "./pages/ChangeExpirePassword";
+import { isPathValidForLayout, getDefaultRouteForLayout } from "./config/routeConfig";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ViewModeProvider, useViewMode } from "./contexts/ViewModeContext";
 import { AppDrawerProvider } from "./contexts/DrawerContext";
@@ -37,6 +39,8 @@ function AppContent() {
   const { effectiveLayout } = useViewMode();
   const client = useApolloClient();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [previousLayout, setPreviousLayout] = useState(effectiveLayout);
   
   // Direct check before hook
   console.log('[AppContent] window.electron at render:', window.electron);
@@ -46,6 +50,24 @@ function AppContent() {
   console.log('[AppContent] useElectron() returned:', isElectron);
   
   const { showSplash, setShowSplash } = useSplashScreen();
+  
+  // Handle layout switching - redirect to default route if current route is invalid for the new layout
+  useEffect(() => {
+    if (previousLayout !== effectiveLayout) {
+      console.log(`[App] Layout changed from ${previousLayout} to ${effectiveLayout}`);
+      setPreviousLayout(effectiveLayout);
+      
+      // Get the current path (without query string and hash)
+      const currentPath = location.pathname;
+      
+      // Check if current path is valid for the new layout
+      if (!isPathValidForLayout(currentPath, effectiveLayout)) {
+        console.log(`[App] Current path "${currentPath}" is invalid for ${effectiveLayout} layout, redirecting to default route`);
+        const defaultRoute = getDefaultRouteForLayout(effectiveLayout);
+        navigate(defaultRoute, { replace: true });
+      }
+    }
+  }, [effectiveLayout, previousLayout, location.pathname, navigate]);
   
   // Listen for task assignment notifications
   useTaskNotifications();
