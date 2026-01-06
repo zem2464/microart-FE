@@ -53,21 +53,9 @@ import {
 import GlobalSearchModal from "../components/GlobalSearchModal";
 import { GET_TODAY_PENDING_REMINDERS_COUNT } from "../gql/reminders";
 import { NOTIFICATION_CREATED_SUBSCRIPTION } from "../graphql/notifications";
-
-// Import pages
-import Dashboard from "../pages/FrontOffice/Dashboard";
-import TaskTable from "../pages/FrontOffice/TaskTable";
-import ProjectManagement from "../pages/FrontOffice/ProjectManagement";
-import ClientDashboard from "../pages/FrontOffice/ClientDashboard";
-import ClientList from "../pages/FrontOffice/ClientList";
-import LedgerReport from "../pages/FrontOffice/LedgerReport";
-import Transactions from "../pages/FrontOffice/Transactions";
-import UserDashboard from "../pages/FrontOffice/UserDashboard";
-import Messages from "../pages/FrontOffice/Messages";
-import MyLeaves from "../pages/FrontOffice/MyLeaves";
-import LeaveApprovals from "../pages/FrontOffice/LeaveApprovals";
-import AllUsersLeaves from "../pages/FrontOffice/AllUsersLeaves";
-import Reminders from "../pages/FrontOffice/Reminders";
+import { frontOfficeRoutes } from "../config/routeConfig";
+import { renderRoutes } from "../components/PrivateRoute";
+import NotFound from "../pages/NotFound";
 
 const { Header, Content } = Layout;
 const { Title } = Typography;
@@ -442,20 +430,8 @@ const FrontOfficeLayout = () => {
           }
         >
           <Routes>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/" element={<TaskTable />} />
-            <Route path="/projects" element={<ProjectManagement />} />
-            <Route path="/reminders" element={<Reminders />} />
-            <Route path="/transactions" element={<Transactions />} />
-            <Route path="/ledger" element={<LedgerReport />} />
-            <Route path="/user-dashboard" element={<UserDashboard />} />
-            <Route path="/clients/dashboard" element={<ClientDashboard />} />
-            <Route path="/clients" element={<ClientList />} />
-            <Route path="/messages" element={<Messages />} />
-            <Route path="/messages/:roomId" element={<Messages />} />
-            <Route path="/leaves" element={<MyLeaves />} />
-            <Route path="/leave-approvals" element={<LeaveApprovals />} />
-            <Route path="/all-users-leaves" element={<AllUsersLeaves />} />
+            {renderRoutes(frontOfficeRoutes)}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </Content>

@@ -26,23 +26,9 @@ import {
   generatePermission,
 } from "../config/permissions";
 import GlobalSearchModal from "../components/GlobalSearchModal";
-
-// Page Components
-import Dashboard from "../pages/BackOffice/Dashboard";
-import Users from "../pages/BackOffice/Users";
-import Reports from "../pages/BackOffice/Reports";
-import Settings from "../pages/BackOffice/Settings";
-import TaskTypes from "../pages/BackOffice/TaskTypes";
-import WorkTypes from "../pages/BackOffice/WorkTypes";
-import Gradings from "../pages/BackOffice/Gradings";
-import Roles from "../pages/BackOffice/Roles";
-import AuditLogs from "../pages/BackOffice/AuditLogs";
-import PaymentTypes from "../pages/BackOffice/PaymentTypes";
-import UserGradingRateManagement from "../pages/Admin/UserGradingRateManagement";
-import HolidayManagement from "../pages/BackOffice/HolidayManagement";
-import SalaryManagement from "../pages/BackOffice/SalaryManagement";
-import Finance from "../pages/BackOffice/Finance";
-import Reminders from "../pages/BackOffice/Reminders";
+import { backOfficeRoutes } from "../config/routeConfig";
+import { renderRoutes } from "../components/PrivateRoute";
+import NotFound from "../pages/NotFound";
 
 const { Header, Content } = Layout;
 
@@ -292,21 +278,8 @@ const BackOfficeLayout = () => {
       <Content className="p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
         <div className="w-full max-w-none mx-auto px-4">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/reminders" element={<Reminders />} />
-            <Route path="/task-types" element={<TaskTypes />} />
-            <Route path="/work-types" element={<WorkTypes />} />
-            <Route path="/gradings" element={<Gradings />} />
-            <Route path="/finance" element={<Finance />} />
-            <Route path="/payment-types" element={<PaymentTypes />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/roles" element={<Roles />} />
-            <Route path="/audit-logs" element={<AuditLogs />} />
-            <Route path="/user-rates" element={<UserGradingRateManagement />} />
-            <Route path="/holidays" element={<HolidayManagement />} />
-            <Route path="/salary-management" element={<SalaryManagement />} />
-            <Route path="/reports" element={<Reports />} />
-            <Route path="/settings" element={<Settings />} />
+            {renderRoutes(backOfficeRoutes)}
+            <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
       </Content>
