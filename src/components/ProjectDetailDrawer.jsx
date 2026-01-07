@@ -615,31 +615,30 @@ const ProjectDetailDrawer = ({ projectId }) => {
           const gradingId = pg.gradingId || pg.grading?.id;
           const gradingWorkTypeId = pg.grading?.workType?.id;
           
-          // If grading has workType, use it for filtering
+          // Primary: If grading already has workType populated, use it
           if (gradingWorkTypeId) {
             return String(gradingWorkTypeId) === String(workTypeId);
           }
           
           // Fallback 1: Check gradings data fetched from GraphQL
-          // This has workType populated even when project query doesn't
+          // This query returns all gradings for the project's workTypes with workType populated
           if (gradingsData?.gradingsByWorkType?.length > 0) {
             const fetchedGrading = gradingsData.gradingsByWorkType.find(
               (g) => String(g.id) === String(gradingId)
             );
+            // If grading is found in fetched data and matches this workType, include it
             if (fetchedGrading?.workType?.id) {
               return String(fetchedGrading.workType.id) === String(workTypeId);
             }
-            // If grading not found in fetched gradings, it doesn't match this workType
+            // If grading not in fetched data, exclude it (doesn't belong to any project workType)
             return false;
           }
           
-          // Fallback 2: Check if any task for this grading belongs to this workType
-          // by looking at the task's project.projectGradings which has the workType data
+          // Fallback 2: If gradings data not loaded yet, check tasks for workType info
           const hasTaskInWorkType = tasks.some((task) => {
             const taskGradingId = task.gradingTask?.grading?.id;
             if (String(taskGradingId) !== String(gradingId)) return false;
             
-            // Check task's project.projectGradings for this grading's workType
             const taskProjectGradings = task.project?.projectGradings || [];
             const matchingGrading = taskProjectGradings.find(
               (tpg) => String(tpg.grading?.id) === String(gradingId)
