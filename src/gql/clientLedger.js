@@ -299,6 +299,70 @@ export const GET_PAYMENT_TYPES = gql`
   }
 `;
 
+export const GET_INVOICE_BY_ID = gql`
+  query GetInvoiceById($invoiceId: ID!) {
+    invoice(id: $invoiceId) {
+      id
+      invoiceNumber
+      invoiceDate
+      dueDate
+      subtotalAmount
+      taxAmount
+      discountAmount
+      totalAmount
+      paidAmount
+      balanceAmount
+      status
+      createdAt
+      createdByUser {
+        id
+        firstName
+        lastName
+        email
+      }
+      project {
+        id
+        projectCode
+        name
+        description
+        client {
+          id
+          clientCode
+          displayName
+        }
+        projectGradings {
+          id
+          imageQuantity
+          customRate
+          grading {
+            id
+            name
+            shortCode
+            defaultRate
+          }
+        }
+      }
+      allocations {
+        id
+        allocatedAmount
+        allocationDate
+        isAutoAllocated
+        payment {
+          id
+          paymentNumber
+          paymentDate
+          amount
+          paymentType {
+            id
+            name
+            type
+          }
+        }
+      }
+    }
+  }
+`;
+
 export const GET_CLIENT_INVOICES = gql`
   query GetClientInvoices(
     $clientId: ID!

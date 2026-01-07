@@ -93,9 +93,49 @@ export const GET_PROJECTS = gql`
         invoice {
           id
           invoiceNumber
+          invoiceDate
+          dueDate
           totalAmount
           balanceAmount
+          paidAmount
           status
+          subtotalAmount
+          taxAmount
+          discountAmount
+          project {
+            id
+            projectCode
+            name
+            description
+            projectGradings {
+              id
+              imageQuantity
+              customRate
+              grading {
+                id
+                name
+                shortCode
+                defaultRate
+              }
+            }
+          }
+          allocations {
+            id
+            allocatedAmount
+            allocationDate
+            isAutoAllocated
+            payment {
+              id
+              paymentNumber
+              paymentDate
+              amount
+              paymentType {
+                id
+                name
+                type
+              }
+            }
+          }
         }
         # Backward compatibility fields
         imageQuantity

@@ -19,6 +19,7 @@ import ClientDetail from '../components/ClientDetail';
 import ProjectDetail from '../components/ProjectDetail';
 import ProjectDetailDrawer from '../components/ProjectDetailDrawer';
 import TaskDetailDrawer from '../components/TaskDetailDrawer';
+import InvoiceDetailDrawer from '../components/InvoiceDetailDrawer';
 
 const AppDrawerContext = createContext();
 
@@ -57,6 +58,10 @@ export const AppDrawerProvider = ({ children }) => {
 	// Task Detail Drawer (accepts taskId only)
 	const [taskDetailDrawerV2, setTaskDetailDrawerV2] = useState({ open: false, taskId: null });
 	
+	// Invoice Detail Drawer (for showing invoice details)
+	const [invoiceDetailDrawer, setInvoiceDetailDrawer] = useState({ open: false, invoice: null, invoiceId: null });
+	const [invoiceDrawerExtra, setInvoiceDrawerExtra] = useState(null);
+	
 	const showProjectFormDrawer = (project = null, mode = 'create', onSuccess = null) => {
 		setProjectFormDrawer({ open: true, project, mode, onSuccess });
 		setProjectCreditExceeded(false); // Reset on open
@@ -77,6 +82,21 @@ export const AppDrawerProvider = ({ children }) => {
 	// Task Detail Drawer V2 functions
 	const showTaskDetailDrawerV2 = (taskId) => setTaskDetailDrawerV2({ open: true, taskId });
 	const closeTaskDetailDrawerV2 = () => setTaskDetailDrawerV2({ open: false, taskId: null });
+
+	// Invoice Detail Drawer functions
+	const showInvoiceDetailDrawer = (invoiceOrId) => {
+		console.log('showInvoiceDetailDrawer called with:', invoiceOrId);
+		// Check if it's an invoice object or just an ID
+		if (typeof invoiceOrId === 'string' || typeof invoiceOrId === 'number') {
+			setInvoiceDetailDrawer({ open: true, invoice: null, invoiceId: invoiceOrId });
+		} else {
+			setInvoiceDetailDrawer({ open: true, invoice: invoiceOrId, invoiceId: null });
+		}
+	};
+	const closeInvoiceDetailDrawer = () => {
+		setInvoiceDetailDrawer({ open: false, invoice: null, invoiceId: null });
+		setInvoiceDrawerExtra(null);
+	};
 
 	// User Drawers
 	const [userFormDrawer, setUserFormDrawer] = useState({ open: false, user: null, mode: 'create', onSuccess: null });
@@ -139,6 +159,9 @@ export const AppDrawerProvider = ({ children }) => {
 		// New Task Detail V2
 		showTaskDetailDrawerV2,
 		closeTaskDetailDrawerV2,
+		// Invoice Detail
+		showInvoiceDetailDrawer,
+		closeInvoiceDetailDrawer,
 		// User
 		showUserFormDrawer,
 		closeUserFormDrawer,
@@ -563,6 +586,27 @@ export const AppDrawerProvider = ({ children }) => {
 					maskClosable
 				>
 					<TaskDetailDrawer taskId={taskDetailDrawerV2.taskId} />
+				</ModuleDrawer>
+			)}
+
+			{/* Invoice Detail Drawer */}
+			{invoiceDetailDrawer.open && (
+				<ModuleDrawer
+					open={invoiceDetailDrawer.open}
+					title="Invoice Details"
+					width={700}
+					placement="right"
+					onClose={closeInvoiceDetailDrawer}
+					destroyOnClose
+					maskClosable
+					extra={invoiceDrawerExtra}
+				>
+					<InvoiceDetailDrawer 
+						invoice={invoiceDetailDrawer.invoice}
+						invoiceId={invoiceDetailDrawer.invoiceId}
+						onClose={closeInvoiceDetailDrawer}
+						onExtraRender={setInvoiceDrawerExtra}
+					/>
 				</ModuleDrawer>
 			)}
 		</AppDrawerContext.Provider>
