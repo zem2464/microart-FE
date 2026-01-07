@@ -597,43 +597,57 @@ const ProjectDetailDrawer = ({ projectId }) => {
         const fullWorkType = allWorkTypes.find((wt) => wt.id === workTypeId);
         const taskTypes = fullWorkType?.taskTypes || [];
 
-        // Get all gradings for this project (we'll show all gradings in each work type tab)
-        const gradings = projectGradings
+        // Filter gradings to only include those belonging to this workType
+        // If grading.workType is null, use tasks data to determine workType
+        const workTypeGradings = projectGradings.filter((pg) => {
+          const gradingWorkTypeId = pg.grading?.workType?.id;
+          
+          // If grading has workType, use it for filtering
+          if (gradingWorkTypeId) {
+            return String(gradingWorkTypeId) === String(workTypeId);
+          }
+          
+          // Fallback: Check if any task for this grading belongs to this workType
+          // by looking at the task's project.projectGradings which has the workType data
+          const gradingId = pg.gradingId || pg.grading?.id;
+          const hasTaskInWorkType = tasks.some((task) => {
+            const taskGradingId = task.gradingTask?.grading?.id;
+            if (String(taskGradingId) !== String(gradingId)) return false;
+            
+            // Check task's project.projectGradings for this grading's workType
+            const taskProjectGradings = task.project?.projectGradings || [];
+            const matchingGrading = taskProjectGradings.find(
+              (tpg) => String(tpg.grading?.id) === String(gradingId)
+            );
+            const taskGradingWorkTypeId = matchingGrading?.grading?.workType?.id;
+            return taskGradingWorkTypeId && String(taskGradingWorkTypeId) === String(workTypeId);
+          });
+          
+          return hasTaskInWorkType;
+        });
+
+        // Map each grading to a row with its tasks
+        const gradings = workTypeGradings
           .map((projectGrading) => {
             const grading = projectGrading.grading;
             if (!grading) return null;
 
-            // Verify this grading belongs to the current work type
-            const gradingWorkTypeId = grading.workType?.id;
-            
-            // Only filter if we have a valid grading workType - otherwise show in all tabs
-            if (gradingWorkTypeId && gradingWorkTypeId !== workTypeId) {
-              // Skip gradings that don't belong to this work type
-              return null;
-            }
+            const gradingId = projectGrading.gradingId || grading.id;
 
-            // Get all tasks for this grading, organized by task type
-            const tasksByType = {};
-            // Match tasks to current grading via gradingTask.grading.id
+            // Get ALL tasks for this specific grading
             const gradingTasks = tasks.filter((task) => {
               const taskGradingId = task.gradingTask?.grading?.id;
-              return taskGradingId === grading.id;
+              return taskGradingId && String(taskGradingId) === String(gradingId);
             });
 
-            // Organize tasks by task type - only include tasks for this work type
+            // Organize tasks by task type for display
+            const tasksByType = {};
             gradingTasks.forEach((task) => {
-              const taskTypeId = task.taskType?.id;
-              // Check if this task type belongs to the current work type
-              if (taskTypeId && taskTypes.find((tt) => tt.id === taskTypeId)) {
-                tasksByType[taskTypeId] = task;
-              }
+              const taskTypeId = task.taskType?.id ? String(task.taskType.id) : "no-tasktype";
+              tasksByType[taskTypeId] = task;
             });
-
-            // Only include this grading if it has tasks for this work type
-            if (Object.keys(tasksByType).length === 0) return null;
 
             // Prefer shortCode from tasks.project.projectGradings for the matching grading
-            // Prefer task.gradingTask.grading.shortCode; fallback to tasks.project.projectGradings[].grading.shortCode
             const shortCodeFromTasks = gradingTasks
               .map((task) => {
                 const direct = task.gradingTask?.grading?.shortCode || null;
@@ -644,29 +658,29 @@ const ProjectDetailDrawer = ({ projectId }) => {
               })
               .find((code) => !!code);
 
-            // Get dueDate from first task (tasks have dueDate field)
+            // Get dueDate from first task
             const firstTask = gradingTasks[0];
             const taskDueDate = firstTask?.dueDate || null;
 
             return {
-              gradingId: grading.id,
-              gradingName: grading.name || null,
+              gradingId: gradingId,
+              gradingName: grading.name || grading.shortCode || null,
               gradingShortCode: shortCodeFromTasks || grading.shortCode || null,
               imageQuantity: projectGrading.imageQuantity,
               estimatedCost: projectGrading.estimatedCost,
               actualCost: projectGrading.actualCost,
               tasksByType,
-              // Add project-level fields for columns from main project query
               projectId: project.id,
-              orderDate: project.createdAt, // Use createdAt as orderDate (like main TaskTable)
-              dueDate: taskDueDate, // Get dueDate from task (tasks have dueDate, not projects)
+              orderDate: project.createdAt,
+              dueDate: taskDueDate,
               priority: project.priority,
             };
           })
           .filter(Boolean); // Remove null gradings
 
-        // Only return work type if it has gradings with tasks
-        if (gradings.length === 0) return null;
+        // Show workType even if no gradings (might have tasks without gradings)
+        // Only skip if workType has no gradings at all in the project
+        if (workTypeGradings.length === 0) return null;
 
         return {
           workTypeId,
