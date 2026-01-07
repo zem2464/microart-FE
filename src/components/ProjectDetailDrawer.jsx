@@ -605,7 +605,9 @@ const ProjectDetailDrawer = ({ projectId }) => {
 
             // Verify this grading belongs to the current work type
             const gradingWorkTypeId = grading.workType?.id;
-            if (gradingWorkTypeId !== workTypeId) {
+            
+            // Only filter if we have a valid grading workType - otherwise show in all tabs
+            if (gradingWorkTypeId && gradingWorkTypeId !== workTypeId) {
               // Skip gradings that don't belong to this work type
               return null;
             }
