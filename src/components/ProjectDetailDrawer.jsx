@@ -41,6 +41,7 @@ import {
 } from "../graphql/projectQueries";
 import { UPDATE_CLIENT } from "../gql/clients";
 import { GET_TASKS } from "../gql/tasks";
+import { GET_GRADINGS_BY_WORK_TYPES } from "../gql/gradings";
 // Use work types query that includes sortOrder for proper ordering
 import { GET_WORK_TYPES } from "../gql/workTypes";
 import { GET_PROJECT_AUDIT_HISTORY } from "../gql/auditLogs";
@@ -158,6 +159,17 @@ const ProjectDetailDrawer = ({ projectId }) => {
   // Mutations - Using cache eviction and refetchQueries to ensure updates reflect
   const project = data?.project;
   const tasks = tasksData?.tasks?.tasks || [];
+
+  // Fetch gradings for all project workTypes to get workType mappings
+  // This ensures we have workType info even when project query doesn't populate it
+  const {
+    data: gradingsData,
+    loading: gradingsLoading,
+  } = useQuery(GET_GRADINGS_BY_WORK_TYPES, {
+    variables: { workTypeIds: project?.projectWorkTypes?.map((pwt) => pwt.workTypeId) || [] },
+    skip: !project?.projectWorkTypes?.length,
+    fetchPolicy: "cache-first",
+  });
   const canShowQuote =
     ["ACTIVE", "IN_PROGRESS"].includes((project?.status || "").toString().toUpperCase()) &&
     !(project?.invoiceId || project?.invoice?.id);
@@ -598,8 +610,9 @@ const ProjectDetailDrawer = ({ projectId }) => {
         const taskTypes = fullWorkType?.taskTypes || [];
 
         // Filter gradings to only include those belonging to this workType
-        // If grading.workType is null, use tasks data to determine workType
+        // If grading.workType is null, use gradings data or tasks data to determine workType
         const workTypeGradings = projectGradings.filter((pg) => {
+          const gradingId = pg.gradingId || pg.grading?.id;
           const gradingWorkTypeId = pg.grading?.workType?.id;
           
           // If grading has workType, use it for filtering
@@ -607,9 +620,21 @@ const ProjectDetailDrawer = ({ projectId }) => {
             return String(gradingWorkTypeId) === String(workTypeId);
           }
           
-          // Fallback: Check if any task for this grading belongs to this workType
+          // Fallback 1: Check gradings data fetched from GraphQL
+          // This has workType populated even when project query doesn't
+          if (gradingsData?.gradingsByWorkType?.length > 0) {
+            const fetchedGrading = gradingsData.gradingsByWorkType.find(
+              (g) => String(g.id) === String(gradingId)
+            );
+            if (fetchedGrading?.workType?.id) {
+              return String(fetchedGrading.workType.id) === String(workTypeId);
+            }
+            // If grading not found in fetched gradings, it doesn't match this workType
+            return false;
+          }
+          
+          // Fallback 2: Check if any task for this grading belongs to this workType
           // by looking at the task's project.projectGradings which has the workType data
-          const gradingId = pg.gradingId || pg.grading?.id;
           const hasTaskInWorkType = tasks.some((task) => {
             const taskGradingId = task.gradingTask?.grading?.id;
             if (String(taskGradingId) !== String(gradingId)) return false;
