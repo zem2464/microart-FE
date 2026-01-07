@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useState } from 'react';
-import { Space, Button } from 'antd';
+import { Space, Button, message } from 'antd';
 import ModuleDrawer from '../components/common/ModuleDrawer';
 import TaskTypeForm from '../components/TaskTypeForm';
 import TaskTypeDetail from '../components/TaskTypeDetail';
@@ -20,6 +20,9 @@ import ProjectDetail from '../components/ProjectDetail';
 import ProjectDetailDrawer from '../components/ProjectDetailDrawer';
 import TaskDetailDrawer from '../components/TaskDetailDrawer';
 import InvoiceDetailDrawer from '../components/InvoiceDetailDrawer';
+import QuoteDrawer from '../components/common/QuoteDrawer';
+import { generateQuotationPDF } from '../utils/quotationPDF';
+import dayjs from 'dayjs';
 
 const AppDrawerContext = createContext();
 
@@ -62,6 +65,9 @@ export const AppDrawerProvider = ({ children }) => {
 	const [invoiceDetailDrawer, setInvoiceDetailDrawer] = useState({ open: false, invoice: null, invoiceId: null });
 	const [invoiceDrawerExtra, setInvoiceDrawerExtra] = useState(null);
 	
+	// Quotation Drawer
+	const [quoteDrawer, setQuoteDrawer] = useState({ open: false, quoteData: null });
+	
 	const showProjectFormDrawer = (project = null, mode = 'create', onSuccess = null) => {
 		setProjectFormDrawer({ open: true, project, mode, onSuccess });
 		setProjectCreditExceeded(false); // Reset on open
@@ -97,6 +103,9 @@ export const AppDrawerProvider = ({ children }) => {
 		setInvoiceDetailDrawer({ open: false, invoice: null, invoiceId: null });
 		setInvoiceDrawerExtra(null);
 	};
+
+	const showQuoteDrawer = (quoteData) => setQuoteDrawer({ open: true, quoteData });
+	const closeQuoteDrawer = () => setQuoteDrawer({ open: false, quoteData: null });
 
 	// User Drawers
 	const [userFormDrawer, setUserFormDrawer] = useState({ open: false, user: null, mode: 'create', onSuccess: null });
@@ -162,6 +171,9 @@ export const AppDrawerProvider = ({ children }) => {
 		// Invoice Detail
 		showInvoiceDetailDrawer,
 		closeInvoiceDetailDrawer,
+		// Quotation
+		showQuoteDrawer,
+		closeQuoteDrawer,
 		// User
 		showUserFormDrawer,
 		closeUserFormDrawer,
@@ -187,6 +199,37 @@ export const AppDrawerProvider = ({ children }) => {
 	return (
 		<AppDrawerContext.Provider value={value}>
 			{children}
+			<QuoteDrawer
+				open={quoteDrawer.open}
+				onClose={closeQuoteDrawer}
+				quoteData={quoteDrawer.quoteData}
+				onDownload={async () => {
+					if (!quoteDrawer.quoteData) return;
+					try {
+						message.loading({ content: 'Generating quote PDF...', key: 'quote-pdf' });
+						await generateQuotationPDF(quoteDrawer.quoteData);
+						message.success({ content: 'Quotation downloaded', key: 'quote-pdf', duration: 2 });
+					} catch (err) {
+						message.error({ content: 'Failed to generate quotation', key: 'quote-pdf', duration: 2 });
+					}
+				}}
+				onEmail={() => {
+					const q = quoteDrawer.quoteData;
+					if (!q?.client?.email) return;
+					const subject = encodeURIComponent(
+						`Quotation for Project ${q.project?.projectCode || ''}`
+					);
+					const body = encodeURIComponent(
+						`Hi ${q.client.displayName || q.client.companyName || 'Client'},\n\n` +
+						`Please find attached the quotation for project ${q.project?.projectCode || ''}.\n` +
+						`Total Amount: ₹${q.totalAmount.toLocaleString()}\n` +
+						`Valid Until: ${dayjs(q.validUntil).format('DD MMM YYYY')}\n\n` +
+						`Kindly confirm so we can proceed.\n\nThanks,\nMicroArt`
+					);
+					window.open(`mailto:${q.client.email}?subject=${subject}&body=${body}`);
+				}}
+				emailDisabled={!quoteDrawer.quoteData?.client?.email}
+			/>
 			{/* Role Form Drawer */}
 			{roleFormDrawer.open && (
 				<ModuleDrawer

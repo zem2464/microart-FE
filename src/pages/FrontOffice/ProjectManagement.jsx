@@ -12,6 +12,7 @@ import {
   Timeline,
   Button,
   Modal,
+  Drawer,
   Alert,
   Tooltip,
   Input,
@@ -41,6 +42,8 @@ import {
   ClockCircleOutlined,
   DollarOutlined,
   ExclamationCircleOutlined,
+  FilePdfOutlined,
+  ReloadOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation } from "@apollo/client";
 import {
@@ -82,6 +85,7 @@ const STATUS_MAP = {
   CANCELLED: { label: "Cancelled", color: "error" },
   ON_HOLD: { label: "On Hold", color: "warning" },
   REQUESTED: { label: "Pending Approval", color: "purple" },
+  REOPEN: { label: "Reopen", color: "magenta" },
 };
 
 // Helper function to get client display name
@@ -98,6 +102,7 @@ const ProjectManagement = () => {
     showProjectDetailDrawer,
     showProjectDetailDrawerV2,
     showInvoiceDetailDrawer,
+    showQuoteDrawer,
   } = useContext(AppDrawerContext);
   const user = useReactiveVar(userCacheVar);
 
@@ -125,6 +130,10 @@ const ProjectManagement = () => {
   const canDeleteProjects = hasPermission(
     user,
     generatePermission(MODULES.PROJECTS, ACTIONS.DELETE)
+  );
+  const canEditProjects = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.UPDATE)
   );
   const canCreateFinance = hasPermission(
     user,
@@ -652,6 +661,7 @@ const ProjectManagement = () => {
     requested: statsMap.requested?.count || 0,
     cancelled: statsMap.cancelled?.count || 0,
     onHold: statsMap.on_hold?.count || 0,
+    reopen: statsMap.reopen?.count || 0,
     flyOnCredit: projectStatsResponse.flyOnCreditCount || 0, // Use dedicated fly-on-credit count from response
     noInvoice: projectStatsResponse.noInvoiceCount || 0, // Completed projects without invoices
     notDelivered: projectStatsResponse.notDeliveredCount || 0, // Completed projects with invoice but not delivered
@@ -831,8 +841,79 @@ const ProjectManagement = () => {
       });
   };
 
+  const buildQuoteFromProject = (project) => {
+    if (!project) return null;
+
+    const now = dayjs();
+    const identifier =
+      project.projectCode || project.projectNumber || project.id || "PROJECT";
+    const items = (project.projectGradings || []).length
+      ? project.projectGradings.map((pg, idx) => {
+          const quantity = Number(pg.imageQuantity || 0);
+          const rate = Number(pg.customRate || pg.grading?.defaultRate || 0);
+          const amount = quantity * rate;
+          return {
+            line: idx + 1,
+            description: pg.grading?.name || "Service",
+            quantity,
+            rate,
+            amount,
+          };
+        })
+      : [
+          {
+            line: 1,
+            description: project.grading?.name || "Service",
+            quantity:
+              project.imageQuantity ||
+              project.totalImageQuantity ||
+              project.imageQuantityInvoiced ||
+              0,
+            rate: Number(project.grading?.defaultRate || 0),
+          },
+        ].map((item) => ({ ...item, amount: item.quantity * item.rate }));
+
+    const subtotal = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const discountAmount = Math.max(Number(project.discountAmount || 0), 0);
+    const taxableBase = Math.max(subtotal - discountAmount, 0);
+    const taxRate = Number(
+      project.taxRate || project.taxPercent || project.taxPercentage || 0
+    );
+    const taxAmount = Math.max((taxableBase * taxRate) / 100, 0);
+    const totalAmount = Math.max(taxableBase + taxAmount, 0);
+    const totalImages = items.reduce(
+      (sum, item) => sum + Number(item.quantity || 0),
+      0
+    );
+
+    return {
+      quoteNumber: `QT-${identifier}-${now.format("YYMMDDHHmm")}`,
+      quoteDate: now.toISOString(),
+      validUntil: project.quoteValidUntil || now.add(7, "day").toISOString(),
+      client: project.client,
+      project,
+      items,
+      subtotal,
+      discountAmount,
+      taxRate,
+      taxAmount,
+      totalAmount,
+      totalImages,
+      notes: project.description,
+    };
+  };
+
+  const handleShowQuote = (project) => {
+    const draftQuote = buildQuoteFromProject(project);
+    showQuoteDrawer(draftQuote);
+  };
+
   // Status editing handlers (inline editing like ClientList)
   const handleEditStatus = (projectId, currentStatus) => {
+    if (!canEditProjects) {
+      message.error("You don't have permission to edit project status");
+      return;
+    }
     setEditingStatus((prev) => ({ ...prev, [projectId]: true }));
     setTempValues((prev) => ({
       ...prev,
@@ -898,6 +979,24 @@ const ProjectManagement = () => {
         }
       }
       // Permanent clients: Invoice is sufficient (no additional checks)
+    }
+    
+    // Validate REOPEN status change
+    if (newStatus?.toLowerCase() === "reopen") {
+      if (!project) {
+        message.error("Project not found");
+        return;
+      }
+      const invoicePaid =
+        project.invoice?.status === "fully_paid" ||
+        (project.invoice?.balanceAmount !== undefined &&
+          project.invoice?.balanceAmount <= 0);
+      if (invoicePaid) {
+        message.error(
+          "Cannot change to Reopen: invoice is fully paid/completed"
+        );
+        return;
+      }
     }
 
     try {
@@ -984,10 +1083,12 @@ const ProjectManagement = () => {
           record.invoice?.balanceAmount <= 0;
         const isCompleted = record.status?.toLowerCase() === "completed";
 
-        // If project is completed AND has invoice, show ONLY delivered option
+        // If project is completed AND has invoice, show ONLY delivered or reopen option
         const filteredStatusOptions =
           isCompleted && hasInvoice
-            ? statusOptions.filter((opt) => opt.value === "delivered")
+            ? statusOptions.filter(
+                (opt) => opt.value === "delivered" || opt.value === "reopen"
+              )
             : statusOptions;
 
         if (isEditing) {
@@ -1025,6 +1126,12 @@ const ProjectManagement = () => {
                       }
                     }
                     // Permanent: No restrictions
+                  } else if (option.value === "reopen") {
+                    // Reopen allowed only if invoice is not completed/fully paid
+                    if (isPaid) {
+                      disabled = true;
+                      title = "Cannot reopen when invoice is fully paid";
+                    }
                   }
 
                   return (
@@ -1071,13 +1178,15 @@ const ProjectManagement = () => {
         return (
           <div className="group flex items-center justify-between">
             <Tag color={statusConfig.color}>{statusConfig.label}</Tag>
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              className="opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={() => handleEditStatus(record.id, status)}
-            />
+            {canEditProjects && (
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                className="opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={() => handleEditStatus(record.id, status)}
+              />
+            )}
           </div>
         );
       },
@@ -1173,7 +1282,7 @@ const ProjectManagement = () => {
               onClick={() => handleViewProject(record)}
             />
           </Tooltip>
-          {(record.status || "").toString().toUpperCase() !== "COMPLETED" && (
+          {canEditProjects && (record.status || "").toString().toUpperCase() !== "COMPLETED" && (
             <Tooltip title="Edit">
               <Button
                 type="text"
@@ -1202,6 +1311,22 @@ const ProjectManagement = () => {
                 />
               </Tooltip>
             )}
+          {(["ACTIVE", "IN_PROGRESS"].includes((record.status || "").toString().toUpperCase())) &&
+            !(
+              record.invoiceId ||
+              record.invoice?.id ||
+              invoicedProjectIds.has(record.id)
+            ) && (
+              <Tooltip title="View Quotation">
+                <Button
+                  type="text"
+                  icon={<FilePdfOutlined />}
+                  style={{ color: "#13c2c2" }}
+                  onClick={() => handleShowQuote(record)}
+                />
+              </Tooltip>
+            )}
+
           {(record.status || "").toString().toUpperCase() === "ACTIVE" &&
             ((record.taskCount &&
               record.completedTaskCount &&
@@ -1400,6 +1525,28 @@ const ProjectManagement = () => {
                     padding: "4px 8px",
                     borderRadius: "4px",
                     transition: "background-color 0.3s",
+                  }}
+                  className="hover:bg-gray-100"
+                  onClick={() => setStatusFilter("REOPEN")}
+                >
+                  <ReloadOutlined style={{ fontSize: 16, color: "#eb2f96" }} />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Reopen:
+                  </Text>
+                  <Tag
+                    color="magenta"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.reopen}
+                  </Tag>
+                </Space>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
                     backgroundColor:
                       stats.noInvoice > 0 ? "#fff7e6" : "transparent",
                     border: stats.noInvoice > 0 ? "1px solid #ffa940" : "none",
@@ -1526,6 +1673,7 @@ const ProjectManagement = () => {
                 <Option value="DRAFT">Draft</Option>
                 <Option value="ACTIVE">Active</Option>
                 <Option value="COMPLETED">Completed</Option>
+                <Option value="REOPEN">Reopen</Option>
                 <Option value="REQUESTED">Fly-on-Credit</Option>
                 <Option value="NO_INVOICE">No Invoice</Option>
                 <Option value="CANCELLED">Cancelled</Option>

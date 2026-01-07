@@ -123,6 +123,49 @@ const CustomFieldRenderer = ({ field, value, onChange, disabled = false }) => {
         }
         break;
 
+      case "date":
+      case "datetime":
+        if (parsedValidation.min || parsedValidation.max) {
+          rules.push({
+            validator: (_, val) => {
+              if (!val) return Promise.resolve();
+              
+              // Ensure val is a dayjs object
+              let dateValue = val;
+              if (!dayjs.isDayjs(val)) {
+                dateValue = dayjs(val);
+              }
+              
+              if (!dateValue.isValid()) {
+                return Promise.reject(
+                  new Error(`Please enter a valid ${fieldType}`)
+                );
+              }
+              
+              if (parsedValidation.min) {
+                const minDate = dayjs(parsedValidation.min);
+                if (minDate.isValid() && dateValue.isBefore(minDate)) {
+                  return Promise.reject(
+                    new Error(`${fieldName} must be after ${parsedValidation.min}`)
+                  );
+                }
+              }
+              
+              if (parsedValidation.max) {
+                const maxDate = dayjs(parsedValidation.max);
+                if (maxDate.isValid() && dateValue.isAfter(maxDate)) {
+                  return Promise.reject(
+                    new Error(`${fieldName} must be before ${parsedValidation.max}`)
+                  );
+                }
+              }
+              
+              return Promise.resolve();
+            },
+          });
+        }
+        break;
+
       case "select":
         if (parsedOptions.length > 0) {
           rules.push({

@@ -16,25 +16,29 @@ import {
   Button,
   Space,
   message,
+  Descriptions,
+  Table,
+  Modal,
+  Select,
+  DatePicker,
 } from "antd";
 import {
-  FolderOutlined,
-  CodeOutlined,
+  EditOutlined,
   CalendarOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
-  DollarOutlined,
-  FileImageOutlined,
   ReloadOutlined,
+  ClockCircleOutlined,
+  FolderOutlined,
   CopyOutlined,
+  FilePdfOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { userCacheVar } from "../cache/userCacheVar";
 import {
   GET_PROJECT_DETAIL,
   GET_AVAILABLE_USERS,
+  ACTIVATE_PROJECT,
+  DELETE_PROJECT,
+  UPDATE_PROJECT,
 } from "../graphql/projectQueries";
-import { UPDATE_PROJECT } from "../graphql/projectQueries";
 import { UPDATE_CLIENT } from "../gql/clients";
 import { GET_TASKS } from "../gql/tasks";
 // Use work types query that includes sortOrder for proper ordering
@@ -44,6 +48,16 @@ import AuditDisplay from "./common/AuditDisplay.jsx";
 import TasksTable from "./common/TasksTable";
 import { generateBaseColumns } from "./common/TasksTableColumns";
 import { useAppDrawer } from "../contexts/DrawerContext";
+import { AppDrawerContext } from "../contexts/DrawerContext";
+import { GENERATE_PROJECT_INVOICE } from "../gql/clientLedger";
+import {
+  hasPermission,
+  MODULES,
+  ACTIONS,
+  generatePermission,
+} from "../config/permissions";
+import { generateQuotationPDF } from "../utils/quotationPDF";
+import { userCacheVar } from "../cache/userCacheVar";
 
 const { Title, Text } = Typography;
 
@@ -53,6 +67,7 @@ const STATUS_MAP = {
   ACTIVE: { label: "Active", color: "green" },
   IN_PROGRESS: { label: "In Progress", color: "processing" },
   REVIEW: { label: "Review", color: "cyan" },
+  REOPEN: { label: "Reopen", color: "geekblue" },
   COMPLETED: { label: "Completed", color: "success" },
   CANCELLED: { label: "Cancelled", color: "error" },
   ON_HOLD: { label: "On Hold", color: "warning" },
@@ -63,7 +78,19 @@ const STATUS_MAP = {
 const ProjectDetailDrawer = ({ projectId }) => {
   const currentUser = useReactiveVar(userCacheVar);
   const { updateProjectDetailDrawerTitle } = useAppDrawer();
+  const drawerCtx = React.useContext(AppDrawerContext);
   const client = useApolloClient();
+
+  // State declarations
+  const [projectNotesInput, setProjectNotesInput] = useState("");
+  const [clientNotesInput, setClientNotesInput] = useState("");
+  const [quoteVisible, setQuoteVisible] = useState(false);
+  const [quoteData, setQuoteData] = useState(null);
+  const [statusModalVisible, setStatusModalVisible] = useState(false);
+  const [statusValue, setStatusValue] = useState("");
+  const [dueDateModalVisible, setDueDateModalVisible] = useState(false);
+  const [dueDateValue, setDueDateValue] = useState(null);
+  const [statusSelectOpen, setStatusSelectOpen] = useState(false);
 
   // Fetch project details
   const { data, loading, error, refetch } = useQuery(GET_PROJECT_DETAIL, {
@@ -78,71 +105,10 @@ const ProjectDetailDrawer = ({ projectId }) => {
     loading: tasksLoading,
     refetch: refetchTasks,
   } = useQuery(GET_TASKS, {
-    variables: {
-      filters: { 
-        projectId: projectId,
-        // Explicitly include all statuses including COMPLETED
-        statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
-        // Include inactive tasks (soft-deleted) to show completed tasks
-        includeInactive: true
-      },
-      page: 1,
-      limit: 1000,
-      sortBy: "createdAt",
-      sortOrder: "DESC",
-    },
+    variables: { projectId },
     skip: !projectId,
     fetchPolicy: "no-cache",
-    onCompleted: (data) => {
-      console.log('[ProjectDetailDrawer] GET_TASKS completed. Tasks received:', data?.tasks?.tasks?.length || 0);
-      if (data?.tasks?.tasks?.length > 0) {
-        console.log('[ProjectDetailDrawer] Sample tasks:', data.tasks.tasks.slice(0, 3).map(t => ({ 
-          id: t.id, 
-          taskCode: t.taskCode, 
-          status: t.status,
-          isActive: t.isActive 
-        })));
-      }
-    },
-    onError: (error) => {
-      console.error('[ProjectDetailDrawer] GET_TASKS error:', error);
-    }
   });
-
-  // Fetch available users
-  const { data: usersData } = useQuery(GET_AVAILABLE_USERS, {
-    fetchPolicy: "no-cache",
-  });
-
-  // Fetch work types with task types
-  const { data: workTypesData } = useQuery(GET_WORK_TYPES, {
-    fetchPolicy: "no-cache",
-  });
-  const [updateProject] = useMutation(UPDATE_PROJECT, {
-    fetchPolicy: 'no-cache',
-    onCompleted: () => {
-      // Evict cache
-      client.cache.evict({ fieldName: 'project' });
-      client.cache.evict({ fieldName: 'tasks' });
-      client.cache.gc();
-      message.success("Project notes updated");
-      refetch();
-    },
-    onError: (error) => message.error(error.message),
-  });
-  const [updateClient] = useMutation(UPDATE_CLIENT, {
-    fetchPolicy: 'no-cache',
-    onCompleted: () => {
-      // Evict cache
-      client.cache.evict({ fieldName: 'project' });
-      client.cache.evict({ fieldName: 'client' });
-      client.cache.gc();
-      message.success("Client notes updated");
-      refetch();
-    },
-    onError: (error) => message.error(error.message),
-  });
-
 
   // Fetch combined audit logs for project and all its tasks (like Jira ticket history)
   const {
@@ -155,13 +121,73 @@ const ProjectDetailDrawer = ({ projectId }) => {
     fetchPolicy: "no-cache",
   });
 
+  // Fetch available users for assignment
+  const {
+    data: usersData,
+    loading: usersLoading,
+  } = useQuery(GET_AVAILABLE_USERS, {
+    variables: { limit: 1000, offset: 0 },
+    fetchPolicy: "cache-first",
+  });
+
+  // Fetch work types
+  const {
+    data: workTypesData,
+    loading: workTypesLoading,
+  } = useQuery(GET_WORK_TYPES, {
+    fetchPolicy: "cache-first",
+  });
+
+  // Mutations
+  const [updateProject] = useMutation(UPDATE_PROJECT, {
+    onCompleted: () => {
+      message.success("Project updated successfully");
+      refetch();
+    },
+    onError: (error) => message.error(error.message),
+  });
+
+  const [updateClient] = useMutation(UPDATE_CLIENT, {
+    onCompleted: () => {
+      message.success("Client notes updated");
+      refetch();
+    },
+    onError: (error) => message.error(error.message),
+  });
+
   // Mutations - Using cache eviction and refetchQueries to ensure updates reflect
   const project = data?.project;
   const tasks = tasksData?.tasks?.tasks || [];
+  const canShowQuote =
+    ["ACTIVE", "IN_PROGRESS"].includes((project?.status || "").toString().toUpperCase()) &&
+    !(project?.invoiceId || project?.invoice?.id);
+  const hasInvoice = !!(project?.invoiceId || project?.invoice?.id);
+  const completedTasks = tasks.filter((task) => (task.status || "").toString().toUpperCase() === "COMPLETED").length;
+  const totalTasks = tasks.length || 0;
+  const allTasksCompleted = totalTasks > 0 && completedTasks === totalTasks;
+
+  const canCreateFinance = hasPermission(
+    currentUser,
+    generatePermission(MODULES.FINANCE, ACTIONS.CREATE)
+  );
+  const canDeleteProjects = hasPermission(
+    currentUser,
+    generatePermission(MODULES.PROJECTS, ACTIONS.DELETE)
+  );
+  const canApproveProjects = hasPermission(
+    currentUser,
+    generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE)
+  );
+  const canEditProjects = hasPermission(
+    currentUser,
+    generatePermission(MODULES.PROJECTS, ACTIONS.UPDATE)
+  );
   
   // Update drawer title when project loads
   useEffect(() => {
     if (project) {
+      setStatusValue((project.status || "").toLowerCase());
+      setDueDateValue(project.deadlineDate ? dayjs(project.deadlineDate) : null);
       const statusConfig = STATUS_MAP[project.status?.toUpperCase()] || {};
       const titleElement = (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingRight: 24 }}>
@@ -173,27 +199,116 @@ const ProjectDetailDrawer = ({ projectId }) => {
               {statusConfig.label || project.status}
             </Tag>
           </Space>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              refetch();
-              refetchTasks();
-              refetchAudit();
-            }}
-            size="small"
-          >
-            Refresh
-          </Button>
+          <Space>
+            {canEditProjects && (
+              <Select
+                value={statusValue}
+                onChange={(value) => {
+                  // Save immediately with the selected value to avoid stale state
+                  setStatusValue(value);
+                  handleSaveStatus(value);
+                }}
+                style={{ width: 150 }}
+                size="small"
+                placeholder="Change Status"
+                options={(() => {
+                  const options = Object.entries(STATUS_MAP).map(([key, cfg]) => ({
+                    value: key.toLowerCase(),
+                    label: cfg.label,
+                    color: cfg.color,
+                  }));
+                  const isCompleted = (project?.status || "").toLowerCase() === "completed";
+                  const filtered = isCompleted && hasInvoice
+                    ? options.filter((opt) => opt.value === "delivered")
+                    : options;
+
+                  const clientType = project?.client?.clientType;
+                  const isPaid = !!(project?.invoice?.status === "fully_paid" || (project?.invoice?.balanceAmount ?? 0) <= 0);
+
+                  return filtered.map((option) => {
+                    let disabled = false;
+                    let title = "";
+                    if (option.value === "delivered") {
+                      if (!hasInvoice) {
+                        disabled = true;
+                        title = "Invoice must be generated first";
+                      } else if (clientType === "walkIn") {
+                        if (!canApproveProjects) {
+                          disabled = true;
+                          title = "Permission required to deliver walk-in projects";
+                        } else if (!isPaid) {
+                          disabled = true;
+                          title = "Invoice must be paid for walk-in projects";
+                        }
+                      }
+                    }
+                    return {
+                      ...option,
+                      disabled,
+                      label: disabled ? (
+                        <Tooltip title={title}>{option.label} 🔒</Tooltip>
+                      ) : (
+                        option.label
+                      ),
+                    };
+                  });
+                })()}
+              />
+            )}
+            {canEditProjects && (
+              <Button
+                icon={<CalendarOutlined />}
+                size="small"
+                onClick={() => setDueDateModalVisible(true)}
+              >
+                Change Due Date
+              </Button>
+            )}
+            <Button
+              icon={<ReloadOutlined />}
+              size="small"
+              onClick={() => {
+                refetch();
+                refetchTasks();
+                refetchAudit();
+              }}
+            >
+              Refresh
+            </Button>
+            {canShowQuote && (
+              <Button
+                size="small"
+                icon={<FilePdfOutlined />}
+                onClick={handleOpenQuote}
+              >
+                View Quote
+              </Button>
+            )}
+            {canDeleteProjects && (project.status || '').toString().toUpperCase() !== 'COMPLETED' && (
+              <Button
+                danger
+                size="small"
+                onClick={() => {
+                  Modal.confirm({
+                    title: 'Delete project?',
+                    content: 'This action cannot be undone.',
+                    okType: 'danger',
+                    onOk: () => deleteProject({ variables: { id: project.id } }),
+                  });
+                }}
+              >
+                Delete
+              </Button>
+            )}
+          </Space>
         </div>
       );
       updateProjectDetailDrawerTitle(titleElement);
     }
-  }, [project, updateProjectDetailDrawerTitle]);
-  const [projectNotesInput, setProjectNotesInput] = useState("");
-    const [clientNotesInput, setClientNotesInput] = useState("");
+  }, [project, statusValue, dueDateValue, canEditProjects]);
 
-    React.useEffect(() => {
-      setProjectNotesInput(project?.notes || "");
+  React.useEffect(() => {
+    setProjectNotesInput(project?.notes || "");
       const clientNotesFromTasks = Array.isArray(tasks) && tasks.length > 0
         ? (tasks[0]?.project?.client?.clientNotes || tasks[0]?.clientNotes)
         : null;
@@ -220,6 +335,37 @@ const ProjectDetailDrawer = ({ projectId }) => {
     };
   const users = usersData?.availableUsers || [];
   const allWorkTypes = workTypesData?.workTypes || [];
+
+  const [activateProject, { loading: activating }] = useMutation(ACTIVATE_PROJECT, {
+    fetchPolicy: "no-cache",
+    onCompleted: () => {
+      message.success("Project activated");
+      refetch();
+    },
+    onError: (err) => message.error(err.message),
+  });
+
+  const [deleteProject, { loading: deleting }] = useMutation(DELETE_PROJECT, {
+    fetchPolicy: "no-cache",
+    onCompleted: () => {
+      message.success("Project deleted");
+      drawerCtx?.closeProjectDetailDrawerV2?.();
+    },
+    onError: (err) => message.error(err.message),
+  });
+
+  const [generateInvoice, { loading: invoicing }] = useMutation(GENERATE_PROJECT_INVOICE, {
+    fetchPolicy: "no-cache",
+    onCompleted: (data) => {
+      if (data?.generateProjectInvoice?.success) {
+        message.success(data.generateProjectInvoice.message || "Invoice generated");
+        refetch();
+      } else {
+        message.error(data?.generateProjectInvoice?.message || "Failed to generate invoice");
+      }
+    },
+    onError: (err) => message.error(err.message),
+  });
 
   // Base columns for TasksTable - show all columns except project/client/dates
   const baseColumns = generateBaseColumns({
@@ -301,6 +447,118 @@ const ProjectDetailDrawer = ({ projectId }) => {
     }
   };
 
+  const buildQuoteFromProject = (proj) => {
+    if (!proj) return null;
+    const now = dayjs();
+    const identifier = proj.projectCode || proj.projectNumber || proj.id || "PROJECT";
+    const items = (proj.projectGradings || []).length
+      ? proj.projectGradings.map((pg, idx) => {
+          const quantity = Number(pg.imageQuantity || 0);
+          const rate = Number(pg.customRate || pg.grading?.defaultRate || 0);
+          const amount = quantity * rate;
+          return {
+            line: idx + 1,
+            description: pg.grading?.name || "Service",
+            quantity,
+            rate,
+            amount,
+          };
+        })
+      : [
+          {
+            line: 1,
+            description: proj.grading?.name || "Service",
+            quantity:
+              proj.imageQuantity ||
+              proj.totalImageQuantity ||
+              proj.imageQuantityInvoiced ||
+              0,
+            rate: Number(proj.grading?.defaultRate || 0),
+          },
+        ].map((item) => ({ ...item, amount: item.quantity * item.rate }));
+
+    const subtotal = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const discountAmount = Math.max(Number(proj.discountAmount || 0), 0);
+    const taxableBase = Math.max(subtotal - discountAmount, 0);
+    const taxRate = Number(proj.taxRate || proj.taxPercent || proj.taxPercentage || 0);
+    const taxAmount = Math.max((taxableBase * taxRate) / 100, 0);
+    const totalAmount = Math.max(taxableBase + taxAmount, 0);
+    const totalImages = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
+
+    return {
+      quoteNumber: `QT-${identifier}-${now.format("YYMMDDHHmm")}`,
+      quoteDate: now.toISOString(),
+      validUntil: proj.quoteValidUntil || now.add(7, "day").toISOString(),
+      client: proj.client,
+      project: proj,
+      items,
+      subtotal,
+      discountAmount,
+      taxRate,
+      taxAmount,
+      totalAmount,
+      totalImages,
+      notes: proj.description,
+    };
+  };
+
+  const handleOpenQuote = () => {
+    const draft = buildQuoteFromProject(project);
+    setQuoteData(draft);
+    setQuoteVisible(true);
+  };
+
+  const handleEditProject = () => {
+    drawerCtx?.showProjectFormDrawer?.(project, 'edit', () => {
+      refetch();
+      refetchTasks();
+    });
+  };
+
+  const handleSaveStatus = async (nextValue) => {
+    const valueToSave = (nextValue ?? statusValue) || "";
+    if (!valueToSave) return;
+    try {
+      message.loading({ content: "Updating status...", key: "status" });
+      await updateProject({ variables: { id: project.id, input: { status: valueToSave.toUpperCase() } } });
+      message.success({ content: "Status updated", key: "status", duration: 2 });
+      setStatusModalVisible(false);
+      setStatusSelectOpen(false);
+      refetch();
+    } catch (err) {
+      message.error({ content: err.message, key: "status" });
+    }
+  };
+
+  const handleSaveDueDate = async () => {
+    try {
+      message.loading({ content: "Updating due date...", key: "due" });
+      await updateProject({
+        variables: {
+          id: project.id,
+          input: { deadlineDate: dueDateValue ? dueDateValue.toDate().toISOString() : null },
+        },
+      });
+      message.success({ content: "Due date updated", key: "due", duration: 2 });
+      setDueDateModalVisible(false);
+      refetch();
+    } catch (err) {
+      message.error({ content: err.message, key: "due" });
+    }
+  };
+
+  const handleDownloadQuote = async () => {
+    if (!quoteData) return;
+    try {
+      message.loading({ content: "Generating quote PDF...", key: "quote-pdf" });
+      await generateQuotationPDF(quoteData);
+      message.success({ content: "Quotation downloaded", key: "quote-pdf", duration: 2 });
+    } catch (err) {
+      console.error("Quote PDF error", err);
+      message.error({ content: "Failed to generate quotation", key: "quote-pdf", duration: 2 });
+    }
+  };
+
   // Structure data for table display using projectWorkTypes
   const getWorkTypeTabsData = () => {
     if (
@@ -344,6 +602,13 @@ const ProjectDetailDrawer = ({ projectId }) => {
           .map((projectGrading) => {
             const grading = projectGrading.grading;
             if (!grading) return null;
+
+            // Verify this grading belongs to the current work type
+            const gradingWorkTypeId = grading.workType?.id;
+            if (gradingWorkTypeId !== workTypeId) {
+              // Skip gradings that don't belong to this work type
+              return null;
+            }
 
             // Get all tasks for this grading, organized by task type
             const tasksByType = {};
@@ -436,10 +701,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
     return <Empty description="Project not found" />;
   }
 
-  const totalTasks = tasks.length || 0;
-  const completedTasks = tasks.filter(
-    (task) => task.status === "completed"
-  ).length;
   const totalImages = project.totalImageQuantity || project.imageQuantity || 0;
   const completedImages = tasks.reduce(
     (sum, task) => sum + (task.completedImageQuantity || 0),
@@ -562,6 +823,57 @@ const ProjectDetailDrawer = ({ projectId }) => {
         </Row>
       </Card>
 
+      <Card size="small" style={{ marginBottom: 16 }} title={<Text strong>Actions</Text>}>
+        <Space wrap>
+          {canEditProjects && <Button onClick={handleEditProject}>Edit Project</Button>}
+          {canApproveProjects && (project.status || '').toString().toUpperCase() === 'DRAFT' && (
+            <Button onClick={() => activateProject({ variables: { id: project.id } })} loading={activating}>
+              Activate
+            </Button>
+          )}
+          {(
+            ((project.status || '').toString().toUpperCase() === 'ACTIVE' && allTasksCompleted) ||
+            (project.status || '').toString().toUpperCase() === 'COMPLETED'
+          ) &&
+            !hasInvoice &&
+            (canCreateFinance || project?.client?.leaderId === currentUser?.id) && (
+              <Button
+                type="primary"
+                loading={invoicing}
+                onClick={() => generateInvoice({ variables: { projectId: project.id } })}
+              >
+                Generate Invoice
+              </Button>
+            )}
+          {hasInvoice && (
+            <Button onClick={() => drawerCtx?.showInvoiceDetailDrawer?.(project.invoiceId || project.invoice?.id)}>
+              View Invoice
+            </Button>
+          )}
+          {canShowQuote && (
+            <Button icon={<FilePdfOutlined />} onClick={handleOpenQuote}>
+              View Quote
+            </Button>
+          )}
+          {canDeleteProjects && (project.status || '').toString().toUpperCase() !== 'COMPLETED' && (
+            <Button
+              danger
+              loading={deleting}
+              onClick={() => {
+                Modal.confirm({
+                  title: 'Delete project?',
+                  content: 'This action cannot be undone.',
+                  okType: 'danger',
+                  onOk: () => deleteProject({ variables: { id: project.id } }),
+                });
+              }}
+            >
+              Delete
+            </Button>
+          )}
+        </Space>
+      </Card>
+
       {/* Notes Section */}
       <Card title={<Title level={4}>Notes</Title>} size="small" style={{ marginBottom: 16 }}>
         <Row gutter={12}>
@@ -572,6 +884,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
               value={projectNotesInput}
               onChange={(e) => setProjectNotesInput(e.target.value)}
               placeholder="Enter project internal notes"
+              disabled={!canEditProjects}
             />
           </Col>
           <Col span={12}>
@@ -581,11 +894,12 @@ const ProjectDetailDrawer = ({ projectId }) => {
               value={clientNotesInput}
               onChange={(e) => setClientNotesInput(e.target.value)}
               placeholder="Enter client notes"
+              disabled={!canEditProjects}
             />
           </Col>
         </Row>
         <div style={{ marginTop: 12, textAlign: 'right' }}>
-          <Button type="primary" onClick={handleUpdateNotes}>
+          <Button type="primary" onClick={handleUpdateNotes} disabled={!canEditProjects}>
             Update Notes
           </Button>
         </div>
@@ -723,6 +1037,194 @@ const ProjectDetailDrawer = ({ projectId }) => {
           loading={auditLoading}
         />
       </Card>
+
+      <Modal
+        title="Quotation Preview"
+        open={quoteVisible}
+        onCancel={() => setQuoteVisible(false)}
+        width={900}
+        footer={[
+          <Button key="close" onClick={() => setQuoteVisible(false)}>
+            Close
+          </Button>,
+          <Button
+            key="pdf"
+            type="primary"
+            icon={<FilePdfOutlined />}
+            onClick={handleDownloadQuote}
+            disabled={!quoteData}
+          >
+            Download PDF
+          </Button>,
+        ]}
+      >
+        {quoteData ? (
+          <Space direction="vertical" size="large" style={{ width: "100%" }}>
+            <Card size="small">
+              <Row gutter={[16, 12]}>
+                <Col span={8}>
+                  <Text type="secondary">Quote Number</Text>
+                  <div><Text strong>{quoteData.quoteNumber}</Text></div>
+                </Col>
+                <Col span={8}>
+                  <Text type="secondary">Quote Date</Text>
+                  <div><Text strong>{dayjs(quoteData.quoteDate).format("DD MMM YYYY")}</Text></div>
+                </Col>
+                <Col span={8}>
+                  <Text type="secondary">Valid Until</Text>
+                  <div>
+                    <Text strong type={dayjs(quoteData.validUntil).isBefore(dayjs()) ? "danger" : undefined}>
+                      {dayjs(quoteData.validUntil).format("DD MMM YYYY")}
+                    </Text>
+                  </div>
+                </Col>
+              </Row>
+            </Card>
+
+            <Card size="small" title={<Text strong>Client & Project</Text>}>
+              <Descriptions bordered size="small" column={2}>
+                <Descriptions.Item label="Client" span={1}>
+                  {quoteData.client?.displayName || quoteData.client?.companyName || quoteData.client?.clientCode || "N/A"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Contact" span={1}>
+                  {quoteData.client?.email || quoteData.client?.contactNoPersonal || quoteData.client?.mobile || "-"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Project Code" span={1}>
+                  {quoteData.project?.projectCode || "N/A"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Project Name" span={1}>
+                  {quoteData.project?.name || quoteData.project?.description || "N/A"}
+                </Descriptions.Item>
+                <Descriptions.Item label="Images" span={1}>
+                  {quoteData.totalImages}
+                </Descriptions.Item>
+                <Descriptions.Item label="Status" span={1}>
+                  <Tag color="blue">Active</Tag>
+                </Descriptions.Item>
+                {quoteData.notes && (
+                  <Descriptions.Item label="Notes" span={2}>
+                    {quoteData.notes}
+                  </Descriptions.Item>
+                )}
+              </Descriptions>
+            </Card>
+
+            <Card size="small" title={<Text strong>Service Details</Text>}>
+              <Table
+                dataSource={quoteData.items}
+                rowKey={(record) => `${record.line}-${record.description}`}
+                size="small"
+                pagination={false}
+                bordered
+                columns={[
+                  { title: "#", dataIndex: "line", width: "5%", align: "center" },
+                  { title: "Description", dataIndex: "description", width: "45%", render: (value) => <Text strong>{value}</Text> },
+                  { title: "Qty", dataIndex: "quantity", width: "15%", align: "center" },
+                  { title: "Rate", dataIndex: "rate", width: "15%", align: "right", render: (rate) => `₹${Number(rate || 0).toLocaleString()}` },
+                  { title: "Amount", dataIndex: "amount", width: "20%", align: "right", render: (amount) => <Text strong>₹{Number(amount || 0).toLocaleString()}</Text> },
+                ]}
+                summary={() => (
+                  <Table.Summary fixed>
+                    <Table.Summary.Row style={{ backgroundColor: "#fafafa" }}>
+                      <Table.Summary.Cell colSpan={3}>
+                        <Text strong>Subtotal</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell colSpan={2} align="right">
+                        <Text strong>₹{quoteData.subtotal.toLocaleString()}</Text>
+                      </Table.Summary.Cell>
+                    </Table.Summary.Row>
+                    {quoteData.discountAmount > 0 && (
+                      <Table.Summary.Row style={{ backgroundColor: "#fafafa" }}>
+                        <Table.Summary.Cell colSpan={3}>
+                          <Text strong>Discount</Text>
+                        </Table.Summary.Cell>
+                        <Table.Summary.Cell colSpan={2} align="right">
+                          <Text type="danger">-₹{quoteData.discountAmount.toLocaleString()}</Text>
+                        </Table.Summary.Cell>
+                      </Table.Summary.Row>
+                    )}
+                    <Table.Summary.Row style={{ backgroundColor: "#fafafa" }}>
+                      <Table.Summary.Cell colSpan={3}>
+                        <Text strong>
+                          Tax{quoteData.taxRate ? ` (${quoteData.taxRate}%)` : ""}
+                        </Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell colSpan={2} align="right">
+                        <Text>₹{quoteData.taxAmount.toLocaleString()}</Text>
+                      </Table.Summary.Cell>
+                    </Table.Summary.Row>
+                    <Table.Summary.Row style={{ backgroundColor: "#e6fffb" }}>
+                      <Table.Summary.Cell colSpan={3}>
+                        <Text strong style={{ fontSize: "16px" }}>Total Quote Amount</Text>
+                      </Table.Summary.Cell>
+                      <Table.Summary.Cell colSpan={2} align="right">
+                        <Text strong style={{ fontSize: "16px", color: "#13c2c2" }}>
+                          ₹{quoteData.totalAmount.toLocaleString()}
+                        </Text>
+                      </Table.Summary.Cell>
+                    </Table.Summary.Row>
+                  </Table.Summary>
+                )}
+              />
+            </Card>
+          </Space>
+        ) : (
+          <Empty description="No quotation data" />
+        )}
+      </Modal>
+
+      <Modal
+        title="Change Status"
+        open={statusModalVisible}
+        onCancel={() => {
+          setStatusModalVisible(false);
+          setStatusSelectOpen(false);
+        }}
+        onOk={handleSaveStatus}
+        okButtonProps={{ disabled: !statusValue }}
+      >
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <Text>Select new status</Text>
+          <Select
+            value={statusValue}
+            onChange={setStatusValue}
+            style={{ width: "100%" }}
+            open={statusSelectOpen}
+            onDropdownVisibleChange={(open) => setStatusSelectOpen(open)}
+            options={(() => {
+              const options = Object.entries(STATUS_MAP).map(([key, cfg]) => ({
+                value: key.toLowerCase(),
+                label: cfg.label,
+              }));
+              
+              // If completed and invoiced, only show "delivered" option
+              if ((project?.status || '').toString().toUpperCase() === 'COMPLETED' && hasInvoice) {
+                return options.filter(opt => opt.value === 'delivered');
+              }
+              
+              return options;
+            })()}
+          />
+        </Space>
+      </Modal>
+
+      <Modal
+        title="Change Due Date"
+        open={dueDateModalVisible}
+        onCancel={() => setDueDateModalVisible(false)}
+        onOk={handleSaveDueDate}
+      >
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <Text>Select new due date</Text>
+          <DatePicker
+            style={{ width: "100%" }}
+            value={dueDateValue}
+            onChange={setDueDateValue}
+            format="DD MMM YYYY"
+            allowClear
+          />
+        </Space>
+      </Modal>
     </div>
   );
 };
