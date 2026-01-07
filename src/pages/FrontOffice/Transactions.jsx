@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useContext } from 'react';
 import { 
   Table, 
   Card, 
@@ -33,12 +34,14 @@ import dayjs from 'dayjs';
 import { GET_CLIENTS } from '../../gql/clients';
 import { GET_CLIENT_LEDGER_RANGE } from '../../gql/clientLedger';
 import { generateInvoicePDF } from '../../utils/invoicePDF';
+import { AppDrawerContext } from '../../contexts/DrawerContext';
 
 const { RangePicker } = DatePicker;
 const { Option } = Select;
 const { Title, Text } = Typography;
 
 const Transactions = () => {
+  const { showInvoiceDetailDrawer } = useContext(AppDrawerContext);
   const [selectedClient, setSelectedClient] = useState(null);
   const [dateRange, setDateRange] = useState([
     dayjs().startOf('month'),
@@ -363,11 +366,14 @@ const Transactions = () => {
             type="link" 
             icon={<EyeOutlined />}
             onClick={() => {
-              console.log('Selected Transaction:', record);
-              console.log('Invoice:', record.invoice);
-              console.log('Invoice Allocations:', record.invoice?.allocations);
-              setSelectedTransaction(record);
-              setDrawerVisible(true);
+              // For invoices, use centralized drawer
+              if (record.transactionType === 'work_done' && record.invoice) {
+                showInvoiceDetailDrawer(record.invoice.id);
+              } else {
+                // For payments and other transactions, use local drawer
+                setSelectedTransaction(record);
+                setDrawerVisible(true);
+              }
             }}
           >
             View

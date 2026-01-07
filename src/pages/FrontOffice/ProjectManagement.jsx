@@ -97,6 +97,7 @@ const ProjectManagement = () => {
     showProjectFormDrawer,
     showProjectDetailDrawer,
     showProjectDetailDrawerV2,
+    showInvoiceDetailDrawer,
   } = useContext(AppDrawerContext);
   const user = useReactiveVar(userCacheVar);
 
@@ -1249,16 +1250,17 @@ const ProjectManagement = () => {
               </Tooltip>
             )}
 
-          {/* When project is already completed or has an invoice, show a quick Invoice/View button so users can open details */}
-          {((record.status || "").toString().toUpperCase() === "COMPLETED" ||
-            record.invoiceId ||
-            record.invoice?.id ||
-            invoicedProjectIds.has(record.id)) && (
+          {/* Show View Invoice button only when invoice is actually generated */}
+          {(record.invoice?.id || record.invoiceId) && (
               <Tooltip title="View Invoice">
                 <Button
                   type="text"
                   icon={<FileTextOutlined />}
-                  onClick={() => handleViewProject(record)}
+                  onClick={() => {
+                    const invoiceId = record.invoice?.id || record.invoiceId;
+                    console.log('Opening invoice drawer with ID:', invoiceId);
+                    showInvoiceDetailDrawer(invoiceId);
+                  }}
                 />
               </Tooltip>
             )}

@@ -591,6 +591,69 @@ const ProjectDetailDrawer = ({ projectId }) => {
         </div>
       </Card>
 
+      {/* Custom Fields Section */}
+      {project?.customFields && typeof project.customFields === "object" && Object.keys(project.customFields).length > 0 && (
+        <Card title={<Title level={4}>Additional Fields</Title>} size="small" style={{ marginBottom: 16 }}>
+          <Row gutter={[16, 12]}>
+            {Object.entries(project.customFields).map(([fieldKey, fieldValue], index) => {
+              // Format field label from key
+              const formatFieldLabel = (key) => {
+                return key
+                  .replace(/([A-Z])/g, " $1") // Add space before capital letters
+                  .replace(/_/g, " ") // Replace underscores with spaces
+                  .trim()
+                  .split(" ")
+                  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+                  .join(" ");
+              };
+
+              // Format field value for display
+              const formatFieldValue = (value) => {
+                if (value === null || value === undefined || value === "") {
+                  return "-";
+                }
+                if (Array.isArray(value)) {
+                  return value.join(", ");
+                }
+                if (typeof value === "boolean") {
+                  return value ? "Yes" : "No";
+                }
+                return String(value);
+              };
+
+              return (
+                <Col span={12} key={`${fieldKey}-${index}`}>
+                  <div
+                    style={{
+                      padding: "12px",
+                      backgroundColor: "#F0F9FF",
+                      borderRadius: "4px",
+                      border: "1px solid #B5E7FB",
+                    }}
+                  >
+                    <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "6px" }}>
+                      <strong>{formatFieldLabel(fieldKey)}</strong>
+                    </Text>
+                    <div
+                      style={{
+                        padding: "8px",
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: "4px",
+                        border: "1px solid #E8E8E8",
+                      }}
+                    >
+                      <Text style={{ fontSize: "12px", color: "#172B4D" }}>
+                        {formatFieldValue(fieldValue)}
+                      </Text>
+                    </div>
+                  </div>
+                </Col>
+              );
+            })}
+          </Row>
+        </Card>
+      )}
+
       {/* Work Types Tables */}
       {workTypeTabs.length === 0 ? (
         <Card
