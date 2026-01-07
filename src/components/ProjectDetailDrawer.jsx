@@ -106,7 +106,11 @@ const ProjectDetailDrawer = ({ projectId }) => {
     loading: tasksLoading,
     refetch: refetchTasks,
   } = useQuery(GET_TASKS, {
-    variables: { projectId },
+    variables: {
+      filters: projectId ? { projectId } : undefined,
+      page: 1,
+      limit: 500, // plenty for project detail view
+    },
     skip: !projectId,
     fetchPolicy: "no-cache",
   });
