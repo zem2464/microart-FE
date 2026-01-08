@@ -16,6 +16,7 @@ import {
   Tooltip,
   Input,
   Select,
+  Checkbox,
 } from "antd";
 import {
   PlusOutlined,
@@ -31,7 +32,7 @@ import {
   CloseOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { useQuery, useMutation } from "@apollo/client";
+import { useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import {
   GET_CLIENTS,
   GET_CLIENT_STATS,
@@ -40,11 +41,14 @@ import {
 } from "../../gql/clients";
 import CommonTable from "../../components/common/CommonTable";
 import { useAppDrawer } from "../../contexts/DrawerContext";
+import { userCacheVar } from "../../cache/userCacheVar";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
 
 const ClientList = () => {
+  const currentUser = useReactiveVar(userCacheVar);
+  const [myClientsOnly, setMyClientsOnly] = useState(true);
   const [filters, setFilters] = useState({
     search: "",
     clientType: undefined,
@@ -93,7 +97,15 @@ const ClientList = () => {
   const [deleteClient] = useMutation(DELETE_CLIENT, {
     onCompleted: () => {
       message.success("Client deleted successfully");
-      refetch();
+      // Refetch all pages up to current page to maintain scroll position
+      const currentPage = page;
+      refetch({
+        filters,
+        page: 1,
+        limit: pageSize * currentPage,
+        sortBy: sorter.field,
+        sortOrder: sorter.order,
+      });
     },
     onError: (error) => {
       message.error(`Failed to delete client: ${error.message}`);
@@ -103,7 +115,15 @@ const ClientList = () => {
   const [updateClient] = useMutation(UPDATE_CLIENT, {
     onCompleted: () => {
       message.success("Client updated successfully");
-      refetch();
+      // Refetch all pages up to current page to maintain scroll position
+      const currentPage = page;
+      refetch({
+        filters,
+        page: 1,
+        limit: pageSize * currentPage,
+        sortBy: sorter.field,
+        sortOrder: sorter.order,
+      });
     },
     onError: (error) => {
       message.error(`Failed to update client: ${error.message}`);
@@ -112,6 +132,26 @@ const ClientList = () => {
 
   const clients = data?.clients || [];
   const totalCount = data?.clientsCount || 0;
+
+  // Default "My Clients" filter for service providers
+  useEffect(() => {
+    const roleType = currentUser?.role?.roleType?.toString()?.toUpperCase();
+    if (roleType && roleType.includes("SERVICE_PROVIDER")) {
+      setMyClientsOnly(true);
+    }
+  }, [currentUser]);
+
+  // Update filters when myClientsOnly changes
+  useEffect(() => {
+    if (myClientsOnly && currentUser?.id) {
+      setFilters(prev => ({ ...prev, serviceProviderId: currentUser.id }));
+    } else {
+      setFilters(prev => {
+        const { serviceProviderId, ...rest } = prev;
+        return rest;
+      });
+    }
+  }, [myClientsOnly, currentUser?.id]);
 
   // Refetch when filters or sorter change
   React.useEffect(() => {
@@ -1140,6 +1180,16 @@ const ClientList = () => {
               >
                 Add New Client
               </Button>
+            </Col>
+          </Row>
+          <Row gutter={16} align="middle" style={{ marginTop: 12 }}>
+            <Col span={8}>
+              <Checkbox
+                checked={myClientsOnly}
+                onChange={(e) => setMyClientsOnly(e.target.checked)}
+              >
+                My Clients Only
+              </Checkbox>
             </Col>
           </Row>
         </Card>

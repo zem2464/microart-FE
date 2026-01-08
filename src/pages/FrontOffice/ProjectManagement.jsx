@@ -24,6 +24,7 @@ import {
   Descriptions,
   Divider,
   Empty,
+  Checkbox,
 } from "antd";
 import {
   EyeOutlined,
@@ -147,6 +148,7 @@ const ProjectManagement = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("all");
   const [workTypeFilter, setWorkTypeFilter] = useState("all");
+  const [myClientsOnly, setMyClientsOnly] = useState(true);
 
   // Infinite scroll state
   const [page, setPage] = useState(1);
@@ -192,8 +194,13 @@ const ProjectManagement = () => {
       filters.workTypeId = workTypeFilter;
     }
 
+    // Add service provider filter for "My Clients" functionality
+    if (myClientsOnly && user?.id) {
+      filters.serviceProviderId = user.id;
+    }
+
     return filters;
-  }, [statusFilter, clientFilter, workTypeFilter]);
+  }, [statusFilter, clientFilter, workTypeFilter, myClientsOnly, user?.id]);
 
   // GraphQL Queries
   const {
@@ -405,9 +412,18 @@ const ProjectManagement = () => {
     statusFilter,
     clientFilter,
     workTypeFilter,
+    myClientsOnly,
     buildFilters,
     refetchProjects,
   ]);
+
+  // Default "My Clients" filter for service providers
+  useEffect(() => {
+    const roleType = user?.role?.roleType?.toString()?.toUpperCase();
+    if (roleType && roleType.includes("SERVICE_PROVIDER")) {
+      setMyClientsOnly(true);
+    }
+  }, [user]);
 
   // Check if there are more items to load
   useEffect(() => {
@@ -1652,19 +1668,13 @@ const ProjectManagement = () => {
               </Col>
             </Row>
           )}
-          <Row gutter={16} align="middle">
-            <Col span={8}>
-              <Input
-                placeholder="Search projects..."
-                prefix={<SearchOutlined />}
-                value={searchText}
-                onChange={(e) => setSearchText(e.target.value)}
-                allowClear
-              />
-            </Col>
-            <Col span={4}>
+          <Row gutter={16} align="middle" style={{ marginBottom: 12 }}>
+            <Col span={3}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Status
+              </div>
               <Select
-                placeholder="Status"
+                placeholder="All Status"
                 value={statusFilter}
                 onChange={setStatusFilter}
                 style={{ width: "100%" }}
@@ -1672,20 +1682,24 @@ const ProjectManagement = () => {
                 <Option value="all">All Status</Option>
                 <Option value="DRAFT">Draft</Option>
                 <Option value="ACTIVE">Active</Option>
+                <Option value="IN_PROGRESS">In Progress</Option>
                 <Option value="COMPLETED">Completed</Option>
-                <Option value="REOPEN">Reopen</Option>
-                <Option value="REQUESTED">Fly-on-Credit</Option>
                 <Option value="NO_INVOICE">No Invoice</Option>
+                <Option value="REQUESTED">Fly-on-Credit</Option>
+                <Option value="REOPEN">Reopen</Option>
                 <Option value="CANCELLED">Cancelled</Option>
               </Select>
             </Col>
             <Col span={4}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Work Type
+              </div>
               <Select
-                placeholder="Work Type"
+                placeholder="All Work Types"
                 value={workTypeFilter}
                 onChange={setWorkTypeFilter}
                 style={{ width: "100%" }}
-                allowClear={false}
+                allowClear
               >
                 <Option value="all">All Work Types</Option>
                 {workTypesData?.workTypes?.map((workType) => (
@@ -1695,68 +1709,74 @@ const ProjectManagement = () => {
                 ))}
               </Select>
             </Col>
-            <Col span={4}>
+            <Col span={2}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Filter
+              </div>
+              <Checkbox
+                checked={myClientsOnly}
+                onChange={(e) => setMyClientsOnly(e.target.checked)}
+              >
+                My Clients Only
+              </Checkbox>
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Client
+              </div>
               <Select
-                placeholder="Client"
+                placeholder="All Clients"
                 value={clientFilter}
                 onChange={setClientFilter}
                 style={{ width: "100%" }}
-                showSearch
                 allowClear
-                optionFilterProp="children"
+                showSearch
                 filterOption={(input, option) => {
-                  if (!input) return true;
-                  const client = clientsData?.clients?.find(
-                    (c) => c.id === option.value
-                  );
-                  if (!client) return false;
-                  const searchText = [
-                    client.clientCode,
-                    client.displayName,
-                    client.companyName,
-                    client.firstName,
-                    client.lastName,
-                  ]
-                    .filter(Boolean)
-                    .join(" ")
-                    .toLowerCase();
-                  return searchText.includes(input.toLowerCase());
-                }}
-                labelRender={(props) => {
-                  if (props.value === "all") return "All Clients";
-                  const client = clientsData?.clients?.find(
-                    (c) => c.id === props.value
-                  );
-                  if (!client) return props.label;
-                  return (
-                    <span>
-                      <strong>{client.clientCode}</strong> ({client.displayName}
-                      )
-                    </span>
-                  );
+                  const children = option?.children;
+                  const searchText = Array.isArray(children)
+                    ? children.join(" ")
+                    : String(children ?? "");
+                  return searchText.toLowerCase().includes(input.toLowerCase());
                 }}
               >
                 <Option value="all">All Clients</Option>
                 {clientsData?.clients?.map((client) => (
                   <Option key={client.id} value={client.id}>
-                    <div>
-                      <strong>{client.clientCode}</strong> ({client.displayName}
-                      )
-                    </div>
+                    {client.clientCode} - {client.displayName}
                   </Option>
                 ))}
               </Select>
             </Col>
-            <Col span={4} style={{ textAlign: "right" }}>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() =>
-                  showProjectFormDrawer(null, "create", refetchProjects)
-                }
-              >
-                Create Project
-              </Button>
+            <Col span={6}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Search
+              </div>
+              <Input
+                placeholder="Search projects..."
+                prefix={<SearchOutlined />}
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                allowClear
+              />
+            </Col>
+            <Col span={3} style={{ textAlign: "right", paddingTop: 20 }}>
+              <Space>
+                <Tooltip title="Refresh">
+                  <Button
+                    icon={<ReloadOutlined />}
+                    onClick={() => refetchProjects()}
+                  />
+                </Tooltip>
+                <Tooltip title="New Project">
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() =>
+                      showProjectFormDrawer(null, "create", refetchProjects)
+                    }
+                  />
+                </Tooltip>
+              </Space>
             </Col>
           </Row>
         </Card>

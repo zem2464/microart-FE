@@ -184,15 +184,20 @@ const ProjectList = () => {
     }
   }, [currentUser]);
 
-  const displayProjects = useMemo(() => {
-    if (!myClientsOnly) return projects;
-    return (projects || []).filter((p) => {
-      const sps = p?.client?.serviceProviders || [];
-      return sps.some(
-        (sp) => sp?.isActive && sp?.serviceProvider?.id === currentUser?.id
-      );
-    });
-  }, [projects, myClientsOnly, currentUser?.id]);
+  // Update filters when myClientsOnly changes
+  useEffect(() => {
+    if (myClientsOnly && currentUser?.id) {
+      setFilters(prev => ({ ...prev, serviceProviderId: currentUser.id }));
+    } else {
+      setFilters(prev => {
+        const { serviceProviderId, ...rest } = prev;
+        return rest;
+      });
+    }
+  }, [myClientsOnly, currentUser?.id]);
+
+  // No need for client-side filtering anymore - backend handles it
+  const displayProjects = projects;
 
   // Table columns
   const columns = [

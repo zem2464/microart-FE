@@ -62,7 +62,7 @@ const ClientDashboard = () => {
   const [selectedClient, setSelectedClient] = useState(null);
   const { showClientFormDrawer } = useAppDrawer();
   const currentUser = useReactiveVar(userCacheVar);
-  const [myClientsOnly, setMyClientsOnly] = useState(false);
+  const [myClientsOnly, setMyClientsOnly] = useState(true);
 
   // Queries
   const { data: clientsData, loading: clientsLoading, refetch } = useQuery(GET_CLIENTS, {

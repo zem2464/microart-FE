@@ -139,7 +139,7 @@ const TaskTable = () => {
   const [gradingFilter, setGradingFilter] = useState("all");
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState("DESC");
-  const [myClientsOnly, setMyClientsOnly] = useState(false);
+  const [myClientsOnly, setMyClientsOnly] = useState(true);
 
   // Reset filters to default values
   const handleResetFilters = useCallback(() => {
@@ -153,7 +153,7 @@ const TaskTable = () => {
     setGradingFilter("all");
     setSortBy("createdAt");
     setSortOrder("DESC");
-    setMyClientsOnly(currentUser?.role?.roleType?.toString()?.toUpperCase()?.includes("SERVICE_PROVIDER") || false);
+    setMyClientsOnly(true);
     message.success("Filters reset to default values");
   }, []);
 
@@ -325,6 +325,11 @@ const TaskTable = () => {
       filters.gradingId = gradingFilter;
     }
 
+    // Add service provider filter for "My Clients" functionality
+    if (myClientsOnly && currentUser?.id) {
+      filters.serviceProviderId = currentUser.id;
+    }
+
     return filters;
   }, [
     statusFilter,
@@ -332,6 +337,7 @@ const TaskTable = () => {
     priorityFilter,
     selectedWorkTypeId,
     gradingFilter,
+    myClientsOnly,
     currentUser?.id,
   ]);
 
@@ -526,6 +532,7 @@ const TaskTable = () => {
     searchText,
     sortBy,
     sortOrder,
+    myClientsOnly, // Added to trigger refetch when "My Clients" filter changes
     refetchTasks,
   ]);
 
@@ -619,15 +626,8 @@ const TaskTable = () => {
     const projectSearchTerm = projectSearch.trim().toLowerCase();
 
     const filteredTasks = tasks.filter((task) => {
-      // My Clients Only filter (for service providers)
-      if (myClientsOnly) {
-        const sps = task?.project?.client?.serviceProviders || [];
-        const isMine = sps.some(
-          (sp) => sp?.isActive && sp?.serviceProvider?.id === currentUser?.id
-        );
-        if (!isMine) return false;
-      }
-
+      // Note: My Clients Only filter is now handled server-side via serviceProviderId in buildFilters()
+      
       // Client search filter
       if (clientSearchTerm) {
         const client = task?.project?.client;
@@ -1737,27 +1737,25 @@ const TaskTable = () => {
                     {dashboardData?.tasksDashboard?.overdueTasks || 0}
                   </Tag>
                 </Space>
+                <Checkbox
+                  checked={myClientsOnly}
+                  onChange={(e) => setMyClientsOnly(e.target.checked)}
+                  style={{ marginLeft: 16 }}
+                >
+                  <Text style={{ fontSize: 14, fontWeight: 500 }}>
+                    My Clients Only
+                  </Text>
+                </Checkbox>
               </Space>
             </Col>
           </Row>
-          <Row gutter={16} align="middle">
+          <Row gutter={16} align="middle" style={{ marginBottom: 12 }}>
             <Col span={4}>
-              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
-                Visibility
-              </div>
-              <Checkbox
-                checked={myClientsOnly}
-                onChange={(e) => setMyClientsOnly(e.target.checked)}
-              >
-                My Clients Only
-              </Checkbox>
-            </Col>
-            <Col span={6}>
               <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
                 Client Search
               </div>
               <Input
-                placeholder="Client code, name, company..."
+                placeholder="Client code, name..."
                 prefix={<SearchOutlined />}
                 value={clientSearch}
                 onChange={(e) => setClientSearch(e.target.value)}
@@ -1872,7 +1870,7 @@ const TaskTable = () => {
                 allowClear
               />
             </Col>
-            <Col span={2} style={{ textAlign: "right", paddingTop: 20 }}>
+            <Col span={2} style={{ textAlign: "right" }}>
               <Space>
                 <Tooltip title="Reset Filters">
                   <Button
