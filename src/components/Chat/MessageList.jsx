@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { useQuery, useSubscription, useMutation } from "@apollo/client";
-import { Spin, Empty, List } from "antd";
+import { Spin, Empty, List, Typography } from "antd";
 import Message from "./Message";
 import {
   GET_CHAT_MESSAGES,
@@ -9,6 +9,12 @@ import {
   CHAT_MESSAGE_DELETED,
   MARK_CHAT_AS_READ,
 } from "../../graphql/chat";
+import dayjs from "dayjs";
+import relativeTime from "dayjs/plugin/relativeTime";
+
+dayjs.extend(relativeTime);
+
+const { Text } = Typography;
 
 const MessageList = ({ roomId, onReply, onEdit, members }) => {
   const messagesEndRef = useRef(null);
@@ -35,9 +41,10 @@ const MessageList = ({ roomId, onReply, onEdit, members }) => {
   }, [messages, roomId, markChatAsRead]);
 
   // Fetch initial messages
-  const { loading, error } = useQuery(GET_CHAT_MESSAGES, {
+  const { loading, error, refetch: refetchMessages } = useQuery(GET_CHAT_MESSAGES, {
     variables: { roomId, limit: 50 },
     skip: !roomId,
+    fetchPolicy: 'network-only', // Always fetch fresh data from server
     onCompleted: (data) => {
       if (data?.chatMessages) {
         setMessages(data.chatMessages);
@@ -110,10 +117,23 @@ const MessageList = ({ roomId, onReply, onEdit, members }) => {
     },
   });
 
-  // Auto-scroll on mount and when messages change
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    const timer = setTimeout(() => {
+      if (messagesEndRef.current) {
+        messagesEndRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+      }
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, [messages]);
+
+  // Refetch messages when roomId changes
+  useEffect(() => {
+    if (roomId && refetchMessages) {
+      refetchMessages();
+    }
+  }, [roomId, refetchMessages]);
 
   if (loading) {
     return (
@@ -151,6 +171,32 @@ const MessageList = ({ roomId, onReply, onEdit, members }) => {
     );
   }
 
+  // Group messages by date
+  const groupedMessages = messages.reduce((acc, message) => {
+    const dateKey = dayjs(message.createdAt).format("YYYY-MM-DD");
+    if (!acc[dateKey]) {
+      acc[dateKey] = [];
+    }
+    acc[dateKey].push(message);
+    return acc;
+  }, {});
+
+  const formatDateSeparator = (dateString) => {
+    const date = dayjs(dateString);
+    const today = dayjs();
+    const yesterday = dayjs().subtract(1, "day");
+
+    if (date.isSame(today, "day")) {
+      return "Today";
+    } else if (date.isSame(yesterday, "day")) {
+      return "Yesterday";
+    } else if (date.isSame(today, "year")) {
+      return date.format("DD MMM");
+    } else {
+      return date.format("DD MMM YYYY");
+    }
+  };
+
   return (
     <div
       style={{
@@ -163,20 +209,60 @@ const MessageList = ({ roomId, onReply, onEdit, members }) => {
         boxSizing: "border-box",
       }}
     >
-      <List
-        dataSource={messages}
-        renderItem={(message) => (
-          <Message
-            key={message.id}
-            message={message}
-            onReply={onReply}
-            onEdit={onEdit}
-            members={members}
-          />
-        )}
-        split={false}
-        style={{ backgroundColor: "transparent", margin: 0, padding: 0 }}
-      />
+      <div style={{ backgroundColor: "transparent", margin: 0, padding: 0 }}>
+        {Object.keys(groupedMessages)
+          .sort((a, b) => new Date(a) - new Date(b))
+          .map((dateKey) => (
+            <div key={dateKey}>
+              {/* Date Separator */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  margin: "16px 0",
+                  gap: "12px",
+                }}
+              >
+                <div
+                  style={{
+                    flex: 1,
+                    height: "1px",
+                    backgroundColor: "rgba(0,0,0,0.1)",
+                  }}
+                />
+                <Text
+                  type="secondary"
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: 500,
+                    whiteSpace: "nowrap",
+                    color: "rgba(0,0,0,0.45)",
+                  }}
+                >
+                  {formatDateSeparator(dateKey)}
+                </Text>
+                <div
+                  style={{
+                    flex: 1,
+                    height: "1px",
+                    backgroundColor: "rgba(0,0,0,0.1)",
+                  }}
+                />
+              </div>
+
+              {/* Messages for this date */}
+              {groupedMessages[dateKey].map((message) => (
+                <Message
+                  key={message.id}
+                  message={message}
+                  onReply={onReply}
+                  onEdit={onEdit}
+                  members={members}
+                />
+              ))}
+            </div>
+          ))}
+      </div>
       <div ref={messagesEndRef} />
     </div>
   );
