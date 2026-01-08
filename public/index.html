@@ -2,6 +2,15 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
+    <script>
+      // Dynamically set base href only for web (not Electron)
+      // This fixes 404 errors on nested routes without breaking Electron
+      if (!navigator.userAgent.includes('Electron')) {
+        var base = document.createElement('base');
+        base.href = '/';
+        document.head.appendChild(base);
+      }
+    </script>
     <link rel="icon" href="%PUBLIC_URL%/favicon.ico" />
     <link rel="icon" type="image/png" sizes="96x96" href="%PUBLIC_URL%/images/favicon-96x96.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
