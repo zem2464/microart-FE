@@ -417,16 +417,25 @@ const FrontOfficeLayout = () => {
       <Content
         className={
           location.pathname.startsWith("/messages")
-            ? "bg-white h-[calc(100vh-64px)] w-full"
+            ? "bg-white h-[calc(100vh-64px)] w-full p-0"
             : "bg-gray-50 min-h-[calc(100vh-64px)]"
         }
-        style={{ margin: 0, padding: 0 }}
+        style={{ 
+          margin: 0, 
+          padding: 0,
+          ...(location.pathname.startsWith("/messages") ? { height: 'calc(100vh - 64px)', overflow: 'hidden' } : {})
+        }}
       >
         <div
           className={
             location.pathname.startsWith("/messages")
               ? "w-full h-full flex flex-col"
               : "w-full max-w-none"
+          }
+          style={
+            location.pathname.startsWith("/messages") 
+              ? { height: '100%', overflow: 'hidden' }
+              : {}
           }
         >
           <Routes>

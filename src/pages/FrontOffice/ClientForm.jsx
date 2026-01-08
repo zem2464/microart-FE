@@ -33,6 +33,7 @@ import { buildGradingsPayload } from "./clientFormUtils";
 import { GET_WORK_TYPES } from "../../gql/workTypes";
 import { GET_USERS } from "../../gql/users";
 import { GET_GRADINGS_BY_WORK_TYPES } from "../../gql/gradings";
+import TransferModeSelect from "../../components/TransferModeSelect";
 
 const { TextArea } = Input;
 const { Option } = Select;
@@ -92,45 +93,57 @@ const ClientForm = ({
         setGradingTaskAssignments({});
         form.setFieldsValue({ gradings: [] });
         console.log("Cleared all gradings because all work types were removed");
-      } else if (gradingsData?.gradingsByWorkType) {
-        // Only remove gradings that belong to deselected work types
-        // Get all gradings that belong to the currently selected work types
-        const validGradingIds = gradingsData.gradingsByWorkType
-          .filter((grading) => values.includes(grading.workTypeId))
-          .map((grading) => grading.id);
+      } else {
+        // Check if worktypes were removed (not just added)
+        const removedWorkTypes = currentWorkTypes.filter(wt => !values.includes(wt));
+        
+        // Only filter gradings if worktypes were actually removed
+        // When adding new worktypes, keep existing gradings and let the user select new ones
+        if (removedWorkTypes.length > 0 && gradingsData?.gradingsByWorkType) {
+          // Only remove gradings that belong to deselected work types
+          // Get all gradings that belong to the currently selected work types
+          const validGradingIds = gradingsData.gradingsByWorkType
+            .filter((grading) => values.includes(grading.workTypeId))
+            .map((grading) => grading.id);
 
-        // Filter current selected gradings to only keep those that are still valid
-        const newSelectedGradings = selectedGradings.filter((gradingId) =>
-          validGradingIds.includes(gradingId)
-        );
+          // Filter current selected gradings to only keep those that are still valid
+          const newSelectedGradings = selectedGradings.filter((gradingId) =>
+            validGradingIds.includes(gradingId)
+          );
 
-        // Filter custom rates to only keep valid gradings
-        const newCustomRates = {};
-        newSelectedGradings.forEach((gradingId) => {
-          if (Object.prototype.hasOwnProperty.call(gradingCustomRates, gradingId)) {
-            newCustomRates[gradingId] = gradingCustomRates[gradingId];
-          }
-        });
+          // Filter custom rates to only keep valid gradings
+          const newCustomRates = {};
+          newSelectedGradings.forEach((gradingId) => {
+            if (Object.prototype.hasOwnProperty.call(gradingCustomRates, gradingId)) {
+              newCustomRates[gradingId] = gradingCustomRates[gradingId];
+            }
+          });
 
-        // Filter task assignments to only keep valid gradings
-        const newTaskAssignments = {};
-        newSelectedGradings.forEach((gradingId) => {
-          if (Object.prototype.hasOwnProperty.call(gradingTaskAssignments, gradingId)) {
-            newTaskAssignments[gradingId] = gradingTaskAssignments[gradingId];
-          }
-        });
+          // Filter task assignments to only keep valid gradings
+          const newTaskAssignments = {};
+          newSelectedGradings.forEach((gradingId) => {
+            if (Object.prototype.hasOwnProperty.call(gradingTaskAssignments, gradingId)) {
+              newTaskAssignments[gradingId] = gradingTaskAssignments[gradingId];
+            }
+          });
 
-        // Update state with filtered data
-        setSelectedGradings(newSelectedGradings);
-        setGradingCustomRates(newCustomRates);
-        setGradingTaskAssignments(newTaskAssignments);
-        form.setFieldsValue({ gradings: newSelectedGradings });
+          // Update state with filtered data
+          setSelectedGradings(newSelectedGradings);
+          setGradingCustomRates(newCustomRates);
+          setGradingTaskAssignments(newTaskAssignments);
+          form.setFieldsValue({ gradings: newSelectedGradings });
 
-        console.log("Filtered gradings due to work type change:", {
-          before: selectedGradings.length,
-          after: newSelectedGradings.length,
-          removed: selectedGradings.length - newSelectedGradings.length
-        });
+          console.log("Filtered gradings due to work type removal:", {
+            removedWorkTypes,
+            before: selectedGradings.length,
+            after: newSelectedGradings.length,
+            removed: selectedGradings.length - newSelectedGradings.length
+          });
+        } else {
+          console.log("Work types added, keeping existing gradings:", {
+            addedWorkTypes: values.filter(wt => !currentWorkTypes.includes(wt))
+          });
+        }
       }
     }
   };
@@ -1003,7 +1016,7 @@ const ClientForm = ({
   }, [currentStep]); // Re-run when step changes
 
   console.log("workTypes", selectedWorkTypes);
-  // Step configurations - both client types now have 2 steps
+  // Step configurations - both client types have 2 steps
   const steps = useMemo(
     () => [
       {
@@ -1227,6 +1240,10 @@ const ClientForm = ({
                     data-lpignore="true"
                     data-form-type="other"
                     dropdownStyle={{ zIndex: 9999 }}
+                    showSearch
+                    filterOption={(input, option) =>
+                      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                    }
                   >
                     {countriesData?.countries?.map((country) => (
                       <Option key={country.id} value={country.id}>
@@ -1257,6 +1274,10 @@ const ClientForm = ({
                     data-lpignore="true"
                     data-form-type="other"
                     dropdownStyle={{ zIndex: 9999 }}
+                    showSearch
+                    filterOption={(input, option) =>
+                      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                    }
                   >
                     {statesData?.statesByCountry?.map((state) => (
                       <Option key={state.id} value={state.id}>
@@ -1285,6 +1306,10 @@ const ClientForm = ({
                     data-lpignore="true"
                     data-form-type="other"
                     dropdownStyle={{ zIndex: 9999 }}
+                    showSearch
+                    filterOption={(input, option) =>
+                      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
+                    }
                   >
                     {citiesData?.citiesByState?.map((city) => (
                       <Option key={city.id} value={city.id}>
@@ -1628,9 +1653,11 @@ const ClientForm = ({
                     loading={usersLoading}
                     showSearch
                     optionFilterProp="children"
-                    filterOption={(input, option) =>
-                      option.children.toLowerCase().indexOf(input.toLowerCase()) >= 0
-                    }
+                    filterOption={(input, option) => {
+                      const label = (option?.children ?? "").toString().toLowerCase();
+                      const query = (input ?? "").toString().toLowerCase();
+                      return label.includes(query);
+                    }}
                     tagRender={(props) => {
                       const { label, value, closable, onClose } = props;
                       const user = userOptions.find(u => u.id === value);
@@ -1694,13 +1721,7 @@ const ClientForm = ({
               </Col>
               <Col span={8}>
                 <Form.Item name="transferMode" label="Transfer Mode">
-                  <Select placeholder="Select transfer mode" size="middle">
-                    <Option value="email">Email</Option>
-                    <Option value="ftp">FTP</Option>
-                    <Option value="cloud_storage">Cloud Storage (Drive/Dropbox/WeTransfer)</Option>
-                    <Option value="physical_drive">Physical Drive</Option>
-                    <Option value="download_link">Download Link</Option>
-                  </Select>
+                  <TransferModeSelect placeholder="Select transfer mode" />
                 </Form.Item>
               </Col>
               <Col span={8}>
@@ -1732,9 +1753,11 @@ const ClientForm = ({
                     showSearch
                     optionFilterProp="children"
                     loading={usersLoading}
-                    filterOption={(input, option) =>
-                      (option?.children ?? '').toLowerCase().includes(input.toLowerCase())
-                    }
+                    filterOption={(input, option) => {
+                      const label = (option?.children ?? "").toString().toLowerCase();
+                      const query = (input ?? "").toString().toLowerCase();
+                      return label.includes(query);
+                    }}
                   >
                     {usersData?.users?.map((user) => (
                       <Option key={user.id} value={user.id}>

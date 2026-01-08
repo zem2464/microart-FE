@@ -16,6 +16,7 @@ import {
   Typography,
   Tabs,
   Modal,
+  Checkbox,
 } from "antd";
 import {
   SearchOutlined,
@@ -138,6 +139,7 @@ const TaskTable = () => {
   const [gradingFilter, setGradingFilter] = useState("all");
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState("DESC");
+  const [myClientsOnly, setMyClientsOnly] = useState(false);
 
   // Reset filters to default values
   const handleResetFilters = useCallback(() => {
@@ -151,6 +153,7 @@ const TaskTable = () => {
     setGradingFilter("all");
     setSortBy("createdAt");
     setSortOrder("DESC");
+    setMyClientsOnly(currentUser?.role?.roleType?.toString()?.toUpperCase()?.includes("SERVICE_PROVIDER") || false);
     message.success("Filters reset to default values");
   }, []);
 
@@ -531,6 +534,14 @@ const TaskTable = () => {
     setGradingFilter("all");
   }, [selectedWorkTypeId]);
 
+  // Default "My Clients" filter for service providers
+  useEffect(() => {
+    const roleType = currentUser?.role?.roleType?.toString()?.toUpperCase();
+    if (roleType && roleType.includes("SERVICE_PROVIDER")) {
+      setMyClientsOnly(true);
+    }
+  }, [currentUser]);
+
   // Normalize tasks array from GraphQL response
   const allTasks = tasksData?.tasks?.tasks || [];
 
@@ -608,6 +619,15 @@ const TaskTable = () => {
     const projectSearchTerm = projectSearch.trim().toLowerCase();
 
     const filteredTasks = tasks.filter((task) => {
+      // My Clients Only filter (for service providers)
+      if (myClientsOnly) {
+        const sps = task?.project?.client?.serviceProviders || [];
+        const isMine = sps.some(
+          (sp) => sp?.isActive && sp?.serviceProvider?.id === currentUser?.id
+        );
+        if (!isMine) return false;
+      }
+
       // Client search filter
       if (clientSearchTerm) {
         const client = task?.project?.client;
@@ -677,7 +697,7 @@ const TaskTable = () => {
     });
 
     return grouped;
-  }, [tasks, selectedWorkTypeId, clientSearch, projectSearch]);
+  }, [tasks, selectedWorkTypeId, clientSearch, projectSearch, myClientsOnly, currentUser?.id]);
 
   // Convert grouped data to table format for each worktype
   const tableDataByWorkType = useMemo(() => {
@@ -1721,6 +1741,17 @@ const TaskTable = () => {
             </Col>
           </Row>
           <Row gutter={16} align="middle">
+            <Col span={4}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Visibility
+              </div>
+              <Checkbox
+                checked={myClientsOnly}
+                onChange={(e) => setMyClientsOnly(e.target.checked)}
+              >
+                My Clients Only
+              </Checkbox>
+            </Col>
             <Col span={6}>
               <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
                 Client Search

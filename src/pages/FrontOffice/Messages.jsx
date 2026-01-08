@@ -162,17 +162,20 @@ const Messages = () => {
             <style>{`
                 .messages-layout.ant-layout {
                     min-height: auto !important;
+                    height: 100% !important;
                 }
                 .messages-layout .ant-layout-sider {
                     padding: 0 !important;
                     margin: 0 !important;
+                    height: 100% !important;
                 }
                 .messages-layout .ant-layout-content {
                     padding: 0 !important;
                     margin: 0 !important;
+                    height: 100% !important;
                 }
             `}</style>
-            <Layout className="messages-layout" style={{ height: '100%', background: '#fff', overflow: 'hidden', minHeight: 'auto' }}>
+            <Layout className="messages-layout" style={{ height: '100%', background: '#fff', overflow: 'hidden', minHeight: '100%', width: '100%' }}>
             {/* Left Sidebar - Chat List */}
             <Sider
                 width={350}
@@ -304,7 +307,7 @@ const Messages = () => {
             </Sider>
 
             {/* Right Content - Chat Window */}
-            <Content style={{ background: '#e5ddd5', position: 'relative', padding: '0 !important', margin: 0, overflow: 'hidden' }}>
+            <Content style={{ background: '#e5ddd5', position: 'relative', padding: 0, margin: 0, overflow: 'hidden', flex: 1 }}>
                 {selectedRoom ? (
                     <div style={{ height: '100%', display: 'flex', flexDirection: 'column', boxSizing: 'border-box' }}>
                         {/* Chat Header */}

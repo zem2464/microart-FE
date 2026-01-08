@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Table,
   Card,
@@ -19,6 +19,7 @@ import {
   Col,
   Statistic,
   Alert,
+  Checkbox,
 } from "antd";
 import {
   PlusOutlined,
@@ -28,7 +29,7 @@ import {
   PlayCircleOutlined,
   ReloadOutlined,
 } from "@ant-design/icons";
-import { useQuery, useMutation } from "@apollo/client";
+import { useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import {
   GET_PROJECTS,
   CREATE_PROJECT,
@@ -41,6 +42,7 @@ import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import { GET_GRADINGS } from "../../graphql/gradingQueries";
 import { useAppDrawer } from "../../contexts/DrawerContext";
 import dayjs from "dayjs";
+import { userCacheVar } from "../../cache/userCacheVar";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -69,6 +71,7 @@ const PRIORITY_MAP = {
 const ProjectList = () => {
   // Drawer context
   const { showProjectDetailDrawerV2 } = useAppDrawer();
+  const currentUser = useReactiveVar(userCacheVar);
   
   // State management
   const [projects, setProjects] = useState([]);
@@ -78,6 +81,7 @@ const ProjectList = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState("view"); // 'view', 'create', 'edit'
   const [form] = Form.useForm();
+  const [myClientsOnly, setMyClientsOnly] = useState(false);
 
   // Pagination state
   const [pagination, setPagination] = useState({
@@ -171,6 +175,24 @@ const ProjectList = () => {
       setProjects(projectsData.projects.projects || projectsData.projects);
     }
   }, [projectsData]);
+
+  // Default "My Clients" filter for service providers
+  useEffect(() => {
+    const roleType = currentUser?.role?.roleType?.toString()?.toUpperCase();
+    if (roleType && roleType.includes("SERVICE_PROVIDER")) {
+      setMyClientsOnly(true);
+    }
+  }, [currentUser]);
+
+  const displayProjects = useMemo(() => {
+    if (!myClientsOnly) return projects;
+    return (projects || []).filter((p) => {
+      const sps = p?.client?.serviceProviders || [];
+      return sps.some(
+        (sp) => sp?.isActive && sp?.serviceProvider?.id === currentUser?.id
+      );
+    });
+  }, [projects, myClientsOnly, currentUser?.id]);
 
   // Table columns
   const columns = [
@@ -536,6 +558,14 @@ const ProjectList = () => {
               onSearch={handleSearch}
               style={{ width: 200 }}
             />
+            <Form.Item style={{ margin: 0 }}>
+              <Checkbox
+                checked={myClientsOnly}
+                onChange={(e) => setMyClientsOnly(e.target.checked)}
+              >
+                My Clients Only
+              </Checkbox>
+            </Form.Item>
             <Button
               icon={<ReloadOutlined />}
               onClick={refetchProjects}
@@ -555,13 +585,13 @@ const ProjectList = () => {
       >
         <Table
           columns={columns}
-          dataSource={projects}
+          dataSource={displayProjects}
           rowKey="id"
           loading={projectsLoading}
           pagination={{
             current: pagination.current,
             pageSize: pagination.pageSize,
-            total: projects.length,
+            total: displayProjects.length,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) =>

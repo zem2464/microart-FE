@@ -60,6 +60,12 @@ export const GET_PROJECTS = gql`
           clientCode
           displayName
           clientType
+          serviceProviders {
+            serviceProvider {
+              id
+            }
+            isActive
+          }
         }
         projectWorkTypes {
           id

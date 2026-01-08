@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Card,
   Row,
@@ -16,6 +16,7 @@ import {
   Empty,
   Spin
 } from 'antd';
+import { Checkbox } from 'antd';
 import {
   UserOutlined,
   DollarOutlined,
@@ -49,6 +50,8 @@ import {
 import { GET_CLIENTS, GET_TRANSACTIONS_SUMMARY, GET_CLIENT_STATS } from '../../gql/clients';
 import { GET_PENDING_PAYMENTS, GET_OVERDUE_PAYMENTS } from '../../gql/clientTransactions';
 import { useAppDrawer } from '../../contexts/DrawerContext';
+import { useReactiveVar } from '@apollo/client';
+import { userCacheVar } from '../../cache/userCacheVar';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -58,6 +61,8 @@ const ClientDashboard = () => {
   const [dateRange, setDateRange] = useState(null);
   const [selectedClient, setSelectedClient] = useState(null);
   const { showClientFormDrawer } = useAppDrawer();
+  const currentUser = useReactiveVar(userCacheVar);
+  const [myClientsOnly, setMyClientsOnly] = useState(false);
 
   // Queries
   const { data: clientsData, loading: clientsLoading, refetch } = useQuery(GET_CLIENTS, {
@@ -95,7 +100,22 @@ const ClientDashboard = () => {
     fetchPolicy: 'cache-and-network'
   });
 
-  const clients = clientsData?.clients || [];
+  // Default "My Clients" filter for service providers
+  useEffect(() => {
+    const roleType = currentUser?.role?.roleType?.toString()?.toUpperCase();
+    if (roleType && roleType.includes('SERVICE_PROVIDER')) {
+      setMyClientsOnly(true);
+    }
+  }, [currentUser]);
+
+  const clients = useMemo(() => {
+    const list = clientsData?.clients || [];
+    if (!myClientsOnly) return list;
+    return list.filter(c => {
+      const sps = c?.serviceProviders || [];
+      return sps.some(sp => sp?.isActive && sp?.serviceProvider?.id === currentUser?.id);
+    });
+  }, [clientsData, myClientsOnly, currentUser?.id]);
   const pendingPayments = pendingData?.pendingPayments || [];
   const overduePayments = overdueData?.overduePayments || [];
 
@@ -106,15 +126,14 @@ const ClientDashboard = () => {
 
   // Calculate dashboard statistics using stats query for accurate counts
   const dashboardStats = useMemo(() => {
-    // Use stats query for accurate total counts
-    const stats = statsData?.clientsSummary || {};
-    const totalClients = stats.totalClients || 0;
-    const activeClients = stats.activeClients || 0;
-    const inactiveClients = stats.inactiveClients || 0;
-    const permanentClients = stats.permanentClients || 0;
-    const walkinClients = stats.walkinClients || 0;
-    const clientsWithBalance = stats.clientsWithBalance || 0;
-    const totalOutstandingAmount = stats.totalOutstandingAmount || 0;
+    // Compute stats from filtered clients for consistent "My Clients" view
+    const totalClients = clients.length;
+    const activeClients = clients.filter(c => c.isActive).length;
+    const inactiveClients = clients.filter(c => !c.isActive).length;
+    const permanentClients = clients.filter(c => (c.clientType || '').toLowerCase() === 'permanent').length;
+    const walkinClients = clients.filter(c => (c.clientType || '').toLowerCase() === 'walkin' || (c.clientType || '').toLowerCase() === 'walk_in').length;
+    const clientsWithBalance = clients.filter(c => (c.totalBalance || 0) > 0).length;
+    const totalOutstandingAmount = clients.reduce((sum, c) => sum + (c.totalBalance || 0), 0);
 
     const pendingAmount = pendingPayments.reduce((sum, p) => sum + p.amount, 0);
     const overdueAmount = overduePayments.reduce((sum, p) => sum + p.amount, 0);
@@ -249,6 +268,9 @@ const ClientDashboard = () => {
             </Text>
           </div>
           <Space>
+            <Checkbox checked={myClientsOnly} onChange={e => setMyClientsOnly(e.target.checked)}>
+              My Clients Only
+            </Checkbox>
             <Select
               placeholder="Select client"
               style={{ width: 200 }}

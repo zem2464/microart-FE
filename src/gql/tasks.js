@@ -87,6 +87,12 @@ export const TASK_FRAGMENT = gql`
         colorCorrectionStyle
         transferMode
         clientNotes
+        serviceProviders {
+          serviceProvider {
+            id
+          }
+          isActive
+        }
       }
       workType {
         id
