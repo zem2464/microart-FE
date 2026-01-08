@@ -129,7 +129,12 @@ const NotificationDropdown = () => {
       navigate('/reminders');
     } else if (notification.actionUrl) {
       // For other notifications, navigate to action URL
-      navigate(notification.actionUrl);
+      // For message notifications, pass state to trigger refresh
+      if (notification.type === 'message') {
+        navigate(notification.actionUrl, { state: { fromNotification: true } });
+      } else {
+        navigate(notification.actionUrl);
+      }
     }
   };
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Layout, Input, List, Avatar, Badge, Typography, Empty, Spin, Divider, Button } from 'antd';
 import { SearchOutlined, UserOutlined, TeamOutlined, PlusOutlined, InfoOutlined } from '@ant-design/icons';
 import { useQuery, useSubscription } from '@apollo/client';
@@ -20,6 +20,7 @@ const { Text } = Typography;
 const Messages = () => {
     const { roomId } = useParams();
     const navigate = useNavigate();
+    const location = useLocation();
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedRoom, setSelectedRoom] = useState(null);
     const [replyingTo, setReplyingTo] = useState(null);
@@ -47,6 +48,20 @@ const Messages = () => {
             });
         },
     });
+
+    // Hard refresh chat rooms when component mounts
+    useEffect(() => {
+        refetch();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Refetch chat rooms when navigating from a notification
+    useEffect(() => {
+        if (location.state?.fromNotification) {
+            refetch();
+            // Clear the state to avoid refetching on subsequent renders
+            navigate(location.pathname, { replace: true, state: {} });
+        }
+    }, [location.state, refetch, navigate, location.pathname]);
 
     // Set selected room based on URL param
     useEffect(() => {
