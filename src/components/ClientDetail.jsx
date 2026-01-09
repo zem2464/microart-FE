@@ -584,9 +584,9 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                                           const sp =
                                             client.serviceProviders?.find(
                                               (s) =>
-                                                s.serviceProvider?.id === userId
+                                                s.user?.id === userId
                                             );
-                                          return sp?.serviceProvider;
+                                          return sp?.user;
                                         })
                                         .filter(Boolean);
 

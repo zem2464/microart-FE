@@ -53,6 +53,12 @@ import {
   DELETE_TASK_ASSIGNMENT,
   UPDATE_TASK_ASSIGNMENT,
 } from "../../gql/taskAssignments";
+import {
+  getTaskFiltersFromCookie,
+  saveTaskFiltersToCookie,
+  clearTaskFiltersCookie,
+  getDefaultFilters,
+} from "../../utils/taskFilterUtils";
 
 dayjs.extend(relativeTime);
 
@@ -133,34 +139,47 @@ const TaskTable = () => {
   const { showProjectDetailDrawerV2, showTaskDetailDrawerV2 } = useAppDrawer();
 
   const currentUser = useReactiveVar(userCacheVar);
-  const [searchText, setSearchText] = useState("");
-  const [clientSearch, setClientSearch] = useState("");
-  const [projectSearch, setProjectSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all"); // Show all tasks including completed
-  const [userFilter, setUserFilter] = useState("all");
-  const [priorityFilter, setPriorityFilter] = useState("all");
-  const [selectedWorkTypeId, setSelectedWorkTypeId] = useState("all");
-  const [gradingFilter, setGradingFilter] = useState("all");
-  const [sortBy, setSortBy] = useState("createdAt");
-  const [sortOrder, setSortOrder] = useState("DESC");
+
+  // Initialize filter states from cookies
+  const savedFilters = getTaskFiltersFromCookie();
+  const [searchText, setSearchText] = useState(savedFilters.searchText);
+  const [clientSearch, setClientSearch] = useState(savedFilters.clientSearch);
+  const [projectSearch, setProjectSearch] = useState(
+    savedFilters.projectSearch
+  );
+  const [statusFilter, setStatusFilter] = useState(savedFilters.statusFilter); // Show all tasks including completed
+  const [userFilter, setUserFilter] = useState(savedFilters.userFilter);
+  const [priorityFilter, setPriorityFilter] = useState(
+    savedFilters.priorityFilter
+  );
+  const [selectedWorkTypeId, setSelectedWorkTypeId] = useState(
+    savedFilters.selectedWorkTypeId
+  );
+  const [gradingFilter, setGradingFilter] = useState(
+    savedFilters.gradingFilter
+  );
+  const [sortBy, setSortBy] = useState(savedFilters.sortBy);
+  const [sortOrder, setSortOrder] = useState(savedFilters.sortOrder);
   const [myClientsOnly, setMyClientsOnly] = useState(
-    currentUser?.isServiceProvider === true
+    currentUser?.isServiceProvider === true ? savedFilters.myClientsOnly : false
   );
 
   // Reset filters to default values
   const handleResetFilters = useCallback(() => {
-    setSearchText("");
-    setClientSearch("");
-    setProjectSearch("");
-    setStatusFilter("all");
-    setUserFilter("all");
-    setPriorityFilter("all");
-    setSelectedWorkTypeId("all");
-    setGradingFilter("all");
-    setSortBy("createdAt");
-    setSortOrder("DESC");
+    const defaults = getDefaultFilters();
+    setSearchText(defaults.searchText);
+    setClientSearch(defaults.clientSearch);
+    setProjectSearch(defaults.projectSearch);
+    setStatusFilter(defaults.statusFilter);
+    setUserFilter(defaults.userFilter);
+    setPriorityFilter(defaults.priorityFilter);
+    setSelectedWorkTypeId(defaults.selectedWorkTypeId);
+    setGradingFilter(defaults.gradingFilter);
+    setSortBy(defaults.sortBy);
+    setSortOrder(defaults.sortOrder);
     // Only reset myClientsOnly to true if user is a service provider
     setMyClientsOnly(currentUser?.isServiceProvider === true);
+    clearTaskFiltersCookie();
     message.success("Filters reset to default values");
   }, []);
 
@@ -580,6 +599,35 @@ const TaskTable = () => {
     }
   }, [currentUser]);
 
+  // Save filters to cookies whenever they change
+  useEffect(() => {
+    saveTaskFiltersToCookie({
+      searchText,
+      clientSearch,
+      projectSearch,
+      statusFilter,
+      userFilter,
+      priorityFilter,
+      selectedWorkTypeId,
+      gradingFilter,
+      sortBy,
+      sortOrder,
+      myClientsOnly,
+    });
+  }, [
+    searchText,
+    clientSearch,
+    projectSearch,
+    statusFilter,
+    userFilter,
+    priorityFilter,
+    selectedWorkTypeId,
+    gradingFilter,
+    sortBy,
+    sortOrder,
+    myClientsOnly,
+  ]);
+
   // Normalize tasks array from GraphQL response
   const allTasks = tasksData?.tasks?.tasks || [];
 
@@ -935,7 +983,8 @@ const TaskTable = () => {
     // Important: Only consider hasAssignedWorkTypes as true if user is actually loaded AND has work types
     // This prevents showing all work types during the initial load before user data is available
     const isUserLoaded = currentUser && currentUser.id;
-    const hasAssignedWorkTypes = isUserLoaded && userWorkTypeIds && userWorkTypeIds.length > 0;
+    const hasAssignedWorkTypes =
+      isUserLoaded && userWorkTypeIds && userWorkTypeIds.length > 0;
 
     console.log("[WorkType Filter] User work types:", {
       userId: currentUser?.id,
@@ -957,7 +1006,8 @@ const TaskTable = () => {
         // - If user is not loaded yet, show no tabs (prevents flash of all tabs)
         // - If user has assigned work types, only show those
         // - If user has no assigned work types (admin/special case), show all
-        const shouldShow = isUserLoaded && 
+        const shouldShow =
+          isUserLoaded &&
           (!hasAssignedWorkTypes || userWorkTypeIds.includes(workTypeId));
 
         console.log(`[WorkType Filter] ${workType.name}:`, {
@@ -1018,7 +1068,7 @@ const TaskTable = () => {
   // This effect ensures we select a valid tab on initial load and when user work types are loaded
   useEffect(() => {
     const workTypeIds = Object.keys(allWorkTypeTabs);
-    
+
     // Only set default if:
     // 1. We have work types available
     // 2. AND either no tab is selected (initial load) OR the selected tab is not in the filtered list
@@ -1031,14 +1081,17 @@ const TaskTable = () => {
         (id) => allWorkTypeTabs[id].rows.length > 0
       );
       const newWorkTypeId = firstWithTasks || workTypeIds[0];
-      
+
       console.log("[WorkType Tab Selection]", {
         currentSelection: selectedWorkTypeId,
         availableTabs: workTypeIds,
         newSelection: newWorkTypeId,
-        reason: selectedWorkTypeId === "all" ? "initial load" : "current tab not available",
+        reason:
+          selectedWorkTypeId === "all"
+            ? "initial load"
+            : "current tab not available",
       });
-      
+
       setSelectedWorkTypeId(newWorkTypeId);
     }
   }, [allWorkTypeTabs, currentUser?.workTypes]);
@@ -1243,14 +1296,14 @@ const TaskTable = () => {
               <Button
                 type="link"
                 size="small"
-                style={{ padding: 0, height: "auto", fontWeight: 600 }}
+                style={{ padding: 0, height: "auto", fontWeight: 400 }}
                 onClick={() => showProjectDetailDrawerV2(record.projectId)}
               >
                 {text}
                 {record.projectName ? ` - ${record.projectName}` : ""}
               </Button>
             </div>
-            <div style={{ color: "#66666", fontSize: 11 }}>
+            <div style={{ color: "#66666", fontSize: 14, fontWeight: 600 }}>
               {record.clientCode}
               {record.clientName ? ` - ${record.clientName}` : ""}
             </div>

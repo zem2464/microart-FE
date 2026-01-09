@@ -570,26 +570,37 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
     </Card>
   );
 
-  const renderServiceProvidersTab = () => (
-    <Card
-      title={
-        <>
-          <TeamOutlined /> Service Providers
-        </>
-      }
-    >
-      <Table
-        columns={serviceProviderColumns}
-        dataSource={serviceProvidersData?.clientServiceProviders || []}
-        loading={serviceProvidersLoading}
-        rowKey="id"
-        pagination={false}
-        locale={{
-          emptyText: <Empty description="No service providers assigned" />,
-        }}
-      />
-    </Card>
-  );
+  const renderServiceProvidersTab = () => {
+    // Transform service provider data to match table column expectations
+    const transformedServiceProviders = (serviceProvidersData?.serviceProvidersByClient || []).map(user => ({
+      id: user.id,
+      serviceProviderName: `${user.firstName} ${user.lastName}`,
+      contactPerson: `${user.firstName} ${user.lastName}`,
+      email: user.email || 'N/A',
+      phone: user.contactPersonal || 'N/A'
+    }));
+
+    return (
+      <Card
+        title={
+          <>
+            <TeamOutlined /> Service Providers
+          </>
+        }
+      >
+        <Table
+          columns={serviceProviderColumns}
+          dataSource={transformedServiceProviders}
+          loading={serviceProvidersLoading}
+          rowKey="id"
+          pagination={false}
+          locale={{
+            emptyText: <Empty description="No service providers assigned" />,
+          }}
+        />
+      </Card>
+    );
+  };
 
   const renderLedgerTab = () => {
     const ledgerSummary = ledgerData?.clientLedgerSummary;

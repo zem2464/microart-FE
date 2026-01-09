@@ -329,11 +329,12 @@ const ClientForm = ({
     clientLoading,
     hasTaskPreferences: fullClientData?.client?.taskPreferences?.length || 0,
     serviceProviders: fullClientData?.client?.serviceProviders,
-    serviceProvidersWithNestedData: fullClientData?.client?.serviceProviders?.map(sp => ({
-      id: sp.id,
-      serviceProviderId: sp.serviceProviderId,
-      hasServiceProviderObject: !!sp.serviceProvider,
-      serviceProviderData: sp.serviceProvider
+    serviceProvidersDetailed: fullClientData?.client?.serviceProviders?.map(user => ({
+      userId: user.id,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      fullName: `${user.firstName || ''} ${user.lastName || ''}`.trim(),
+      email: user.email
     }))
   });
 
@@ -347,34 +348,78 @@ const ClientForm = ({
       serviceProvidersCount: serviceProviders.length,
       hasUsersData: !!usersData,
       hasFullClientData: !!fullClientData,
-      rawServiceProviders: serviceProviders
+      serviceProviderIds: serviceProviders.map(sp => ({
+        id: sp.id,
+        userId: sp.user?.id,
+        spName: sp.user ? `${sp.user.firstName} ${sp.user.lastName}` : "N/A"
+      })),
+      allUsers: users.map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
     });
     
     // Create a map to avoid duplicates
     const userMap = new Map();
     
-    // Add all users from the API who are marked as service providers
+    // Step 1: Add ALL users from the API with full details
     users.forEach(user => {
-      if (user.isServiceProvider) {
-        userMap.set(user.id, user);
-      }
+      userMap.set(user.id, {
+        id: user.id,
+        firstName: user.firstName || "",
+        lastName: user.lastName || "",
+        email: user.email,
+        // Include all other user fields
+        ...user
+      });
     });
     
-    // Add service providers from client (if they're not already in the list)
+    // Step 2: For each service provider in client, ensure we have the full user data
+    // Look up in API users first, then use user data as fallback
     serviceProviders.forEach(sp => {
-      if (sp.serviceProvider && sp.serviceProvider.id) {
-        const user = sp.serviceProvider;
-        console.log("Adding service provider user to options:", {
-          userId: user.id,
-          userName: `${user.firstName} ${user.lastName}`,
-          wasAlreadyInList: userMap.has(user.id)
-        });
-        userMap.set(user.id, user);
+      const userId = sp.user?.id;
+      
+      if (userId) {
+        // Look up full user data from API
+        const fullUserData = users.find(u => u.id === userId);
+        
+        if (fullUserData) {
+          // Use full user data from API (already added above, just ensure it exists)
+          console.log("Service provider found in API users:", {
+            id: userId,
+            name: `${fullUserData.firstName} ${fullUserData.lastName}`
+          });
+          userMap.set(userId, {
+            id: fullUserData.id,
+            firstName: fullUserData.firstName || "",
+            lastName: fullUserData.lastName || "",
+            email: fullUserData.email,
+            ...fullUserData
+          });
+        } else if (sp.user) {
+          // User not in API users, use user data from service provider
+          console.log("Service provider NOT in API users, using user data:", {
+            id: userId,
+            name: `${sp.user.firstName} ${sp.user.lastName}`
+          });
+          userMap.set(userId, {
+            id: sp.user.id,
+            firstName: sp.user.firstName || "",
+            lastName: sp.user.lastName || "",
+            email: sp.user.email,
+            ...sp.user
+          });
+        }
       }
     });
     
     const result = Array.from(userMap.values());
-    console.log("Computed userOptions count:", result.length, "IDs:", result.map(u => u.id));
+    console.log("Final userOptions computed:", {
+      count: result.length,
+      users: result.map(u => ({ 
+        id: u.id, 
+        name: `${u.firstName} ${u.lastName}`,
+        hasFirstName: !!u.firstName,
+        hasLastName: !!u.lastName
+      }))
+    });
     return result;
   }, [usersData, fullClientData]);
 
@@ -447,7 +492,7 @@ const ClientForm = ({
         gradingCustomRates: customRates,
       });
 
-      // Extract service provider IDs with multiple fallback strategies
+      // Extract service provider IDs - now serviceProviders is simply an array of User objects
       let serviceProviderIds = [];
 
       if (
@@ -455,22 +500,8 @@ const ClientForm = ({
         Array.isArray(clientData.serviceProviders)
       ) {
         serviceProviderIds = clientData.serviceProviders
-          .map((sp) => {
-            // Handle nested structure: { serviceProvider: { id: ... } }
-            if (sp.serviceProvider && sp.serviceProvider.id) {
-              return sp.serviceProvider.id;
-            }
-            // Handle direct ID structure: { id: ... }
-            if (sp.id) {
-              return sp.id;
-            }
-            // Handle string ID
-            if (typeof sp === "string") {
-              return sp;
-            }
-            return null;
-          })
-          .filter((id) => id !== null);
+          .map((user) => user?.id)
+          .filter((id) => id !== null && id !== undefined && id !== '');
       }
 
       console.log("Service Providers Debug:", {
@@ -479,24 +510,8 @@ const ClientForm = ({
         length: serviceProviderIds.length,
       });
 
-      // Check if all service provider IDs have corresponding user options
-      const allServiceProvidersInOptions = serviceProviderIds.length === 0 || serviceProviderIds.every(id =>
-        userOptions.some(user => user.id === id)
-      );
-      
-      console.log("Service Provider Availability Check:", {
-        serviceProviderIds,
-        userOptionsIds: userOptions.map(u => u.id),
-        allServiceProvidersInOptions,
-        usersLoading,
-        comparison: serviceProviderIds.map(spId => ({
-          serviceProviderId: spId,
-          foundInOptions: userOptions.some(u => u.id === spId),
-          matchingUser: userOptions.find(u => u.id === spId)
-        }))
-      });
-
       // Build complete form data object
+      // NOTE: Don't set serviceProviders here - it will be set in a separate effect after users load
       const formData = {
         ...clientData,
         clientType: clientType,
@@ -506,10 +521,8 @@ const ClientForm = ({
         phone: clientData.phone || clientData.contactNoWork,
         workTypes: workTypeIds,
         gradings: gradingIds,
-        // Always set service providers immediately, don't wait for users to load
-        // The tagRender function will display names once userOptions is populated
-        // This ensures the selected values are shown even before user data arrives
-        ...(serviceProviderIds.length > 0 && { serviceProviders: serviceProviderIds }),
+        // Service providers will be set in a separate effect after users load
+        // This prevents showing IDs instead of names
         leader: clientData.leader?.id,
         notes: clientData.clientNotes,
         isCreditEnabled: clientData.isCreditEnabled,
@@ -621,6 +634,56 @@ const ClientForm = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gradingsData, selectedWorkTypes, client?.id, fullClientData?.client?.id]);
 
+  // Separate effect to set service providers after users have loaded
+  // This ensures proper names are displayed instead of IDs
+  useEffect(() => {
+    const clientData = fullClientData?.client || client;
+
+    // Early return if no client data or no users loaded yet
+    if (!clientData || !clientData.id || usersLoading) {
+      return;
+    }
+
+    // Extract service provider IDs from client data - now just an array of User objects
+    let serviceProviderIds = [];
+    if (
+      clientData.serviceProviders &&
+      Array.isArray(clientData.serviceProviders)
+    ) {
+      serviceProviderIds = clientData.serviceProviders
+        .map((user) => user?.id)
+        .filter((id) => id !== null && id !== undefined && id !== '');
+    }
+
+    // Only set if we have service provider IDs and users are loaded
+    if (serviceProviderIds.length > 0 && !usersLoading) {
+      console.log("Setting service providers after users loaded:", {
+        serviceProviderIds,
+        userOptionsCount: userOptions.length,
+        userOptionsIds: userOptions.map(u => u.id)
+      });
+
+      // Filter to only include valid IDs that exist in userOptions
+      const validServiceProviderIds = serviceProviderIds.filter(id => {
+        // Ensure ID is valid (not null, undefined, or empty)
+        if (!id || id === 'undefined' || id === 'null') return false;
+        // Ensure ID exists in userOptions
+        return userOptions.some(user => user.id === id);
+      });
+
+      if (validServiceProviderIds.length > 0) {
+        form.setFieldsValue({ serviceProviders: validServiceProviderIds });
+        console.log("Service providers set successfully:", validServiceProviderIds);
+      } else {
+        console.warn("No valid service provider IDs found in userOptions", {
+          extractedIds: serviceProviderIds,
+          availableUserIds: userOptions.map(u => u.id)
+        });
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [client?.id, fullClientData?.client?.id, userOptions, usersLoading]);
+
   // Handle form submission
   const handleSubmit = useCallback(async () => {
     try {
@@ -670,9 +733,13 @@ const ClientForm = ({
       if (input.serviceProviders && Array.isArray(input.serviceProviders)) {
         input.serviceProviders = input.serviceProviders
           .map((sp) => {
-            // Handle nested structure: { serviceProvider: { id: ... } }
-            if (sp.serviceProvider && sp.serviceProvider.id) {
-              return sp.serviceProvider.id;
+            // Handle nested structure: { user: { id: ... } }
+            if (sp.user && sp.user.id) {
+              return sp.user.id;
+            }
+            // Handle direct userId field
+            if (sp.userId) {
+              return sp.userId;
             }
             // Handle direct ID structure: { id: ... }
             if (sp.id) {
@@ -1609,6 +1676,13 @@ const ClientForm = ({
                                         userIds
                                       )
                                     }
+                                    showSearch
+                                    filterOption={(input, option) => {
+                                      const user = usersData?.users?.find(u => u.id === option.value);
+                                      if (!user) return false;
+                                      const searchText = `${user.firstName} ${user.lastName}`.toLowerCase();
+                                      return searchText.includes(input.toLowerCase());
+                                    }}
                                   >
                                     {usersData?.users?.map((user) => (
                                       <Option key={user.id} value={user.id}>
@@ -1662,8 +1736,22 @@ const ClientForm = ({
                     tagRender={(props) => {
                       const { value, closable, onClose } = props;
                       const user = userOptions.find(u => u.id === value);
-                      // Show user name if available, or show loading indicator while users are still loading
-                      const displayName = user ? `${user.firstName} ${user.lastName}` : (usersLoading ? "Loading..." : value);
+                      
+                      // Ensure we have proper names
+                      const firstName = user?.firstName || "";
+                      const lastName = user?.lastName || "";
+                      const displayName = (firstName || lastName) 
+                        ? `${firstName} ${lastName}`.trim()
+                        : `Unknown (${value})`;
+                      
+                      console.log("tagRender for value:", {
+                        value,
+                        userFound: !!user,
+                        firstName,
+                        lastName,
+                        displayName,
+                        allUserOptions: userOptions.map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
+                      });
                       
                       return (
                         <span
@@ -1678,8 +1766,8 @@ const ClientForm = ({
                             fontSize: '14px',
                             lineHeight: '22px',
                             height: '24px',
-                            opacity: user ? 1 : 0.8,
                           }}
+                          title={`ID: ${value}`}
                         >
                           {displayName}
                           {closable && (
@@ -2012,6 +2100,32 @@ const ClientForm = ({
     // always calls the latest callback (which captures the latest gradingCustomRates).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentStep, loading, clientType, handleSubmit]);
+
+  // Show loader while essential data is loading
+  const isLoadingEssentialData = client?.id && (clientLoading || usersLoading);
+
+  if (isLoadingEssentialData) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '400px',
+        flexDirection: 'column',
+        gap: '16px'
+      }}>
+        <div className="ant-spin ant-spin-lg ant-spin-spinning">
+          <span className="ant-spin-dot ant-spin-dot-spin">
+            <i className="ant-spin-dot-item"></i>
+            <i className="ant-spin-dot-item"></i>
+            <i className="ant-spin-dot-item"></i>
+            <i className="ant-spin-dot-item"></i>
+          </span>
+        </div>
+        <Text type="secondary">Loading client data...</Text>
+      </div>
+    );
+  }
 
   return (
     <>

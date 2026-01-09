@@ -70,14 +70,9 @@ export const GET_CLIENTS = gql`
       }
       serviceProviders {
         id
-        serviceProvider {
-          id
-          firstName
-          lastName
-          email
-        }
-        assignedDate
-        isActive
+        firstName
+        lastName
+        email
       }
       createdAt
       updatedAt
@@ -192,15 +187,10 @@ export const GET_CLIENT = gql`
       }
       serviceProviders {
         id
-        serviceProvider {
-          id
-          firstName
-          lastName
-          email
-          contactPersonal
-        }
-        assignedDate
-        isActive
+        firstName
+        lastName
+        email
+        contactPersonal
       }
       leader {
         id
@@ -386,7 +376,7 @@ export const GET_CLIENT_SERVICE_PROVIDERS = gql`
   query GetClientServiceProviders($clientId: ID!) {
     serviceProvidersByClient(clientId: $clientId) {
       id
-      serviceProvider {
+      user {
         id
         firstName
         lastName
@@ -404,7 +394,7 @@ export const ASSIGN_SERVICE_PROVIDER = gql`
   mutation AssignServiceProvider($input: ClientServiceProviderInput!) {
     assignServiceProviderToClient(input: $input) {
       id
-      serviceProvider {
+      user {
         id
         firstName
         lastName
