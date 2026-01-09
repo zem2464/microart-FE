@@ -48,7 +48,9 @@ const { Option } = Select;
 
 const ClientList = () => {
   const currentUser = useReactiveVar(userCacheVar);
-  const [myClientsOnly, setMyClientsOnly] = useState(true);
+  const [myClientsOnly, setMyClientsOnly] = useState(
+    currentUser?.isServiceProvider === true
+  );
   const [filters, setFilters] = useState({
     search: "",
     clientType: undefined,
@@ -135,23 +137,26 @@ const ClientList = () => {
 
   // Default "My Clients" filter for service providers
   useEffect(() => {
-    const roleType = currentUser?.role?.roleType?.toString()?.toUpperCase();
-    if (roleType && roleType.includes("SERVICE_PROVIDER")) {
+    if (currentUser?.isServiceProvider === true) {
       setMyClientsOnly(true);
     }
   }, [currentUser]);
 
   // Update filters when myClientsOnly changes
   useEffect(() => {
-    if (myClientsOnly && currentUser?.id) {
-      setFilters(prev => ({ ...prev, serviceProviderId: currentUser.id }));
+    if (
+      currentUser?.isServiceProvider === true &&
+      myClientsOnly &&
+      currentUser?.id
+    ) {
+      setFilters((prev) => ({ ...prev, serviceProviderId: currentUser.id }));
     } else {
-      setFilters(prev => {
+      setFilters((prev) => {
         const { serviceProviderId, ...rest } = prev;
         return rest;
       });
     }
-  }, [myClientsOnly, currentUser?.id]);
+  }, [myClientsOnly, currentUser?.id, currentUser?.isServiceProvider]);
 
   // Refetch when filters or sorter change
   React.useEffect(() => {
@@ -205,7 +210,16 @@ const ClientList = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMore, loading, fetchMore, page, filters, pageSize, sorter]);
+  }, [
+    isLoadingMore,
+    hasMore,
+    loading,
+    fetchMore,
+    page,
+    filters,
+    pageSize,
+    sorter,
+  ]);
 
   // Handle scroll event for infinite scroll (window-level)
   const handleScroll = useCallback(() => {
@@ -1107,6 +1121,20 @@ const ClientList = () => {
                     {summaryStats.clientsOverLimit}
                   </Tag>
                 </Space>
+                {currentUser?.isServiceProvider === true && (
+                  <Space size={4}>
+                    {/* My Clients Only filter - visible only for service providers */}
+                    <Checkbox
+                      checked={myClientsOnly}
+                      onChange={(e) => setMyClientsOnly(e.target.checked)}
+                      style={{ whiteSpace: "nowrap" }}
+                    >
+                      <Text strong style={{ fontSize: 14 }}>
+                        My Clients
+                      </Text>
+                    </Checkbox>
+                  </Space>
+                )}
               </Space>
             </Col>
           </Row>
@@ -1173,23 +1201,15 @@ const ClientList = () => {
               </Select>
             </Col>
             <Col span={4} style={{ textAlign: "right" }}>
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={handleAddClient}
-              >
-                Add New Client
-              </Button>
-            </Col>
-          </Row>
-          <Row gutter={16} align="middle" style={{ marginTop: 12 }}>
-            <Col span={8}>
-              <Checkbox
-                checked={myClientsOnly}
-                onChange={(e) => setMyClientsOnly(e.target.checked)}
-              >
-                My Clients Only
-              </Checkbox>
+              <Space>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  onClick={handleAddClient}
+                >
+                  Add New Client
+                </Button>
+              </Space>
             </Col>
           </Row>
         </Card>

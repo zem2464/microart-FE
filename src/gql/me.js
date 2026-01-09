@@ -14,6 +14,7 @@ export const ME_QUERY = gql`
         roleType
       }
       roleId
+      isServiceProvider
       userWorkTypes {
         id
         workTypeId

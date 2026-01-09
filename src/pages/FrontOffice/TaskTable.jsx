@@ -111,7 +111,11 @@ function getTaskTotalQuantity(task) {
       const gid = g.gradingId ?? g.id;
       return String(gid) === String(gradingId);
     });
-    if (match && match.imageQuantity !== null && match.imageQuantity !== undefined) {
+    if (
+      match &&
+      match.imageQuantity !== null &&
+      match.imageQuantity !== undefined
+    ) {
       return Number(match.imageQuantity) || 0;
     }
   }
@@ -139,7 +143,9 @@ const TaskTable = () => {
   const [gradingFilter, setGradingFilter] = useState("all");
   const [sortBy, setSortBy] = useState("createdAt");
   const [sortOrder, setSortOrder] = useState("DESC");
-  const [myClientsOnly, setMyClientsOnly] = useState(true);
+  const [myClientsOnly, setMyClientsOnly] = useState(
+    currentUser?.isServiceProvider === true
+  );
 
   // Reset filters to default values
   const handleResetFilters = useCallback(() => {
@@ -153,7 +159,8 @@ const TaskTable = () => {
     setGradingFilter("all");
     setSortBy("createdAt");
     setSortOrder("DESC");
-    setMyClientsOnly(true);
+    // Only reset myClientsOnly to true if user is a service provider
+    setMyClientsOnly(currentUser?.isServiceProvider === true);
     message.success("Filters reset to default values");
   }, []);
 
@@ -173,7 +180,8 @@ const TaskTable = () => {
   const [assignQtySelectedUserIds, setAssignQtySelectedUserIds] = useState([]);
   const [assignQtyAllocations, setAssignQtyAllocations] = useState({}); // { [userId]: qty }
   const [assignQtyOriginalUserIds, setAssignQtyOriginalUserIds] = useState([]);
-  const [assignQtyOriginalAllocations, setAssignQtyOriginalAllocations] = useState({});
+  const [assignQtyOriginalAllocations, setAssignQtyOriginalAllocations] =
+    useState({});
 
   const openAssignQtyModal = useCallback((task, selectedUserIds) => {
     const totalQty = getTaskTotalQuantity(task);
@@ -193,12 +201,17 @@ const TaskTable = () => {
     });
 
     const toDistribute = Math.max(totalQty - preSum, 0);
-    const needAllocation = selectedUserIds.filter((uid) => prefill[uid] === undefined);
+    const needAllocation = selectedUserIds.filter(
+      (uid) => prefill[uid] === undefined
+    );
     if (needAllocation.length > 0) {
-      const base = needAllocation.length > 0 ? Math.floor(toDistribute / needAllocation.length) : 0;
+      const base =
+        needAllocation.length > 0
+          ? Math.floor(toDistribute / needAllocation.length)
+          : 0;
       needAllocation.forEach((uid, idx) => {
         // Put remainder on the first few users
-        const remainder = idx < (toDistribute % needAllocation.length) ? 1 : 0;
+        const remainder = idx < toDistribute % needAllocation.length ? 1 : 0;
         prefill[uid] = base + remainder;
       });
     }
@@ -207,9 +220,9 @@ const TaskTable = () => {
     setAssignQtySelectedUserIds(selectedUserIds);
     setAssignQtyAllocations(prefill);
     // Store original state for change detection (from existing task assignments)
-    const originalUserIds = currentAssignments.map(a => a.userId);
+    const originalUserIds = currentAssignments.map((a) => a.userId);
     const originalAllocations = {};
-    currentAssignments.forEach(a => {
+    currentAssignments.forEach((a) => {
       originalAllocations[a.userId] = a.imageQuantity || 0;
     });
     setAssignQtyOriginalUserIds(originalUserIds);
@@ -227,10 +240,16 @@ const TaskTable = () => {
   }, []);
 
   const assignQtyTotalAllocated = useMemo(() => {
-    return assignQtySelectedUserIds.reduce((sum, uid) => sum + (Number(assignQtyAllocations[uid]) || 0), 0);
+    return assignQtySelectedUserIds.reduce(
+      (sum, uid) => sum + (Number(assignQtyAllocations[uid]) || 0),
+      0
+    );
   }, [assignQtyAllocations, assignQtySelectedUserIds]);
 
-  const assignQtyModalTaskTotal = useMemo(() => getTaskTotalQuantity(assignQtyModalTask), [assignQtyModalTask]);
+  const assignQtyModalTaskTotal = useMemo(
+    () => getTaskTotalQuantity(assignQtyModalTask),
+    [assignQtyModalTask]
+  );
 
   // If task had no assignments before opening modal, allow save without further changes
   const isInitialTaskUnassigned = useMemo(() => {
@@ -252,7 +271,7 @@ const TaskTable = () => {
     for (const uid of assignQtyOriginalUserIds) {
       if (!currentUserSet.has(uid)) return true;
     }
-    
+
     // Check if allocations changed for any user
     for (const uid of assignQtySelectedUserIds) {
       const currentQty = Number(assignQtyAllocations[uid]) || 0;
@@ -261,9 +280,14 @@ const TaskTable = () => {
         return true;
       }
     }
-    
+
     return false;
-  }, [assignQtySelectedUserIds, assignQtyOriginalUserIds, assignQtyAllocations, assignQtyOriginalAllocations]);
+  }, [
+    assignQtySelectedUserIds,
+    assignQtyOriginalUserIds,
+    assignQtyAllocations,
+    assignQtyOriginalAllocations,
+  ]);
 
   const handleAssignQtyAutoDistribute = useCallback(() => {
     if (!assignQtyModalTask) return;
@@ -326,7 +350,12 @@ const TaskTable = () => {
     }
 
     // Add service provider filter for "My Clients" functionality
-    if (myClientsOnly && currentUser?.id) {
+    // Only apply if user is a service provider AND myClientsOnly is checked
+    if (
+      currentUser?.isServiceProvider === true &&
+      myClientsOnly &&
+      currentUser?.id
+    ) {
       filters.serviceProviderId = currentUser.id;
     }
 
@@ -468,7 +497,9 @@ const TaskTable = () => {
       // Current assignments
       const currentAssignments = task.taskAssignments || [];
       // Delete users that are no longer selected
-      const toRemove = currentAssignments.filter((a) => !selectedIds.includes(a.userId));
+      const toRemove = currentAssignments.filter(
+        (a) => !selectedIds.includes(a.userId)
+      );
       for (const assignment of toRemove) {
         await deleteAssignment({ variables: { id: assignment.id } });
       }
@@ -627,7 +658,7 @@ const TaskTable = () => {
 
     const filteredTasks = tasks.filter((task) => {
       // Note: My Clients Only filter is now handled server-side via serviceProviderId in buildFilters()
-      
+
       // Client search filter
       if (clientSearchTerm) {
         const client = task?.project?.client;
@@ -636,18 +667,17 @@ const TaskTable = () => {
           client?.displayName,
           client?.companyName,
         ].some((value) => value?.toLowerCase().includes(clientSearchTerm));
-        
+
         if (!clientMatches) return false;
       }
 
       // Project search filter
       if (projectSearchTerm) {
         const project = task?.project;
-        const projectMatches = [
-          project?.name,
-          project?.projectCode,
-        ].some((value) => value?.toLowerCase().includes(projectSearchTerm));
-        
+        const projectMatches = [project?.name, project?.projectCode].some(
+          (value) => value?.toLowerCase().includes(projectSearchTerm)
+        );
+
         if (!projectMatches) return false;
       }
 
@@ -697,7 +727,14 @@ const TaskTable = () => {
     });
 
     return grouped;
-  }, [tasks, selectedWorkTypeId, clientSearch, projectSearch, myClientsOnly, currentUser?.id]);
+  }, [
+    tasks,
+    selectedWorkTypeId,
+    clientSearch,
+    projectSearch,
+    myClientsOnly,
+    currentUser?.id,
+  ]);
 
   // Convert grouped data to table format for each worktype
   const tableDataByWorkType = useMemo(() => {
@@ -890,20 +927,21 @@ const TaskTable = () => {
 
     // Get user's work type IDs from ME query (prefer workTypes, fallback to userWorkTypes)
     const userWorkTypeIds =
-      (currentUser?.workTypes?.map((wt) => wt.id.toString()) || 
-       currentUser?.userWorkTypes?.map((uwt) => uwt.workTypeId.toString())) || [];
+      currentUser?.workTypes?.map((wt) => wt.id.toString()) ||
+      currentUser?.userWorkTypes?.map((uwt) => uwt.workTypeId.toString()) ||
+      [];
 
     // Check if user has any assigned work types
     const hasAssignedWorkTypes = userWorkTypeIds && userWorkTypeIds.length > 0;
 
-    console.log('[WorkType Filter] User work types:', {
+    console.log("[WorkType Filter] User work types:", {
       userId: currentUser?.id,
       userEmail: currentUser?.email,
       userWorkTypeIds,
       hasAssignedWorkTypes,
-      userWorkTypeNames: currentUser?.workTypes?.map(wt => wt.name) || [],
+      userWorkTypeNames: currentUser?.workTypes?.map((wt) => wt.name) || [],
       userWorkTypesData: currentUser?.workTypes,
-      userWorkTypesJunction: currentUser?.userWorkTypes
+      userWorkTypesJunction: currentUser?.userWorkTypes,
     });
 
     // Create tabs from all available worktypes
@@ -913,13 +951,18 @@ const TaskTable = () => {
 
         // Filter: only show work types assigned to the user
         // Only filter if user has assigned work types. If none are assigned, show all (for backward compatibility/admins)
-        const shouldShow = !hasAssignedWorkTypes || userWorkTypeIds.includes(workTypeId);
-        
+        const shouldShow =
+          !hasAssignedWorkTypes || userWorkTypeIds.includes(workTypeId);
+
         console.log(`[WorkType Filter] ${workType.name}:`, {
           workTypeId,
           isAssignedToUser: userWorkTypeIds.includes(workTypeId),
           shouldShow,
-          reason: !hasAssignedWorkTypes ? 'No work types assigned (show all)' : userWorkTypeIds.includes(workTypeId) ? 'Assigned to user' : 'Not assigned to user'
+          reason: !hasAssignedWorkTypes
+            ? "No work types assigned (show all)"
+            : userWorkTypeIds.includes(workTypeId)
+            ? "Assigned to user"
+            : "Not assigned to user",
         });
 
         if (shouldShow) {
@@ -1018,7 +1061,8 @@ const TaskTable = () => {
 
       if (field === "assigneeId") {
         // Explicitly handle null/undefined to allow clearing assignee
-        input.assigneeId = editedData.assigneeId !== undefined ? editedData.assigneeId : null;
+        input.assigneeId =
+          editedData.assigneeId !== undefined ? editedData.assigneeId : null;
       } else if (field === "assignees") {
         // Handle multiple user assignments with per-user quantities when >1 selected
         const currentAssignments = task.taskAssignments || [];
@@ -1032,8 +1076,12 @@ const TaskTable = () => {
         }
 
         // Otherwise, proceed with simple add/remove logic
-        const usersToAdd = selectedUserIds.filter((id) => !currentUserIds.includes(id));
-        const usersToRemove = currentAssignments.filter((a) => !selectedUserIds.includes(a.userId));
+        const usersToAdd = selectedUserIds.filter(
+          (id) => !currentUserIds.includes(id)
+        );
+        const usersToRemove = currentAssignments.filter(
+          (a) => !selectedUserIds.includes(a.userId)
+        );
 
         for (const assignment of usersToRemove) {
           await deleteAssignment({ variables: { id: assignment.id } });
@@ -1048,7 +1096,9 @@ const TaskTable = () => {
             imageQuantity: qtyPerUser,
             notes: null,
           }));
-          await bulkCreateAssignments({ variables: { inputs: assignmentInputs } });
+          await bulkCreateAssignments({
+            variables: { inputs: assignmentInputs },
+          });
         }
 
         message.success("Task assignments updated successfully");
@@ -1069,20 +1119,27 @@ const TaskTable = () => {
 
         // Validate: the increment being added shouldn't cause total to exceed task quantity
         if (task.imageQuantity) {
-          const currentUserCompleted = userAssignment.completedImageQuantity || 0;
-          const otherAssignmentsCompleted = task.taskAssignments
-            ?.filter((a) => a.id !== userAssignment.id)
-            .reduce((sum, a) => sum + (a.completedImageQuantity || 0), 0) || 0;
+          const currentUserCompleted =
+            userAssignment.completedImageQuantity || 0;
+          const otherAssignmentsCompleted =
+            task.taskAssignments
+              ?.filter((a) => a.id !== userAssignment.id)
+              .reduce((sum, a) => sum + (a.completedImageQuantity || 0), 0) ||
+            0;
 
           const incrementToAdd = editedData.completedQty;
-          const newTotalCompleted = currentUserCompleted + incrementToAdd + otherAssignmentsCompleted;
+          const newTotalCompleted =
+            currentUserCompleted + incrementToAdd + otherAssignmentsCompleted;
 
           if (newTotalCompleted > task.imageQuantity) {
-            const maxCanAdd = task.imageQuantity - currentUserCompleted - otherAssignmentsCompleted;
+            const maxCanAdd =
+              task.imageQuantity -
+              currentUserCompleted -
+              otherAssignmentsCompleted;
             message.error(
               `Cannot add ${incrementToAdd} images. ` +
-              `You've completed ${currentUserCompleted}, others completed ${otherAssignmentsCompleted}. ` +
-              `You can add up to ${maxCanAdd} more images.`
+                `You've completed ${currentUserCompleted}, others completed ${otherAssignmentsCompleted}. ` +
+                `You can add up to ${maxCanAdd} more images.`
             );
             cancelEditCell();
             return;
@@ -1111,7 +1168,10 @@ const TaskTable = () => {
         input.status = editedData.status;
       }
 
-      console.log(`[saveTaskCell] Updating task ${task.id} field=${field}`, input);
+      console.log(
+        `[saveTaskCell] Updating task ${task.id} field=${field}`,
+        input
+      );
 
       await updateTask({
         variables: {
@@ -1446,9 +1506,13 @@ const TaskTable = () => {
                             textAlign: "center",
                           }}
                         >
-                          {assignment.user?.firstName} {assignment.user?.lastName}
-                          {typeof assignment.imageQuantity === 'number' && (
-                            <span style={{ color: '#8c8c8c' }}> ({assignment.imageQuantity})</span>
+                          {assignment.user?.firstName}{" "}
+                          {assignment.user?.lastName}
+                          {typeof assignment.imageQuantity === "number" && (
+                            <span style={{ color: "#8c8c8c" }}>
+                              {" "}
+                              ({assignment.imageQuantity})
+                            </span>
                           )}
                         </Text>
                       ))}
@@ -1737,15 +1801,19 @@ const TaskTable = () => {
                     {dashboardData?.tasksDashboard?.overdueTasks || 0}
                   </Tag>
                 </Space>
-                <Checkbox
-                  checked={myClientsOnly}
-                  onChange={(e) => setMyClientsOnly(e.target.checked)}
-                  style={{ marginLeft: 16 }}
-                >
-                  <Text style={{ fontSize: 14, fontWeight: 500 }}>
-                    My Clients Only
-                  </Text>
-                </Checkbox>
+                {/* My Clients Only filter - visible only for service providers */}
+                {currentUser?.isServiceProvider === true && (
+                  <Space size={4}>
+                    <Checkbox
+                      checked={myClientsOnly}
+                      onChange={(e) => setMyClientsOnly(e.target.checked)}
+                    >
+                      <Text strong style={{ fontSize: 14 }}>
+                        My Clients
+                      </Text>
+                    </Checkbox>
+                  </Space>
+                )}
               </Space>
             </Col>
           </Row>
@@ -1994,7 +2062,7 @@ const TaskTable = () => {
                           pagination={false}
                           size="small"
                           tableLayout="fixed"
-                          scroll={{ x: 'max-content' }}
+                          scroll={{ x: "max-content" }}
                           // loading={updateTaskLoading}
                           rowKey="key"
                           rowClassName={(record, index) => {
@@ -2043,7 +2111,7 @@ const TaskTable = () => {
               <Text type="secondary">
                 Task total: {assignQtyModalTaskTotal} images
               </Text>
-              
+
               {/* User Selector */}
               <div>
                 <Text strong style={{ display: "block", marginBottom: 8 }}>
@@ -2057,13 +2125,13 @@ const TaskTable = () => {
                     setAssignQtySelectedUserIds(values);
                     // Initialize allocations for newly added users with 0
                     const newAllocations = { ...assignQtyAllocations };
-                    values.forEach(uid => {
+                    values.forEach((uid) => {
                       if (!(uid in newAllocations)) {
                         newAllocations[uid] = 0;
                       }
                     });
                     // Remove allocations for deselected users
-                    Object.keys(newAllocations).forEach(uid => {
+                    Object.keys(newAllocations).forEach((uid) => {
                       if (!values.includes(uid)) {
                         delete newAllocations[uid];
                       }
@@ -2106,17 +2174,27 @@ const TaskTable = () => {
               </div>
 
               {/* Allocation Summary and Auto-distribute */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 12px", backgroundColor: "#f5f5f5", borderRadius: "4px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "8px 12px",
+                  backgroundColor: "#f5f5f5",
+                  borderRadius: "4px",
+                }}
+              >
                 <Text>
-                  <strong>Allocated:</strong> {assignQtyTotalAllocated} / {assignQtyModalTaskTotal}
+                  <strong>Allocated:</strong> {assignQtyTotalAllocated} /{" "}
+                  {assignQtyModalTaskTotal}
                   {assignQtyTotalAllocated > assignQtyModalTaskTotal && (
                     <Text type="danger" style={{ marginLeft: 8 }}>
                       (Exceeds total!)
                     </Text>
                   )}
                 </Text>
-                <Button 
-                  size="small" 
+                <Button
+                  size="small"
                   onClick={handleAssignQtyAutoDistribute}
                   disabled={assignQtySelectedUserIds.length === 0}
                 >
@@ -2126,12 +2204,24 @@ const TaskTable = () => {
 
               {/* Quantity Inputs */}
               {assignQtySelectedUserIds.length > 0 ? (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div
+                  style={{ display: "flex", flexDirection: "column", gap: 8 }}
+                >
                   <Text strong>Quantity per user:</Text>
                   {assignQtySelectedUserIds.map((uid) => (
-                    <div key={uid} style={{ display: "flex", gap: 8, alignItems: "center", padding: "4px 0" }}>
+                    <div
+                      key={uid}
+                      style={{
+                        display: "flex",
+                        gap: 8,
+                        alignItems: "center",
+                        padding: "4px 0",
+                      }}
+                    >
                       <div style={{ flex: 1 }}>
-                        <UserOutlined style={{ marginRight: 8, color: "#1890ff" }} />
+                        <UserOutlined
+                          style={{ marginRight: 8, color: "#1890ff" }}
+                        />
                         {getUserDisplayName(uid)}
                       </div>
                       <div style={{ width: 140 }}>
@@ -2141,7 +2231,10 @@ const TaskTable = () => {
                           max={assignQtyModalTaskTotal}
                           value={assignQtyAllocations[uid] ?? 0}
                           onChange={(val) =>
-                            setAssignQtyAllocations((prev) => ({ ...prev, [uid]: Number(val) || 0 }))
+                            setAssignQtyAllocations((prev) => ({
+                              ...prev,
+                              [uid]: Number(val) || 0,
+                            }))
                           }
                           style={{ width: "100%" }}
                           addonAfter="images"
@@ -2151,14 +2244,22 @@ const TaskTable = () => {
                   ))}
                 </div>
               ) : (
-                <div style={{ padding: "20px", textAlign: "center", backgroundColor: "#f5f5f5", borderRadius: "4px" }}>
-                  <Text type="secondary">Please select users to assign quantities</Text>
+                <div
+                  style={{
+                    padding: "20px",
+                    textAlign: "center",
+                    backgroundColor: "#f5f5f5",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <Text type="secondary">
+                    Please select users to assign quantities
+                  </Text>
                 </div>
               )}
             </div>
           ) : null}
         </Modal>
-
       </div>
     </div>
   );

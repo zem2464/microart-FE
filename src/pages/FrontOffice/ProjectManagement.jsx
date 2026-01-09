@@ -148,7 +148,9 @@ const ProjectManagement = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [clientFilter, setClientFilter] = useState("all");
   const [workTypeFilter, setWorkTypeFilter] = useState("all");
-  const [myClientsOnly, setMyClientsOnly] = useState(true);
+  const [myClientsOnly, setMyClientsOnly] = useState(
+    user?.isServiceProvider === true
+  );
 
   // Infinite scroll state
   const [page, setPage] = useState(1);
@@ -195,6 +197,7 @@ const ProjectManagement = () => {
     }
 
     // Add service provider filter for "My Clients" functionality
+    // Only apply if user is a service provider AND myClientsOnly is checked
     if (myClientsOnly && user?.id) {
       filters.serviceProviderId = user.id;
     }
@@ -351,10 +354,10 @@ const ProjectManagement = () => {
 
         try {
           refetchClients && refetchClients();
-        } catch (e) { }
+        } catch (e) {}
         try {
           refetchStats && refetchStats();
-        } catch (e) { }
+        } catch (e) {}
       } else {
         message.error(
           data?.generateProjectInvoice?.message || "Failed to generate invoice"
@@ -889,7 +892,10 @@ const ProjectManagement = () => {
           },
         ].map((item) => ({ ...item, amount: item.quantity * item.rate }));
 
-    const subtotal = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+    const subtotal = items.reduce(
+      (sum, item) => sum + Number(item.amount || 0),
+      0
+    );
     const discountAmount = Math.max(Number(project.discountAmount || 0), 0);
     const taxableBase = Math.max(subtotal - discountAmount, 0);
     const taxRate = Number(
@@ -996,7 +1002,7 @@ const ProjectManagement = () => {
       }
       // Permanent clients: Invoice is sufficient (no additional checks)
     }
-    
+
     // Validate REOPEN status change
     if (newStatus?.toLowerCase() === "reopen") {
       if (!project) {
@@ -1298,15 +1304,16 @@ const ProjectManagement = () => {
               onClick={() => handleViewProject(record)}
             />
           </Tooltip>
-          {canEditProjects && (record.status || "").toString().toUpperCase() !== "COMPLETED" && (
-            <Tooltip title="Edit">
-              <Button
-                type="text"
-                icon={<EditOutlined />}
-                onClick={() => handleEditProject(record)}
-              />
-            </Tooltip>
-          )}
+          {canEditProjects &&
+            (record.status || "").toString().toUpperCase() !== "COMPLETED" && (
+              <Tooltip title="Edit">
+                <Button
+                  type="text"
+                  icon={<EditOutlined />}
+                  onClick={() => handleEditProject(record)}
+                />
+              </Tooltip>
+            )}
           {record.status === "DRAFT" && (
             <Tooltip title="Activate Project">
               <Button
@@ -1327,7 +1334,9 @@ const ProjectManagement = () => {
                 />
               </Tooltip>
             )}
-          {(["ACTIVE", "IN_PROGRESS"].includes((record.status || "").toString().toUpperCase())) &&
+          {["ACTIVE", "IN_PROGRESS"].includes(
+            (record.status || "").toString().toUpperCase()
+          ) &&
             !(
               record.invoiceId ||
               record.invoice?.id ||
@@ -1393,18 +1402,18 @@ const ProjectManagement = () => {
 
           {/* Show View Invoice button only when invoice is actually generated */}
           {(record.invoice?.id || record.invoiceId) && (
-              <Tooltip title="View Invoice">
-                <Button
-                  type="text"
-                  icon={<FileTextOutlined />}
-                  onClick={() => {
-                    const invoiceId = record.invoice?.id || record.invoiceId;
-                    console.log('Opening invoice drawer with ID:', invoiceId);
-                    showInvoiceDetailDrawer(invoiceId);
-                  }}
-                />
-              </Tooltip>
-            )}
+            <Tooltip title="View Invoice">
+              <Button
+                type="text"
+                icon={<FileTextOutlined />}
+                onClick={() => {
+                  const invoiceId = record.invoice?.id || record.invoiceId;
+                  console.log("Opening invoice drawer with ID:", invoiceId);
+                  showInvoiceDetailDrawer(invoiceId);
+                }}
+              />
+            </Tooltip>
+          )}
 
           {(record.status || "").toString().toUpperCase() !== "COMPLETED" &&
             canDeleteProjects && (
@@ -1635,6 +1644,19 @@ const ProjectManagement = () => {
                     {stats.flyOnCredit}
                   </Tag>
                 </Space>
+                {user?.isServiceProvider && (
+                  <Space>
+                    {/* My Clients Only filter - visible only for service providers */}
+                    <Checkbox
+                      checked={myClientsOnly}
+                      onChange={(e) => setMyClientsOnly(e.target.checked)}
+                    >
+                      <Text strong style={{ fontSize: 14 }}>
+                        My Clients
+                      </Text>
+                    </Checkbox>
+                  </Space>
+                )}
               </Space>
             </Col>
           </Row>
@@ -1708,17 +1730,6 @@ const ProjectManagement = () => {
                   </Option>
                 ))}
               </Select>
-            </Col>
-            <Col span={2}>
-              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
-                Filter
-              </div>
-              <Checkbox
-                checked={myClientsOnly}
-                onChange={(e) => setMyClientsOnly(e.target.checked)}
-              >
-                My Clients Only
-              </Checkbox>
             </Col>
             <Col span={6}>
               <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
@@ -2079,8 +2090,8 @@ const ProjectManagement = () => {
                     projectToInvoice.status === "completed"
                       ? "green"
                       : projectToInvoice.status === "active"
-                        ? "blue"
-                        : "default"
+                      ? "blue"
+                      : "default"
                   }
                 >
                   {projectToInvoice.status?.toUpperCase()}
@@ -2089,7 +2100,7 @@ const ProjectManagement = () => {
 
               {/* Show grading details */}
               {projectToInvoice.projectGradings &&
-                projectToInvoice.projectGradings.length > 0 ? (
+              projectToInvoice.projectGradings.length > 0 ? (
                 <>
                   <Descriptions.Item label="Gradings">
                     <Space
@@ -2278,8 +2289,8 @@ const ProjectDetails = ({ project, tasks, tasksLoading, onBack }) => {
                           status === "completed"
                             ? "green"
                             : status === "IN_PROGRESS"
-                              ? "blue"
-                              : "orange"
+                            ? "blue"
+                            : "orange"
                         }
                       >
                         {status}
