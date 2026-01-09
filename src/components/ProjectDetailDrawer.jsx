@@ -174,9 +174,14 @@ const ProjectDetailDrawer = ({ projectId }) => {
     skip: !project?.projectWorkTypes?.length,
     fetchPolicy: "cache-first",
   });
+  const hasLimitedRead = hasPermission(
+    currentUser,
+    generatePermission(MODULES.PROJECTS, ACTIONS.LIMTEREAD)
+  );
   const canShowQuote =
     ["ACTIVE", "IN_PROGRESS"].includes((project?.status || "").toString().toUpperCase()) &&
-    !(project?.invoiceId || project?.invoice?.id);
+    !(project?.invoiceId || project?.invoice?.id) &&
+    !hasLimitedRead;
   const hasInvoice = !!(project?.invoiceId || project?.invoice?.id);
   const completedTasks = tasks.filter((task) => (task.status || "").toString().toUpperCase() === "COMPLETED").length;
   const totalTasks = tasks.length || 0;

@@ -1341,7 +1341,8 @@ const ProjectManagement = () => {
               record.invoiceId ||
               record.invoice?.id ||
               invoicedProjectIds.has(record.id)
-            ) && (
+            ) &&
+            !hasLimitedRead && (
               <Tooltip title="View Quotation">
                 <Button
                   type="text"
