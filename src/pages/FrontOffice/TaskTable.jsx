@@ -932,11 +932,15 @@ const TaskTable = () => {
       [];
 
     // Check if user has any assigned work types
-    const hasAssignedWorkTypes = userWorkTypeIds && userWorkTypeIds.length > 0;
+    // Important: Only consider hasAssignedWorkTypes as true if user is actually loaded AND has work types
+    // This prevents showing all work types during the initial load before user data is available
+    const isUserLoaded = currentUser && currentUser.id;
+    const hasAssignedWorkTypes = isUserLoaded && userWorkTypeIds && userWorkTypeIds.length > 0;
 
     console.log("[WorkType Filter] User work types:", {
       userId: currentUser?.id,
       userEmail: currentUser?.email,
+      isUserLoaded,
       userWorkTypeIds,
       hasAssignedWorkTypes,
       userWorkTypeNames: currentUser?.workTypes?.map((wt) => wt.name) || [],
@@ -949,16 +953,21 @@ const TaskTable = () => {
       if (workType.isActive) {
         const workTypeId = workType.id.toString();
 
-        // Filter: only show work types assigned to the user
-        // Only filter if user has assigned work types. If none are assigned, show all (for backward compatibility/admins)
-        const shouldShow =
-          !hasAssignedWorkTypes || userWorkTypeIds.includes(workTypeId);
+        // Filter logic:
+        // - If user is not loaded yet, show no tabs (prevents flash of all tabs)
+        // - If user has assigned work types, only show those
+        // - If user has no assigned work types (admin/special case), show all
+        const shouldShow = isUserLoaded && 
+          (!hasAssignedWorkTypes || userWorkTypeIds.includes(workTypeId));
 
         console.log(`[WorkType Filter] ${workType.name}:`, {
           workTypeId,
           isAssignedToUser: userWorkTypeIds.includes(workTypeId),
+          isUserLoaded,
           shouldShow,
-          reason: !hasAssignedWorkTypes
+          reason: !isUserLoaded
+            ? "User not loaded yet"
+            : !hasAssignedWorkTypes
             ? "No work types assigned (show all)"
             : userWorkTypeIds.includes(workTypeId)
             ? "Assigned to user"
@@ -1006,8 +1015,13 @@ const TaskTable = () => {
   }, [worktypes, tableDataByWorkType, currentUser]);
 
   // Set default worktype tab when data loads
+  // This effect ensures we select a valid tab on initial load and when user work types are loaded
   useEffect(() => {
     const workTypeIds = Object.keys(allWorkTypeTabs);
+    
+    // Only set default if:
+    // 1. We have work types available
+    // 2. AND either no tab is selected (initial load) OR the selected tab is not in the filtered list
     if (
       workTypeIds.length > 0 &&
       (selectedWorkTypeId === "all" || !allWorkTypeTabs[selectedWorkTypeId])
@@ -1016,9 +1030,18 @@ const TaskTable = () => {
       const firstWithTasks = workTypeIds.find(
         (id) => allWorkTypeTabs[id].rows.length > 0
       );
-      setSelectedWorkTypeId(firstWithTasks || workTypeIds[0]);
+      const newWorkTypeId = firstWithTasks || workTypeIds[0];
+      
+      console.log("[WorkType Tab Selection]", {
+        currentSelection: selectedWorkTypeId,
+        availableTabs: workTypeIds,
+        newSelection: newWorkTypeId,
+        reason: selectedWorkTypeId === "all" ? "initial load" : "current tab not available",
+      });
+      
+      setSelectedWorkTypeId(newWorkTypeId);
     }
-  }, [allWorkTypeTabs]);
+  }, [allWorkTypeTabs, currentUser?.workTypes]);
 
   // Inline editing functions for task cells
   const isEditingCell = (projectId, gradingId, taskTypeId, field) => {

@@ -506,9 +506,10 @@ const ClientForm = ({
         phone: clientData.phone || clientData.contactNoWork,
         workTypes: workTypeIds,
         gradings: gradingIds,
-        // Only set service providers if all users are available in options
-        // This prevents showing IDs instead of names
-        ...(allServiceProvidersInOptions && { serviceProviders: serviceProviderIds }),
+        // Always set service providers immediately, don't wait for users to load
+        // The tagRender function will display names once userOptions is populated
+        // This ensures the selected values are shown even before user data arrives
+        ...(serviceProviderIds.length > 0 && { serviceProviders: serviceProviderIds }),
         leader: clientData.leader?.id,
         notes: clientData.clientNotes,
         isCreditEnabled: clientData.isCreditEnabled,
@@ -1659,9 +1660,10 @@ const ClientForm = ({
                       return label.includes(query);
                     }}
                     tagRender={(props) => {
-                      const { label, value, closable, onClose } = props;
+                      const { value, closable, onClose } = props;
                       const user = userOptions.find(u => u.id === value);
-                      const displayName = user ? `${user.firstName} ${user.lastName}` : value;
+                      // Show user name if available, or show loading indicator while users are still loading
+                      const displayName = user ? `${user.firstName} ${user.lastName}` : (usersLoading ? "Loading..." : value);
                       
                       return (
                         <span
@@ -1670,12 +1672,13 @@ const ClientForm = ({
                             padding: '0 7px',
                             border: '1px solid #d9d9d9',
                             borderRadius: '2px',
-                            background: '#fafafa',
+                            background: user ? '#fafafa' : '#fff7e6',
                             display: 'inline-flex',
                             alignItems: 'center',
                             fontSize: '14px',
                             lineHeight: '22px',
                             height: '24px',
+                            opacity: user ? 1 : 0.8,
                           }}
                         >
                           {displayName}
