@@ -116,6 +116,9 @@ const ProjectForm = ({
   const [availableUsers, setAvailableUsers] = useState([]);
   const [currentStatus, setCurrentStatus] = useState("draft"); // Track current form status
 
+  // Track original gradings for limited edit permission
+  const [originalGradingIds, setOriginalGradingIds] = useState([]);
+
   // Helper functions for field restrictions based on project status
   const isActiveProject =
     project &&
@@ -804,9 +807,40 @@ const ProjectForm = ({
       (id) => !selectedGradingIds.includes(id)
     );
 
+    // Check if trying to remove original gradings from a started project
+    // This applies to ALL users, not just those with limited edit permission
+    if (mode === "edit" && isActiveProject && originalGradingIds.length > 0) {
+      const attemptedRemoveOriginal = removedIds.filter((id) =>
+        originalGradingIds.includes(id)
+      );
+      
+      if (attemptedRemoveOriginal.length > 0) {
+        message.warning(
+          "You cannot remove existing gradings from a started project. You can only add new gradings and adjust quantities or prices."
+        );
+        
+        // Restore original gradings that user tried to remove
+        const restoredIds = selectedGradingIds.concat(attemptedRemoveOriginal);
+        
+        // Update the select to show the restored state
+        // We need to filter out the removed ones first, then add back the originals
+        const validRemovedIds = removedIds.filter(
+          (id) => !originalGradingIds.includes(id)
+        );
+        
+        let newSelectedGradings = [...selectedGradings];
+        newSelectedGradings = newSelectedGradings.filter(
+          (sg) => !validRemovedIds.includes(sg.gradingId)
+        );
+        
+        setSelectedGradings(newSelectedGradings);
+        return; // Exit early to prevent further processing
+      }
+    }
+
     let newSelectedGradings = [...selectedGradings];
 
-    // Remove unselected gradings
+    // Remove unselected gradings (only those allowed to be removed)
     newSelectedGradings = newSelectedGradings.filter(
       (sg) => !removedIds.includes(sg.gradingId)
     );
@@ -1544,6 +1578,10 @@ const ProjectForm = ({
             sequence: pg.sequence,
           }));
           setSelectedGradings(mappedGradings);
+          
+          // Track original grading IDs for limited edit permission
+          const originalIds = mappedGradings.map((g) => g.gradingId);
+          setOriginalGradingIds(originalIds);
         } else if (gradingId) {
           // Backward compatibility: convert single grading to multiple
           const singleGrading = {
@@ -1555,6 +1593,10 @@ const ProjectForm = ({
           };
           setSelectedGradings([singleGrading]);
           setSelectedGrading(gradingId);
+          
+          // Track original grading ID for limited edit permission
+          setOriginalGradingIds([gradingId]);
+          
           await loadGradingData(gradingId);
         }
 
@@ -2114,7 +2156,18 @@ const ProjectForm = ({
       {isActiveProject && !isFlyOnCredit && (
         <Alert
           message="Active Project - Limited Editing"
-          description="This project is active. You can only edit basic details like description, notes, deadline, quantity, and priority. Client, work type, grading, and tasks cannot be modified."
+          description="This project is active. You can edit basic details like description, notes, deadline, quantity, and priority. You can also add new gradings, but cannot change work types or remove existing gradings."
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
+      {/* Limited Edit Permission Notice */}
+      {hasLimitedEdit && mode === "edit" && (
+        <Alert
+          message="Limited Edit Permission"
+          description="You can add new gradings and adjust quantities or prices, but you cannot remove existing gradings or change the selected work types."
           type="info"
           showIcon
           style={{ marginBottom: 16 }}
@@ -2411,7 +2464,7 @@ const ProjectForm = ({
               placeholder="Select work types"
               loading={!workTypesData}
               onChange={(workTypeIds) => handleWorkTypeSelect(workTypeIds)}
-              disabled={isActiveProject && !canEditFlyOnCreditProject}
+              disabled={isActiveProject}
             >
               {(() => {
                 const workTypes = workTypesData?.workTypes || [];
@@ -2486,8 +2539,7 @@ const ProjectForm = ({
               }
               disabled={
                 !selectedWorkTypes ||
-                selectedWorkTypes.length === 0 ||
-                isActiveProject
+                selectedWorkTypes.length === 0
               }
               value={selectedGradings.map((sg) => sg.gradingId)}
               onChange={handleMultipleGradingSelect}

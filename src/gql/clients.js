@@ -308,6 +308,7 @@ export const CREATE_CLIENT = gql`
       email
       clientType
       priority
+      transferMode
       isActive
       createdAt
     }
@@ -326,6 +327,7 @@ export const UPDATE_CLIENT = gql`
       email
       clientType
       priority
+      transferMode
       isActive
       updatedAt
     }

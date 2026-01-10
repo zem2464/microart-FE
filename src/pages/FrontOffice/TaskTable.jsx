@@ -344,6 +344,8 @@ const TaskTable = () => {
       }
     }
 
+    // Exclude tasks from delivered projects: handled client-side to avoid backend schema changes
+
     if (userFilter && userFilter !== "all") {
       if (userFilter === "assignedToMe") {
         filters.assigneeId = currentUser?.id;
@@ -633,7 +635,10 @@ const TaskTable = () => {
 
   // No pagination/infinite scroll; fetch all tasks in a single request
 
-  const tasks = allTasks;
+  // Hide tasks belonging to projects marked as DELIVERED
+  const tasks = allTasks.filter(
+    (t) => (t?.project?.status || "").toString().toUpperCase() !== "DELIVERED"
+  );
   const users = usersData?.availableUsers || [];
   const worktypes = worktypesData?.workTypes || [];
 
@@ -756,7 +761,7 @@ const TaskTable = () => {
         grouped[workTypeId].projects[projectId] = {
           projectId,
           project: task.project,
-          tasks: {}, // Keyed by taskTypeId
+          tasks: {}, // Keyed by taskTypeId - NOTE: This will store ONLY the last task for each type
           tasksList: [], // All tasks as array
         };
       }
@@ -765,6 +770,9 @@ const TaskTable = () => {
       const taskTypeId = task.taskType?.id
         ? String(task.taskType.id)
         : "no-tasktype";
+      
+      // NOTE: This overwrites previous tasks with the same taskTypeId
+      // For grading-based filtering, we rely on tasksByTypeForGrading created later
       grouped[workTypeId].projects[projectId].tasks[taskTypeId] = task;
       grouped[workTypeId].projects[projectId].tasksList.push(task);
 
@@ -847,7 +855,9 @@ const TaskTable = () => {
         // If project has gradings for this worktype, create a row for each grading
         if (gradings.length > 0) {
           gradings.forEach((grading, idx) => {
-            const gradingId = grading.gradingId || grading.id;
+            // Get the actual grading ID from the nested grading object
+            // grading here is a ProjectGrading with nested grading object
+            const gradingId = grading.grading?.id || grading.gradingId || grading.id;
 
             // Filter tasks for this specific grading
             const gradingTasks = projectData.tasksList.filter((task) => {

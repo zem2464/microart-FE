@@ -239,8 +239,9 @@ const ProjectDetailDrawer = ({ projectId }) => {
                     color: cfg.color,
                   }));
                   const isCompleted = (project?.status || "").toLowerCase() === "completed";
-                  const filtered = isCompleted && hasInvoice
-                    ? options.filter((opt) => opt.value === "delivered")
+                  // If project is completed, show ONLY delivered or reopen option (invoice not required)
+                  const filtered = isCompleted
+                    ? options.filter((opt) => opt.value === "delivered" || opt.value === "reopen")
                     : options;
 
                   const clientType = project?.client?.clientType;
@@ -250,10 +251,8 @@ const ProjectDetailDrawer = ({ projectId }) => {
                     let disabled = false;
                     let title = "";
                     if (option.value === "delivered") {
-                      if (!hasInvoice) {
-                        disabled = true;
-                        title = "Invoice must be generated first";
-                      } else if (clientType === "walkIn") {
+                      // Only restrict if project has invoice AND is walk-in client AND invoice not paid / missing permission
+                      if (hasInvoice && clientType === "walkIn") {
                         if (!canApproveProjects) {
                           disabled = true;
                           title = "Permission required to deliver walk-in projects";
@@ -262,6 +261,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
                           title = "Invoice must be paid for walk-in projects";
                         }
                       }
+                      // For projects without invoice or permanent clients: No restrictions
                     }
                     return {
                       ...option,
@@ -1246,9 +1246,9 @@ const ProjectDetailDrawer = ({ projectId }) => {
                 label: cfg.label,
               }));
               
-              // If completed and invoiced, only show "delivered" option
-              if ((project?.status || '').toString().toUpperCase() === 'COMPLETED' && hasInvoice) {
-                return options.filter(opt => opt.value === 'delivered');
+              // If completed, show only "delivered" or "reopen" (invoice not required)
+              if ((project?.status || '').toString().toUpperCase() === 'COMPLETED') {
+                return options.filter(opt => opt.value === 'delivered' || opt.value === 'reopen');
               }
               
               return options;

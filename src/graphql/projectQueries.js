@@ -699,6 +699,9 @@ export const GET_PROJECT_STATS = gql`
       notDeliveredCount
       notDeliveredEstimatedCost
       notDeliveredActualCost
+      deliveredNoInvoiceCount
+      deliveredNoInvoiceEstimatedCost
+      deliveredNoInvoiceActualCost
     }
   }
 `;

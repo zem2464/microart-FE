@@ -380,7 +380,14 @@ const CustomFieldRenderer = ({ field, value, onChange, disabled = false }) => {
       label={fieldName}
       rules={getFormRules()}
       help={helpText}
-      initialValue={field.defaultValue}
+      initialValue={(function(){
+        // Ensure initialValue type matches component type to avoid rc-picker errors
+        if ((fieldType === "date" || fieldType === "datetime") && field.defaultValue) {
+          const dv = dayjs(field.defaultValue);
+          return dv.isValid() ? dv : null;
+        }
+        return field.defaultValue;
+      })()}
     >
       {renderInput()}
     </Form.Item>

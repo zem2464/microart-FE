@@ -183,6 +183,10 @@ const ProjectManagement = () => {
     if (statusFilter !== "all") {
       if (statusFilter === "NO_INVOICE") {
         filters.noInvoice = true;
+      } else if (statusFilter === "DELIVERED_NO_INVOICE") {
+        // Combine status + noInvoice to derive delivered-without-invoice server-side
+        filters.status = "DELIVERED";
+        filters.noInvoice = true;
       } else if (statusFilter !== "REQUESTED") {
         filters.status = statusFilter;
       }
@@ -684,6 +688,7 @@ const ProjectManagement = () => {
     flyOnCredit: projectStatsResponse.flyOnCreditCount || 0, // Use dedicated fly-on-credit count from response
     noInvoice: projectStatsResponse.noInvoiceCount || 0, // Completed projects without invoices
     notDelivered: projectStatsResponse.notDeliveredCount || 0, // Completed projects with invoice but not delivered
+    deliveredNoInvoice: projectStatsResponse.deliveredNoInvoiceCount || 0, // Delivered projects without invoices (from backend)
     totalEstimatedCost: projectStats.reduce(
       (sum, s) => sum + (s.totalEstimatedCost || 0),
       0
@@ -963,44 +968,39 @@ const ProjectManagement = () => {
         return;
       }
 
-      // Invoice is REQUIRED for all client types before marking as delivered
-      if (!project.invoice && !project.invoiceId) {
-        message.error(
-          "Cannot mark as delivered: Invoice must be generated first"
+      // If project has invoice, validate based on client type
+      if (project.invoice || project.invoiceId) {
+        const clientType = project.client?.clientType;
+        const hasApprovePermission = hasPermission(
+          user,
+          generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE)
         );
-        return;
-      }
+        const isPaid =
+          project.invoice?.status === "fully_paid" ||
+          project.invoice?.balanceAmount <= 0;
 
-      // Additional validation based on client type
-      const clientType = project.client?.clientType;
-      const hasApprovePermission = hasPermission(
-        user,
-        generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE)
-      );
-      const isPaid =
-        project.invoice?.status === "fully_paid" ||
-        project.invoice?.balanceAmount <= 0;
+        if (clientType === "walkIn") {
+          // Walk-in clients with invoice: Need permission AND payment
+          if (!hasApprovePermission) {
+            message.error(
+              "You do not have permission to mark walk-in projects as delivered. Only users with project approval permission can do this."
+            );
+            return;
+          }
 
-      if (clientType === "walkIn") {
-        // Walk-in clients: Need permission AND payment (in addition to invoice)
-        if (!hasApprovePermission) {
-          message.error(
-            "You do not have permission to mark walk-in projects as delivered. Only users with project approval permission can do this."
-          );
-          return;
+          if (!isPaid) {
+            const balance = project.invoice?.balanceAmount || 0;
+            message.error(
+              `Cannot mark walk-in project as delivered: Invoice must be paid first. Current balance: ₹${balance.toFixed(
+                2
+              )}.`
+            );
+            return;
+          }
         }
-
-        if (!isPaid) {
-          const balance = project.invoice?.balanceAmount || 0;
-          message.error(
-            `Cannot mark walk-in project as delivered: Invoice must be paid first. Current balance: ₹${balance.toFixed(
-              2
-            )}.`
-          );
-          return;
-        }
+        // Permanent clients with invoice: No additional checks
       }
-      // Permanent clients: Invoice is sufficient (no additional checks)
+      // Projects without invoice can be marked as delivered (no validation required)
     }
 
     // Validate REOPEN status change
@@ -1105,9 +1105,9 @@ const ProjectManagement = () => {
           record.invoice?.balanceAmount <= 0;
         const isCompleted = record.status?.toLowerCase() === "completed";
 
-        // If project is completed AND has invoice, show ONLY delivered or reopen option
+        // If project is completed, show ONLY delivered or reopen option (invoice not required)
         const filteredStatusOptions =
-          isCompleted && hasInvoice
+          isCompleted
             ? statusOptions.filter(
                 (opt) => opt.value === "delivered" || opt.value === "reopen"
               )
@@ -1133,11 +1133,9 @@ const ProjectManagement = () => {
                   let title = "";
 
                   if (option.value === "delivered") {
-                    if (!hasInvoice) {
-                      disabled = true;
-                      title = "Invoice must be generated first";
-                    } else if (clientType === "walkIn") {
-                      // Walk-in: Need permission AND payment
+                    // Only restrict if project has invoice AND is walk-in client AND invoice not paid
+                    if (hasInvoice && clientType === "walkIn") {
+                      // Walk-in with invoice: Need permission AND payment
                       if (!hasApprovePermission) {
                         disabled = true;
                         title =
@@ -1147,7 +1145,7 @@ const ProjectManagement = () => {
                         title = "Invoice must be paid for walk-in projects";
                       }
                     }
-                    // Permanent: No restrictions
+                    // For projects without invoice or permanent clients: No restrictions
                   } else if (option.value === "reopen") {
                     // Reopen allowed only if invoice is not completed/fully paid
                     if (isPaid) {
@@ -1381,7 +1379,9 @@ const ProjectManagement = () => {
             )}
 
           {/* If project is already completed but has no invoice, allow generating one */}
-          {(record.status || "").toString().toUpperCase() === "COMPLETED" &&
+          {["COMPLETED", "DELIVERED"].includes(
+            (record.status || "").toString().toUpperCase()
+          ) &&
             !(
               record.invoiceId ||
               record.invoice?.id ||
@@ -1416,7 +1416,9 @@ const ProjectManagement = () => {
             </Tooltip>
           )}
 
-          {(record.status || "").toString().toUpperCase() !== "COMPLETED" &&
+          {!["COMPLETED", "DELIVERED"].includes(
+            (record.status || "").toString().toUpperCase()
+          ) &&
             canDeleteProjects && (
               <Tooltip title="Delete">
                 <Button
@@ -1619,6 +1621,34 @@ const ProjectManagement = () => {
                     style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                   >
                     {stats.notDelivered}
+                  </Tag>
+                </Space>
+                <Space
+                  size={4}
+                  style={{
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    transition: "background-color 0.3s",
+                    backgroundColor:
+                      stats.deliveredNoInvoice > 0 ? "#f6e7ff" : "transparent",
+                    border:
+                      stats.deliveredNoInvoice > 0 ? "1px solid #b37feb" : "none",
+                  }}
+                  className="hover:bg-purple-100"
+                  onClick={() => setStatusFilter("DELIVERED_NO_INVOICE")}
+                >
+                  <CheckCircleOutlined
+                    style={{ fontSize: 16, color: "#b37feb" }}
+                  />
+                  <Text strong style={{ fontSize: 14 }}>
+                    Delivered (No Invoice):
+                  </Text>
+                  <Tag
+                    color="purple"
+                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  >
+                    {stats.deliveredNoInvoice}
                   </Tag>
                 </Space>
                 <Space
