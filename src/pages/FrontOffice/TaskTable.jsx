@@ -325,27 +325,13 @@ const TaskTable = () => {
   const [selectedTask, setSelectedTask] = useState(null);
   const [taskDrawerVisible, setTaskDrawerVisible] = useState(false);
 
-  // Build filters for server-side filtering
+  // Build filters for server-side filtering (relaxed: show all statuses and clients)
   const buildFilters = useCallback(() => {
     const filters = {};
 
-    if (statusFilter && statusFilter !== "all") {
-      if (statusFilter === "active") {
-        // For active, exclude COMPLETED and CANCELLED
-        filters.statuses = [
-          "TODO",
-          "IN_PROGRESS",
-          "REVIEW",
-          "REVISION",
-          "ON_HOLD",
-        ];
-      } else {
-        filters.status = statusFilter;
-      }
-    }
+    // Do NOT restrict by status. Show all task statuses by default.
 
-    // Exclude tasks from delivered projects: handled client-side to avoid backend schema changes
-
+    // Respect explicit user selections only (assignedToMe / unassigned / specific user)
     if (userFilter && userFilter !== "all") {
       if (userFilter === "assignedToMe") {
         filters.assigneeId = currentUser?.id;
@@ -361,7 +347,6 @@ const TaskTable = () => {
     }
 
     // Filter by workTypeId when a specific tab is selected
-    // This now works because backend properly filters via ProjectWorkType junction table
     if (selectedWorkTypeId && selectedWorkTypeId !== "all") {
       filters.workTypeId = selectedWorkTypeId;
     }
@@ -370,24 +355,14 @@ const TaskTable = () => {
       filters.gradingId = gradingFilter;
     }
 
-    // Add service provider filter for "My Clients" functionality
-    // Only apply if user is a service provider AND myClientsOnly is checked
-    if (
-      currentUser?.isServiceProvider === true &&
-      myClientsOnly &&
-      currentUser?.id
-    ) {
-      filters.serviceProviderId = currentUser.id;
-    }
+    // Do NOT apply serviceProviderId filter (show everyone's tasks)
 
     return filters;
   }, [
-    statusFilter,
     userFilter,
     priorityFilter,
     selectedWorkTypeId,
     gradingFilter,
-    myClientsOnly,
     currentUser?.id,
   ]);
 
@@ -635,10 +610,8 @@ const TaskTable = () => {
 
   // No pagination/infinite scroll; fetch all tasks in a single request
 
-  // Hide tasks belonging to projects marked as DELIVERED
-  const tasks = allTasks.filter(
-    (t) => (t?.project?.status || "").toString().toUpperCase() !== "DELIVERED"
-  );
+  // Show tasks for all project statuses (including DELIVERED)
+  const tasks = allTasks;
   const users = usersData?.availableUsers || [];
   const worktypes = worktypesData?.workTypes || [];
 
