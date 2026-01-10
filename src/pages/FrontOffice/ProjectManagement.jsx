@@ -25,6 +25,7 @@ import {
   Divider,
   Empty,
   Checkbox,
+  DatePicker,
 } from "antd";
 import {
   EyeOutlined,
@@ -151,6 +152,7 @@ const ProjectManagement = () => {
   const [myClientsOnly, setMyClientsOnly] = useState(
     user?.isServiceProvider === true
   );
+  const [deadlineDateRange, setDeadlineDateRange] = useState([null, null]);
 
   // Infinite scroll state
   const [page, setPage] = useState(1);
@@ -206,8 +208,16 @@ const ProjectManagement = () => {
       filters.serviceProviderId = user.id;
     }
 
+    // Add deadline date range filter
+    if (deadlineDateRange && deadlineDateRange[0] && deadlineDateRange[1]) {
+      filters.dateRange = {
+        start: deadlineDateRange[0].startOf('day').toISOString(),
+        end: deadlineDateRange[1].endOf('day').toISOString(),
+      };
+    }
+
     return filters;
-  }, [statusFilter, clientFilter, workTypeFilter, myClientsOnly, user?.id]);
+  }, [statusFilter, clientFilter, workTypeFilter, myClientsOnly, user?.id, deadlineDateRange]);
 
   // GraphQL Queries
   const {
@@ -1453,7 +1463,8 @@ const ProjectManagement = () => {
           <Row gutter={16} align="middle" style={{ marginBottom: 12 }}>
             {/* Inline Statistics - Compact Badges */}
             <Col flex="auto">
-              <Space size={16}>
+              <Space size={16} style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
+                <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
                 <Space
                   size={4}
                   style={{
@@ -1688,6 +1699,15 @@ const ProjectManagement = () => {
                     </Checkbox>
                   </Space>
                 )}
+                </div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <Tooltip title="Refresh">
+                    <Button
+                      icon={<ReloadOutlined />}
+                      onClick={() => refetchProjects()}
+                    />
+                  </Tooltip>
+                </div>
               </Space>
             </Col>
           </Row>
@@ -1722,47 +1742,7 @@ const ProjectManagement = () => {
             </Row>
           )}
           <Row gutter={16} align="middle" style={{ marginBottom: 12 }}>
-            <Col span={3}>
-              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
-                Status
-              </div>
-              <Select
-                placeholder="All Status"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                style={{ width: "100%" }}
-              >
-                <Option value="all">All Status</Option>
-                <Option value="DRAFT">Draft</Option>
-                <Option value="ACTIVE">Active</Option>
-                <Option value="IN_PROGRESS">In Progress</Option>
-                <Option value="COMPLETED">Completed</Option>
-                <Option value="NO_INVOICE">No Invoice</Option>
-                <Option value="REQUESTED">Fly-on-Credit</Option>
-                <Option value="REOPEN">Reopen</Option>
-                <Option value="CANCELLED">Cancelled</Option>
-              </Select>
-            </Col>
             <Col span={4}>
-              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
-                Work Type
-              </div>
-              <Select
-                placeholder="All Work Types"
-                value={workTypeFilter}
-                onChange={setWorkTypeFilter}
-                style={{ width: "100%" }}
-                allowClear
-              >
-                <Option value="all">All Work Types</Option>
-                {workTypesData?.workTypes?.map((workType) => (
-                  <Option key={workType.id} value={workType.id}>
-                    {workType.name}
-                  </Option>
-                ))}
-              </Select>
-            </Col>
-            <Col span={6}>
               <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
                 Client
               </div>
@@ -1789,7 +1769,47 @@ const ProjectManagement = () => {
                 ))}
               </Select>
             </Col>
-            <Col span={6}>
+            <Col span={3}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Work Type
+              </div>
+              <Select
+                placeholder="All Work Types"
+                value={workTypeFilter}
+                onChange={setWorkTypeFilter}
+                style={{ width: "100%" }}
+                allowClear
+              >
+                <Option value="all">All Work Types</Option>
+                {workTypesData?.workTypes?.map((workType) => (
+                  <Option key={workType.id} value={workType.id}>
+                    {workType.name}
+                  </Option>
+                ))}
+              </Select>
+            </Col>
+            <Col span={3}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Status
+              </div>
+              <Select
+                placeholder="All Status"
+                value={statusFilter}
+                onChange={setStatusFilter}
+                style={{ width: "100%" }}
+              >
+                <Option value="all">All Status</Option>
+                <Option value="DRAFT">Draft</Option>
+                <Option value="ACTIVE">Active</Option>
+                <Option value="IN_PROGRESS">In Progress</Option>
+                <Option value="COMPLETED">Completed</Option>
+                <Option value="NO_INVOICE">No Invoice</Option>
+                <Option value="REQUESTED">Fly-on-Credit</Option>
+                <Option value="REOPEN">Reopen</Option>
+                <Option value="CANCELLED">Cancelled</Option>
+              </Select>
+            </Col>
+            <Col span={4}>
               <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
                 Search
               </div>
@@ -1801,14 +1821,21 @@ const ProjectManagement = () => {
                 allowClear
               />
             </Col>
-            <Col span={3} style={{ textAlign: "right", paddingTop: 20 }}>
+            <Col span={5}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Deadline Range
+              </div>
+              <DatePicker.RangePicker
+                value={deadlineDateRange}
+                onChange={setDeadlineDateRange}
+                style={{ width: "100%" }}
+                format="DD MMM YYYY"
+                placeholder={["Start Date", "End Date"]}
+                allowClear
+              />
+            </Col>
+            <Col span={4} style={{ textAlign: "right", paddingTop: 20 }}>
               <Space>
-                <Tooltip title="Refresh">
-                  <Button
-                    icon={<ReloadOutlined />}
-                    onClick={() => refetchProjects()}
-                  />
-                </Tooltip>
                 <Tooltip title="New Project">
                   <Button
                     type="primary"

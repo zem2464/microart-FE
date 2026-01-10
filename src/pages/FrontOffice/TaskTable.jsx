@@ -43,7 +43,7 @@ import {
   BULK_UPDATE_TASK_STATUS,
   GET_TASKS_DASHBOARD,
 } from "../../gql/tasks";
-import { GET_AVAILABLE_USERS } from "../../graphql/projectQueries";
+import { GET_AVAILABLE_USERS, UPDATE_PROJECT } from "../../graphql/projectQueries";
 import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import { GET_GRADINGS_BY_WORK_TYPE } from "../../graphql/gradingQueries";
 import { userCacheVar } from "../../cache/userCacheVar";
@@ -163,6 +163,7 @@ const TaskTable = () => {
   const [myClientsOnly, setMyClientsOnly] = useState(
     currentUser?.isServiceProvider === true ? savedFilters.myClientsOnly : false
   );
+  const [dueDateRange, setDueDateRange] = useState([null, null]);
 
   // Reset filters to default values
   const handleResetFilters = useCallback(() => {
@@ -179,6 +180,7 @@ const TaskTable = () => {
     setSortOrder(defaults.sortOrder);
     // Only reset myClientsOnly to true if user is a service provider
     setMyClientsOnly(currentUser?.isServiceProvider === true);
+    setDueDateRange([null, null]);
     clearTaskFiltersCookie();
     message.success("Filters reset to default values");
   }, []);
@@ -358,6 +360,12 @@ const TaskTable = () => {
 
     // Do NOT apply serviceProviderId filter (show everyone's tasks)
 
+    // Add due date range filter
+    if (dueDateRange && dueDateRange[0] && dueDateRange[1]) {
+      filters.dueDateFrom = dueDateRange[0].startOf('day').toISOString();
+      filters.dueDateTo = dueDateRange[1].endOf('day').toISOString();
+    }
+
     return filters;
   }, [
     userFilter,
@@ -365,6 +373,7 @@ const TaskTable = () => {
     selectedWorkTypeId,
     gradingFilter,
     currentUser?.id,
+    dueDateRange,
   ]);
 
   // Fetch tasks with server-side filtering and sorting (single batch)
@@ -462,6 +471,31 @@ const TaskTable = () => {
     },
     onError: (error) => {
       message.error(`Failed to update tasks: ${error.message}`);
+    },
+  });
+
+  // Update project mutation (for deadline changes)
+  const [updateProject] = useMutation(UPDATE_PROJECT, {
+    onCompleted: async (data) => {
+      console.log('[updateProject] Mutation completed with data:', data);
+      message.success("Project deadline updated successfully");
+      // Refetch tasks with the latest filters applied
+      await refetchTasks({
+        filters: buildFilters(),
+        page: 1,
+        limit: TASK_FETCH_LIMIT,
+        sortBy: sortBy,
+        sortOrder: sortOrder,
+        search: searchText || undefined,
+      });
+      setEditedData({});
+      cancelEditCell();
+      setIsInlineUpdating(false);
+    },
+    onError: (error) => {
+      console.error('[updateProject] Mutation error:', error);
+      message.error(`Failed to update project deadline: ${error.message}`);
+      setIsInlineUpdating(false);
     },
   });
 
@@ -1221,9 +1255,22 @@ const TaskTable = () => {
         cancelEditCell();
         return;
       } else if (field === "dueDate") {
-        input.dueDate = editedData.dueDate
-          ? dayjs(editedData.dueDate).toISOString()
-          : null;
+        // Update project deadline instead of task due date
+        setIsInlineUpdating(true);
+        console.log(`[saveTaskCell] Updating project deadline for project ${task.projectId}:`, {
+          deadlineDate: editedData.dueDate ? dayjs(editedData.dueDate).toISOString() : null
+        });
+        await updateProject({
+          variables: {
+            id: task.projectId,
+            input: {
+              deadlineDate: editedData.dueDate
+                ? dayjs(editedData.dueDate).toISOString()
+                : null,
+            },
+          },
+        });
+        return;
       } else if (field === "status") {
         input.status = editedData.status;
       }
@@ -1995,6 +2042,19 @@ const TaskTable = () => {
                 prefix={<SearchOutlined />}
                 value={projectSearch}
                 onChange={(e) => setProjectSearch(e.target.value)}
+                allowClear
+              />
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
+                Due Date Range
+              </div>
+              <DatePicker.RangePicker
+                style={{ width: "100%" }}
+                value={dueDateRange}
+                onChange={(dates) => setDueDateRange(dates)}
+                format="DD MMM YYYY"
+                placeholder={["Start Date", "End Date"]}
                 allowClear
               />
             </Col>

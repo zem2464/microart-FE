@@ -26,6 +26,7 @@ export const GET_USERS = gql`
       salaryAmount
       hourlyRate
       monthlyHours
+      paymentDetails
       canLogin
       hasSetInitialPassword
       isActive
@@ -78,6 +79,7 @@ export const GET_USER = gql`
       salaryAmount
       hourlyRate
       monthlyHours
+      paymentDetails
       canLogin
       hasSetInitialPassword
       isActive

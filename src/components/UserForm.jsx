@@ -284,6 +284,7 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           valuePropName="checked"
         >
           <Switch />
+        </Form.Item>
 
         <Form.Item
           name="isServiceProvider"
@@ -292,7 +293,6 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           tooltip="Enable this to allow the user to be assigned as a service provider to clients"
         >
           <Switch />
-        </Form.Item>
         </Form.Item>
       </div>
 
