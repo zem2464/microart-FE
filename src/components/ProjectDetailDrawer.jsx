@@ -232,6 +232,13 @@ const ProjectDetailDrawer = ({ projectId }) => {
                 style={{ width: 150 }}
                 size="small"
                 placeholder="Change Status"
+                showSearch
+                filterOption={(input, option) =>
+                  (option?.label ?? "")
+                    .toString()
+                    .toLowerCase()
+                    .includes(input.toLowerCase())
+                }
                 options={(() => {
                   const options = Object.entries(STATUS_MAP).map(([key, cfg]) => ({
                     value: key.toLowerCase(),
@@ -953,6 +960,50 @@ const ProjectDetailDrawer = ({ projectId }) => {
           </Button>
         </div>
       </Card>
+
+      {/* Client Information Section */}
+      {project?.client && (
+        <Card title={<Title level={4}>Client Information</Title>} size="small" style={{ marginBottom: 16 }}>
+          <Row gutter={[16, 12]}>
+            <Col span={12}>
+              <div style={{ padding: "12px", backgroundColor: "#F0F9FF", borderRadius: "4px" }}>
+                <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "6px" }}>
+                  <strong>Client Notes</strong>
+                </Text>
+                <div style={{ padding: "8px", backgroundColor: "#FFFFFF", borderRadius: "4px", border: "1px solid #E8E8E8" }}>
+                  <Text style={{ fontSize: "12px", color: "#172B4D" }}>
+                    {project.client.clientNotes || "-"}
+                  </Text>
+                </div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div style={{ padding: "12px", backgroundColor: "#F0F9FF", borderRadius: "4px" }}>
+                <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "6px" }}>
+                  <strong>Color Correction Style</strong>
+                </Text>
+                <div style={{ padding: "8px", backgroundColor: "#FFFFFF", borderRadius: "4px", border: "1px solid #E8E8E8" }}>
+                  <Text style={{ fontSize: "12px", color: "#172B4D" }}>
+                    {project.client.colorCorrectionStyle || "-"}
+                  </Text>
+                </div>
+              </div>
+            </Col>
+            <Col span={12}>
+              <div style={{ padding: "12px", backgroundColor: "#F0F9FF", borderRadius: "4px" }}>
+                <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "6px" }}>
+                  <strong>Transfer Mode</strong>
+                </Text>
+                <div style={{ padding: "8px", backgroundColor: "#FFFFFF", borderRadius: "4px", border: "1px solid #E8E8E8" }}>
+                  <Text style={{ fontSize: "12px", color: "#172B4D" }}>
+                    {project.client.transferMode || "-"}
+                  </Text>
+                </div>
+              </div>
+            </Col>
+          </Row>
+        </Card>
+      )}
 
       {/* Custom Fields Section */}
       {project?.customFields && typeof project.customFields === "object" && Object.keys(project.customFields).length > 0 && (

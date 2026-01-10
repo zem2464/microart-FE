@@ -738,6 +738,9 @@ export const GET_PROJECT_DETAIL = gql`
         clientCode
         displayName
         clientType
+        clientNotes
+        colorCorrectionStyle
+        transferMode
       }
       
       # Work Types

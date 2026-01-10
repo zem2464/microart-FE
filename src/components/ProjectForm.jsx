@@ -427,6 +427,17 @@ const ProjectForm = ({
       return;
     }
 
+    // Populate client notes from selected client (only in create mode)
+    if (mode === "create") {
+      const selectedClient = clientsData?.clients?.find((c) => c.id === clientId);
+      if (selectedClient) {
+        // Set notes field with client notes (empty string if no notes)
+        form.setFieldsValue({
+          notes: selectedClient.clientNotes || "",
+        });
+      }
+    }
+
     // Fetch client preferences and credit info
     try {
       const { data } = await refetchClientPreferences({
@@ -2559,27 +2570,9 @@ const ProjectForm = ({
                   );
                 }
 
-                // Filter by client preferences if available, but only for preferred work types
-                const filteredGradings = gradings.filter((grading) => {
-                  // Check if this grading's work type is a preferred work type
-                  const isPreferredWorkType =
-                    clientPreferences?.workTypes?.some(
-                      (pref) => pref.id === grading.workType?.id
-                    );
-
-                  // If it's a preferred work type, only show preferred gradings
-                  if (
-                    isPreferredWorkType &&
-                    clientPreferences?.gradings?.length > 0
-                  ) {
-                    return clientPreferences.gradings.some(
-                      (pref) => pref.grading.id === grading.id
-                    );
-                  }
-
-                  // For non-preferred work types, show all gradings
-                  return true;
-                });
+                // Show all gradings for selected work types
+                // (client preferences are used for default/preferred selection, not filtering)
+                const filteredGradings = gradings;
 
                 // Group gradings by work type
                 const groupedByWorkType = filteredGradings.reduce(
@@ -2933,7 +2926,7 @@ const ProjectForm = ({
         </div>
       )}
 
-      {/* Description and Internal Notes - Side by Side */}
+      {/* Description and Client Notes - Side by Side */}
       <Row gutter={16}>
         <Col span={12}>
           <Form.Item
@@ -2948,15 +2941,39 @@ const ProjectForm = ({
           </Form.Item>
         </Col>
         <Col span={12}>
-          <Form.Item name="notes" label="Internal Notes">
+          <Form.Item name="notes" label="Client Notes">
             <Input.TextArea
-              placeholder="Internal notes (not visible to client)"
+              placeholder="Client notes from client form"
               rows={2}
               autoComplete="off"
             />
           </Form.Item>
         </Col>
       </Row>
+
+      {/* Client Details Section - Read Only */}
+      {selectedClientId && clientsData?.clients && (
+        <Row gutter={16}>
+          <Col span={12}>
+            <Form.Item label="Color Correction Style">
+              <Input
+                value={clientsData?.clients?.find((c) => c.id === selectedClientId)?.colorCorrectionStyle || "Not specified"}
+                disabled
+                style={{ backgroundColor: "#f5f5f5" }}
+              />
+            </Form.Item>
+          </Col>
+          <Col span={12}>
+            <Form.Item label="Transfer Mode">
+              <Input
+                value={clientsData?.clients?.find((c) => c.id === selectedClientId)?.transferMode || "Not specified"}
+                disabled
+                style={{ backgroundColor: "#f5f5f5" }}
+              />
+            </Form.Item>
+          </Col>
+        </Row>
+      )}
 
       {/* Credit information is shown below in Project Summary (uses projectCreditValidation) */}
 

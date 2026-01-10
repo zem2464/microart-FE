@@ -30,6 +30,9 @@ export const GET_CLIENTS = gql`
       }
       address
       pincode
+      colorCorrectionStyle
+      transferMode
+      clientNotes
       leaderId
       leader {
         id
