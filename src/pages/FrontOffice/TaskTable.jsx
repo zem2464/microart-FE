@@ -334,7 +334,8 @@ const TaskTable = () => {
     // Respect explicit user selections only (assignedToMe / unassigned / specific user)
     if (userFilter && userFilter !== "all") {
       if (userFilter === "assignedToMe") {
-        filters.assigneeId = currentUser?.id;
+        // Project-level filter: include all tasks from projects where the user has any assignment
+        filters.assignedProjectUserId = currentUser?.id;
       } else if (userFilter === "unassigned") {
         filters.assigneeId = null;
       } else {
