@@ -222,6 +222,16 @@ const ProjectDetailDrawer = ({ projectId }) => {
           </Space>
           <Space>
             {canEditProjects && (
+              <Button
+                type="primary"
+                icon={<EditOutlined />}
+                size="small"
+                onClick={handleEditProject}
+              >
+                Edit
+              </Button>
+            )}
+            {canEditProjects && (
               <Select
                 value={statusValue}
                 onChange={(value) => {
@@ -879,80 +889,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
         </Row>
       </Card>
 
-      <Card size="small" style={{ marginBottom: 16 }} title={<Text strong>Actions</Text>}>
-        <Space wrap>
-          {canEditProjects && <Button onClick={handleEditProject}>Edit Project</Button>}
-          {canApproveProjects && (project.status || '').toString().toUpperCase() === 'DRAFT' && (
-            <Button onClick={() => activateProject({ variables: { id: project.id } })} loading={activating}>
-              Activate
-            </Button>
-          )}
-          {(
-            ((project.status || '').toString().toUpperCase() === 'ACTIVE' && allTasksCompleted) ||
-            (project.status || '').toString().toUpperCase() === 'COMPLETED'
-          ) &&
-            !hasInvoice &&
-            (canCreateFinance || project?.client?.leaderId === currentUser?.id) && (
-              <Button
-                type="primary"
-                loading={invoicing}
-                onClick={() => generateInvoice({ variables: { projectId: project.id } })}
-              >
-                Generate Invoice
-              </Button>
-            )}
-          {hasInvoice && (
-            <Button onClick={() => drawerCtx?.showInvoiceDetailDrawer?.(project.invoiceId || project.invoice?.id)}>
-              View Invoice
-            </Button>
-          )}
-          {canShowQuote && (
-            <Button icon={<FilePdfOutlined />} onClick={handleOpenQuote}>
-              View Quote
-            </Button>
-          )}
-          {canDeleteProjects && (project.status || '').toString().toUpperCase() !== 'COMPLETED' && (
-            <Button
-              danger
-              loading={deleting}
-              onClick={() => {
-                let voidReasonInput = '';
-                Modal.confirm({
-                  title: 'Delete project?',
-                  content: (
-                    <div>
-                      <p style={{ marginBottom: 16 }}>This action cannot be undone.</p>
-                      <Input.TextArea
-                        placeholder="Please provide a reason for deleting this project (required)"
-                        rows={3}
-                        onChange={(e) => { voidReasonInput = e.target.value; }}
-                        autoFocus
-                      />
-                    </div>
-                  ),
-                  okType: 'danger',
-                  okText: 'Delete',
-                  cancelText: 'Cancel',
-                  onOk: () => {
-                    if (!voidReasonInput || voidReasonInput.trim() === '') {
-                      message.error('Void reason is required');
-                      return Promise.reject('Void reason required');
-                    }
-                    return deleteProject({ 
-                      variables: { 
-                        id: project.id, 
-                        voidReason: voidReasonInput.trim() 
-                      } 
-                    });
-                  },
-                });
-              }}
-            >
-              Delete
-            </Button>
-          )}
-        </Space>
-      </Card>
+
 
       {/* Notes Section */}
       <Card title={<Title level={4}>Notes</Title>} size="small" style={{ marginBottom: 16 }}>
@@ -988,9 +925,9 @@ const ProjectDetailDrawer = ({ projectId }) => {
       {/* Client Information Section */}
       {project?.client && (
         <Card title={<Title level={4}>Client Information</Title>} size="small" style={{ marginBottom: 16 }}>
-          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+          <Row gutter={[24, 12]}>
             {/* Client Notes */}
-            <div>
+            <Col span={8}>
               <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
                 <strong>Client Notes</strong>
               </Text>
@@ -1001,10 +938,10 @@ const ProjectDetailDrawer = ({ projectId }) => {
               ) : (
                 <Tag style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>-</Tag>
               )}
-            </div>
+            </Col>
 
             {/* Color Correction Style */}
-            <div>
+            <Col span={8}>
               <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
                 <strong>Color Correction Style</strong>
               </Text>
@@ -1015,10 +952,10 @@ const ProjectDetailDrawer = ({ projectId }) => {
               ) : (
                 <Tag style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>-</Tag>
               )}
-            </div>
+            </Col>
 
             {/* Transfer Mode */}
-            <div>
+            <Col span={8}>
               <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
                 <strong>Transfer Mode</strong>
               </Text>
@@ -1029,15 +966,15 @@ const ProjectDetailDrawer = ({ projectId }) => {
               ) : (
                 <Tag style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>-</Tag>
               )}
-            </div>
-          </Space>
+            </Col>
+          </Row>
         </Card>
       )}
 
       {/* Custom Fields Section */}
       {project?.customFields && typeof project.customFields === "object" && Object.keys(project.customFields).length > 0 && (
         <Card title={<Title level={4}>Additional Fields</Title>} size="small" style={{ marginBottom: 16 }}>
-          <Row gutter={[16, 12]}>
+          <Row gutter={[24, 12]}>
             {Object.entries(project.customFields).map(([fieldKey, fieldValue], index) => {
               // Format field label from key
               const formatFieldLabel = (key) => {
@@ -1065,31 +1002,13 @@ const ProjectDetailDrawer = ({ projectId }) => {
               };
 
               return (
-                <Col span={12} key={`${fieldKey}-${index}`}>
-                  <div
-                    style={{
-                      padding: "12px",
-                      backgroundColor: "#F0F9FF",
-                      borderRadius: "4px",
-                      border: "1px solid #B5E7FB",
-                    }}
-                  >
-                    <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "6px" }}>
-                      <strong>{formatFieldLabel(fieldKey)}</strong>
-                    </Text>
-                    <div
-                      style={{
-                        padding: "8px",
-                        backgroundColor: "#FFFFFF",
-                        borderRadius: "4px",
-                        border: "1px solid #E8E8E8",
-                      }}
-                    >
-                      <Text style={{ fontSize: "12px", color: "#172B4D" }}>
-                        {formatFieldValue(fieldValue)}
-                      </Text>
-                    </div>
-                  </div>
+                <Col span={8} key={`${fieldKey}-${index}`}>
+                  <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
+                    <strong>{formatFieldLabel(fieldKey)}</strong>
+                  </Text>
+                  <Tag color="blue" style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px", maxWidth: "100%", whiteSpace: "normal", height: "auto" }}>
+                    {formatFieldValue(fieldValue)}
+                  </Tag>
                 </Col>
               );
             })}
