@@ -145,6 +145,7 @@ const ProjectForm = ({
 
   // Check if total cost has changed for fly-on-credit projects
   const [costChanged, setCostChanged] = useState(false);
+  const [costIncreasedButWithinCredit, setCostIncreasedButWithinCredit] = useState(false);
 
   useEffect(() => {
     if (isFlyOnCredit && mode === "edit") {
@@ -157,15 +158,25 @@ const ProjectForm = ({
       const hasChanged = Math.abs(newTotalCost - originalApprovedAmount) > 0.01;
       setCostChanged(hasChanged);
 
+      // Check if cost increased but is within available credit
+      const costIncreased = newTotalCost > originalApprovedAmount;
+      const hasAvailableCredit = projectCreditValidation && 
+        projectCreditValidation.canCreateProject === true;
+      const increasedButWithinCredit = costIncreased && hasAvailableCredit;
+      setCostIncreasedButWithinCredit(increasedButWithinCredit);
+
       if (hasChanged) {
         console.log("⚠️ Cost changed for fly-on-credit project:", {
           original: originalApprovedAmount,
           new: newTotalCost,
           difference: newTotalCost - originalApprovedAmount,
+          costIncreased,
+          hasAvailableCredit,
+          increasedButWithinCredit,
         });
       }
     }
-  }, [isFlyOnCredit, mode, project, totalCalculatedBudget, calculatedBudget]);
+  }, [isFlyOnCredit, mode, project, totalCalculatedBudget, calculatedBudget, projectCreditValidation]);
 
   // Update parent with footer data whenever totals change
   useEffect(() => {
@@ -1861,7 +1872,7 @@ const ProjectForm = ({
       // Skip validation for draft projects and edit mode with approved credit request
       const hasApprovedCredit = project?.creditRequest?.status === "approved";
 
-      // For fly-on-credit projects with approved credit, validate that total cost hasn't changed
+      // For fly-on-credit projects with approved credit, validate that total cost hasn't increased beyond available credit
       if (mode === "edit" && hasApprovedCredit) {
         const newTotalCost = totalCalculatedBudget || calculatedBudget;
         const originalApprovedAmount =
@@ -1874,17 +1885,33 @@ const ProjectForm = ({
           newTotalCost,
           originalApprovedAmount,
           difference: Math.abs(newTotalCost - originalApprovedAmount),
+          projectCreditValidation,
         });
 
         // Allow small rounding differences (< 0.01)
         if (Math.abs(newTotalCost - originalApprovedAmount) > 0.01) {
-          message.error(
-            `Cannot update project: The approved amount was ₹${originalApprovedAmount.toLocaleString()}. ` +
-              `New amount is ₹${newTotalCost.toLocaleString()}. ` +
-              `You cannot change the total cost for approved fly-on-credit projects.`
-          );
-          setLoading(false);
-          return;
+          // Cost has changed - check if it exceeds the original approved amount
+          if (newTotalCost > originalApprovedAmount) {
+            // Cost increased: check if client has sufficient available credit
+            // If projectCreditValidation shows the new cost is within available credit, allow it
+            const hasAvailableCredit = projectCreditValidation && 
+              projectCreditValidation.canCreateProject === true;
+
+            if (!hasAvailableCredit) {
+              message.error(
+                `Cannot update project: The approved amount was ₹${originalApprovedAmount.toLocaleString()}. ` +
+                  `New amount is ₹${newTotalCost.toLocaleString()}. ` +
+                  `Insufficient credit available. ${projectCreditValidation?.message || 'Please increase client credit limit.'}`
+              );
+              setLoading(false);
+              return;
+            }
+            // If we get here, cost increased but client has sufficient credit - allow it
+            console.log("✅ Cost increased but client has sufficient available credit - allowing update");
+          } else {
+            // Cost decreased - always allow
+            console.log("✅ Cost decreased - allowing update");
+          }
         }
       }
 
@@ -2100,8 +2127,8 @@ const ProjectForm = ({
           />
         )}
 
-      {/* Fly-on-Credit Cost Change Warning */}
-      {isFlyOnCredit && costChanged && !shouldHidePrices && (
+      {/* Fly-on-Credit Cost Change Warning - Only show if cost changed AND NOT within available credit */}
+      {isFlyOnCredit && costChanged && !costIncreasedButWithinCredit && !shouldHidePrices && (
         <Alert
           message="Cost Changed - Cannot Save"
           description={
@@ -2124,13 +2151,53 @@ const ProjectForm = ({
                 </strong>
               </p>
               <p style={{ marginBottom: 0 }}>
-                You can edit other information, but cannot change the total
-                cost. Please restore the original grading quantities and rates
-                to save changes.
+                The cost has increased beyond available credit. 
+                {projectCreditValidation?.message && (
+                  <>
+                    <br />
+                    {projectCreditValidation.message}
+                  </>
+                )}
+                Please restore the original grading quantities and rates, or increase the client's credit limit.
               </p>
             </div>
           }
           type="error"
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
+      {/* Fly-on-Credit Cost Increase Within Available Credit Notice */}
+      {isFlyOnCredit && costIncreasedButWithinCredit && !shouldHidePrices && (
+        <Alert
+          message="Cost Increased - Within Available Credit"
+          description={
+            <div>
+              <p>
+                This project's approved fly-on-credit request was for{" "}
+                <strong>
+                  ₹
+                  {(
+                    project?.creditRequest?.requestedAmount || 0
+                  ).toLocaleString()}
+                </strong>
+                .
+              </p>
+              <p>
+                New total:{" "}
+                <strong>
+                  ₹
+                  {(totalCalculatedBudget || calculatedBudget).toLocaleString()}
+                </strong>
+              </p>
+              <p style={{ marginBottom: 0 }}>
+                ✓ The cost has increased, but the client has sufficient available credit to cover the new amount. 
+                You can proceed with the update.
+              </p>
+            </div>
+          }
+          type="warning"
           showIcon
           style={{ marginBottom: 16 }}
         />
@@ -2144,15 +2211,15 @@ const ProjectForm = ({
             <div>
               <p style={{ marginBottom: 0 }}>
                 This project has an approved credit request
-                {shouldHidePrices
-                  ? ""
-                  : ` for <strong>₹${(
+                {!shouldHidePrices && (
+                  <>
+                    {" "}for <strong>₹{(
                       project?.creditRequest?.requestedAmount || 0
-                    ).toLocaleString()}</strong>`}
+                    ).toLocaleString()}</strong>
+                  </>
+                )}
                 . You can edit project details
-                {shouldHidePrices
-                  ? ""
-                  : ", but the total cost must remain unchanged"}
+                {!shouldHidePrices && ", but the total cost must remain unchanged"}
                 .
               </p>
             </div>
