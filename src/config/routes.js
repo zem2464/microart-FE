@@ -34,6 +34,7 @@ export const FRONTOFFICE_ROUTES = {
   TASKS: '/',
   DASHBOARD: '/dashboard',
   PROJECTS: '/projects',
+  DELETED_PROJECTS: '/projects/deleted',
   REMINDERS: '/reminders',
   TRANSACTIONS: '/transactions',
   LEDGER: '/ledger',

@@ -433,8 +433,35 @@ const ProjectList = () => {
   };
 
   const handleDelete = (project) => {
-    deleteProject({
-      variables: { id: project.id },
+    let voidReasonInput = '';
+    Modal.confirm({
+      title: "Are you sure you want to delete this project?",
+      content: (
+        <div>
+          <p style={{ marginBottom: 16 }}>This action cannot be undone.</p>
+          <Input.TextArea
+            placeholder="Please provide a reason for deleting this project (required)"
+            rows={3}
+            onChange={(e) => { voidReasonInput = e.target.value; }}
+            autoFocus
+          />
+        </div>
+      ),
+      okText: "Yes, Delete",
+      okType: "danger",
+      cancelText: "Cancel",
+      onOk: () => {
+        if (!voidReasonInput || voidReasonInput.trim() === '') {
+          message.error('Void reason is required');
+          return Promise.reject('Void reason required');
+        }
+        return deleteProject({
+          variables: { 
+            id: project.id,
+            voidReason: voidReasonInput.trim() 
+          },
+        });
+      },
     });
   };
 

@@ -282,6 +282,7 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           name="isEmployee"
           label="Is Employee"
           valuePropName="checked"
+          initialValue={true}
         >
           <Switch />
         </Form.Item>
@@ -290,6 +291,7 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           name="isServiceProvider"
           label="Is Service Provider"
           valuePropName="checked"
+          initialValue={false}
           tooltip="Enable this to allow the user to be assigned as a service provider to clients"
         >
           <Switch />
@@ -416,6 +418,7 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           name="canLogin"
           label="Can Login"
           valuePropName="checked"
+          initialValue={true}
         >
           <Switch />
         </Form.Item>
@@ -424,6 +427,7 @@ const UserForm = ({ open, onClose, user, onSuccess }) => {
           name="isActive"
           label="Is Active"
           valuePropName="checked"
+          initialValue={true}
         >
           <Switch />
         </Form.Item>

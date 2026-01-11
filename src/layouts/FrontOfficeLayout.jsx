@@ -34,6 +34,7 @@ import {
   CalendarOutlined,
   BarChartOutlined,
   AlertOutlined,
+  DeleteOutlined,
 } from "@ant-design/icons";
 import { useAuth } from "../contexts/AuthContext";
 import { usePayment } from "../contexts/PaymentContext";
@@ -54,6 +55,7 @@ import GlobalSearchModal from "../components/GlobalSearchModal";
 import { GET_TODAY_PENDING_REMINDERS_COUNT } from "../gql/reminders";
 import { NOTIFICATION_CREATED_SUBSCRIPTION } from "../graphql/notifications";
 import { frontOfficeRoutes } from "../config/routeConfig";
+import { FRONTOFFICE_ROUTES } from "../config/routes";
 import { renderRoutes } from "../components/PrivateRoute";
 import NotFound from "../pages/NotFound";
 
@@ -192,9 +194,21 @@ const FrontOfficeLayout = () => {
       label: <Link to="/">Task Board</Link>,
     },
     canManageProjects && {
-      key: "/projects",
+      key: "projects",
       icon: <ProjectOutlined />,
-      label: <Link to="/projects">Projects</Link>,
+      label: "Projects",
+      children: [
+        {
+          key: "/projects",
+          icon: <ProjectOutlined />,
+          label: <Link to="/projects">All Projects</Link>,
+        },
+        {
+          key: "/projects/deleted",
+          icon: <DeleteOutlined />,
+          label: <Link to="/projects/deleted">Deleted Projects</Link>,
+        },
+      ],
     },
     // Client Management
     canManageClients && {

@@ -22,6 +22,7 @@ const BackOfficeReminders = lazy(() => import('../pages/BackOffice/Reminders'));
 const FrontOfficeDashboard = lazy(() => import('../pages/FrontOffice/Dashboard'));
 const TaskTable = lazy(() => import('../pages/FrontOffice/TaskTable'));
 const ProjectManagement = lazy(() => import('../pages/FrontOffice/ProjectManagement'));
+const DeletedProjectsReport = lazy(() => import('../pages/FrontOffice/DeletedProjectsReport'));
 const ClientDashboard = lazy(() => import('../pages/FrontOffice/ClientDashboard'));
 const ClientList = lazy(() => import('../pages/FrontOffice/ClientList'));
 const LedgerReport = lazy(() => import('../pages/FrontOffice/LedgerReport'));
@@ -167,6 +168,13 @@ export const frontOfficeRoutes = [
     path: FRONTOFFICE_ROUTES.PROJECTS,
     element: ProjectManagement,
     title: 'Projects',
+    exact: true,
+  },
+  {
+    path: FRONTOFFICE_ROUTES.DELETED_PROJECTS,
+    element: DeletedProjectsReport,
+    title: 'Deleted Projects',
+    permission: generatePermission(MODULES.PROJECTS, ACTIONS.MANAGE),
     exact: true,
   },
   {

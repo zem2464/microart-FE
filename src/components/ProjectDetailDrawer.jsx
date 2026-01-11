@@ -916,11 +916,35 @@ const ProjectDetailDrawer = ({ projectId }) => {
               danger
               loading={deleting}
               onClick={() => {
+                let voidReasonInput = '';
                 Modal.confirm({
                   title: 'Delete project?',
-                  content: 'This action cannot be undone.',
+                  content: (
+                    <div>
+                      <p style={{ marginBottom: 16 }}>This action cannot be undone.</p>
+                      <Input.TextArea
+                        placeholder="Please provide a reason for deleting this project (required)"
+                        rows={3}
+                        onChange={(e) => { voidReasonInput = e.target.value; }}
+                        autoFocus
+                      />
+                    </div>
+                  ),
                   okType: 'danger',
-                  onOk: () => deleteProject({ variables: { id: project.id } }),
+                  okText: 'Delete',
+                  cancelText: 'Cancel',
+                  onOk: () => {
+                    if (!voidReasonInput || voidReasonInput.trim() === '') {
+                      message.error('Void reason is required');
+                      return Promise.reject('Void reason required');
+                    }
+                    return deleteProject({ 
+                      variables: { 
+                        id: project.id, 
+                        voidReason: voidReasonInput.trim() 
+                      } 
+                    });
+                  },
                 });
               }}
             >
@@ -964,44 +988,49 @@ const ProjectDetailDrawer = ({ projectId }) => {
       {/* Client Information Section */}
       {project?.client && (
         <Card title={<Title level={4}>Client Information</Title>} size="small" style={{ marginBottom: 16 }}>
-          <Row gutter={[16, 12]}>
-            <Col span={12}>
-              <div style={{ padding: "12px", backgroundColor: "#F0F9FF", borderRadius: "4px" }}>
-                <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "6px" }}>
-                  <strong>Client Notes</strong>
-                </Text>
-                <div style={{ padding: "8px", backgroundColor: "#FFFFFF", borderRadius: "4px", border: "1px solid #E8E8E8" }}>
-                  <Text style={{ fontSize: "12px", color: "#172B4D" }}>
-                    {project.client.clientNotes || "-"}
-                  </Text>
-                </div>
-              </div>
-            </Col>
-            <Col span={12}>
-              <div style={{ padding: "12px", backgroundColor: "#F0F9FF", borderRadius: "4px" }}>
-                <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "6px" }}>
-                  <strong>Color Correction Style</strong>
-                </Text>
-                <div style={{ padding: "8px", backgroundColor: "#FFFFFF", borderRadius: "4px", border: "1px solid #E8E8E8" }}>
-                  <Text style={{ fontSize: "12px", color: "#172B4D" }}>
-                    {project.client.colorCorrectionStyle || "-"}
-                  </Text>
-                </div>
-              </div>
-            </Col>
-            <Col span={12}>
-              <div style={{ padding: "12px", backgroundColor: "#F0F9FF", borderRadius: "4px" }}>
-                <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "6px" }}>
-                  <strong>Transfer Mode</strong>
-                </Text>
-                <div style={{ padding: "8px", backgroundColor: "#FFFFFF", borderRadius: "4px", border: "1px solid #E8E8E8" }}>
-                  <Text style={{ fontSize: "12px", color: "#172B4D" }}>
-                    {project.client.transferMode || "-"}
-                  </Text>
-                </div>
-              </div>
-            </Col>
-          </Row>
+          <Space direction="vertical" size="middle" style={{ width: "100%" }}>
+            {/* Client Notes */}
+            <div>
+              <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
+                <strong>Client Notes</strong>
+              </Text>
+              {project.client.clientNotes ? (
+                <Tag color="blue" style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px", maxWidth: "100%", whiteSpace: "normal", height: "auto" }}>
+                  {project.client.clientNotes}
+                </Tag>
+              ) : (
+                <Tag style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>-</Tag>
+              )}
+            </div>
+
+            {/* Color Correction Style */}
+            <div>
+              <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
+                <strong>Color Correction Style</strong>
+              </Text>
+              {project.client.colorCorrectionStyle ? (
+                <Tag color="cyan" style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>
+                  {project.client.colorCorrectionStyle}
+                </Tag>
+              ) : (
+                <Tag style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>-</Tag>
+              )}
+            </div>
+
+            {/* Transfer Mode */}
+            <div>
+              <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
+                <strong>Transfer Mode</strong>
+              </Text>
+              {project.client.transferMode ? (
+                <Tag color="purple" style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>
+                  {project.client.transferMode}
+                </Tag>
+              ) : (
+                <Tag style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>-</Tag>
+              )}
+            </div>
+          </Space>
         </Card>
       )}
 

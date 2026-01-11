@@ -42,6 +42,9 @@ const GlobalSearchModal = ({ open, onClose }) => {
   const { data, loading, error } = useQuery(SEARCH_PROJECTS, {
     variables: {
       search: debouncedSearchTerm,
+      filters: {
+        includeDeleted: true,
+      },
     },
     skip: !debouncedSearchTerm || debouncedSearchTerm.length < 2,
     fetchPolicy: "network-only",
@@ -179,11 +182,14 @@ const GlobalSearchModal = ({ open, onClose }) => {
                   </Text>
                   <List
                     dataSource={filteredProjects}
-                    renderItem={(project) => (
-                      <List.Item
-                        className="cursor-pointer hover:bg-gray-50 transition-colors rounded-lg px-4"
-                        onClick={() => handleProjectClick(project.id)}
-                      >
+                    renderItem={(project) => {
+                      const isDeleted = !!project.deletedAt;
+                      return (
+                        <List.Item
+                          className={isDeleted ? "rounded-lg px-4 opacity-70" : "cursor-pointer hover:bg-gray-50 transition-colors rounded-lg px-4"}
+                          onClick={isDeleted ? undefined : () => handleProjectClick(project.id)}
+                          style={isDeleted ? { cursor: 'not-allowed' } : undefined}
+                        >
                         <List.Item.Meta
                           avatar={
                             <Avatar
@@ -203,6 +209,9 @@ const GlobalSearchModal = ({ open, onClose }) => {
                               <Text className="text-gray-600">
                                 {highlightMatch(project.name, normalizedSearch)}
                               </Text>
+                              {project.deletedAt && (
+                                <Tag color="red">Deleted</Tag>
+                              )}
                               <Tag color={getStatusColor(project.status)}>
                                 {project.status}
                               </Tag>
@@ -222,6 +231,26 @@ const GlobalSearchModal = ({ open, onClose }) => {
                                   ({project.client?.clientCode || "N/A"})
                                 </Text>
                               </div>
+                              {project.voidReason && (
+                                <div className="text-sm">
+                                  <Text type="danger" strong>
+                                    Void Reason:{" "}
+                                  </Text>
+                                  <Text type="secondary">
+                                    {project.voidReason}
+                                  </Text>
+                                </div>
+                              )}
+                              {project.deletedAt && (
+                                <div className="text-xs text-gray-500">
+                                  <Text type="secondary">
+                                    Deleted on {dayjs(project.deletedAt).format("MMM DD, YYYY HH:mm")}
+                                    {project.updater && (project.updater.firstName || project.updater.lastName) && (
+                                      <> by {project.updater.firstName} {project.updater.lastName}</>
+                                    )}
+                                  </Text>
+                                </div>
+                              )}
                               {project.description && (
                                 <Text
                                   type="secondary"
@@ -255,7 +284,8 @@ const GlobalSearchModal = ({ open, onClose }) => {
                           }
                         />
                       </List.Item>
-                    )}
+                    );
+                    }}
                   />
                 </>
               )}

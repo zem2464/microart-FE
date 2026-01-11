@@ -2,9 +2,10 @@ import { gql } from '@apollo/client';
 
 // Global Search Query for Projects
 export const SEARCH_PROJECTS = gql`
-  query SearchProjects($search: String!) {
+  query SearchProjects($search: String!, $filters: ProjectFilterInput) {
     projects(
       search: $search
+      filters: $filters
       limit: 50
       sortBy: "createdAt"
       sortOrder: "DESC"
@@ -20,6 +21,13 @@ export const SEARCH_PROJECTS = gql`
         totalImageQuantity
         taskCount
         completedTaskCount
+        voidReason
+        deletedAt
+        updater {
+          id
+          firstName
+          lastName
+        }
         client {
           id
           clientCode
@@ -161,6 +169,13 @@ export const GET_PROJECTS = gql`
         customFields
         createdAt
         updatedAt
+        deletedAt
+        voidReason
+        updater {
+          id
+          firstName
+          lastName
+        }
         creditRequest {
           id
           requestedAmount
@@ -364,8 +379,8 @@ export const UPDATE_PROJECT = gql`
 `;
 
 export const DELETE_PROJECT = gql`
-  mutation DeleteProject($id: ID!) {
-    deleteProject(id: $id) {
+  mutation DeleteProject($id: ID!, $voidReason: String!) {
+    deleteProject(id: $id, voidReason: $voidReason) {
       success
       message
     }
