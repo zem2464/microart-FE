@@ -42,6 +42,10 @@ import {
 import CommonTable from "../../components/common/CommonTable";
 import { useAppDrawer } from "../../contexts/DrawerContext";
 import { userCacheVar } from "../../cache/userCacheVar";
+import {
+  getMyClientsFilterFromCookie,
+  saveMyClientsFilterToCookie,
+} from "../../utils/myClientsFilterUtils";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -49,7 +53,7 @@ const { Option } = Select;
 const ClientList = () => {
   const currentUser = useReactiveVar(userCacheVar);
   const [myClientsOnly, setMyClientsOnly] = useState(
-    currentUser?.isServiceProvider === true
+    getMyClientsFilterFromCookie(currentUser?.isServiceProvider === true)
   );
   const [filters, setFilters] = useState({
     search: "",
@@ -156,6 +160,8 @@ const ClientList = () => {
         return rest;
       });
     }
+    // Save filter state to cookie whenever it changes
+    saveMyClientsFilterToCookie(myClientsOnly);
   }, [myClientsOnly, currentUser?.id, currentUser?.isServiceProvider]);
 
   // Refetch when filters or sorter change

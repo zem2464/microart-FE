@@ -43,6 +43,10 @@ import { GET_GRADINGS } from "../../graphql/gradingQueries";
 import { useAppDrawer } from "../../contexts/DrawerContext";
 import dayjs from "dayjs";
 import { userCacheVar } from "../../cache/userCacheVar";
+import {
+  getMyClientsFilterFromCookie,
+  saveMyClientsFilterToCookie,
+} from "../../utils/myClientsFilterUtils";
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -81,7 +85,14 @@ const ProjectList = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState("view"); // 'view', 'create', 'edit'
   const [form] = Form.useForm();
-  const [myClientsOnly, setMyClientsOnly] = useState(false);
+  const [myClientsOnly, setMyClientsOnly] = useState(
+    getMyClientsFilterFromCookie(currentUser?.isServiceProvider === true)
+  );
+
+  // Save myClientsOnly filter to cookie whenever it changes
+  useEffect(() => {
+    saveMyClientsFilterToCookie(myClientsOnly);
+  }, [myClientsOnly]);
 
   // Pagination state
   const [pagination, setPagination] = useState({

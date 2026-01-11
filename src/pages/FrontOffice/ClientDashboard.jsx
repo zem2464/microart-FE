@@ -52,6 +52,10 @@ import { GET_PENDING_PAYMENTS, GET_OVERDUE_PAYMENTS } from '../../gql/clientTran
 import { useAppDrawer } from '../../contexts/DrawerContext';
 import { useReactiveVar } from '@apollo/client';
 import { userCacheVar } from '../../cache/userCacheVar';
+import {
+  getMyClientsFilterFromCookie,
+  saveMyClientsFilterToCookie,
+} from '../../utils/myClientsFilterUtils';
 
 const { Title, Text } = Typography;
 const { RangePicker } = DatePicker;
@@ -62,7 +66,14 @@ const ClientDashboard = () => {
   const [selectedClient, setSelectedClient] = useState(null);
   const { showClientFormDrawer } = useAppDrawer();
   const currentUser = useReactiveVar(userCacheVar);
-  const [myClientsOnly, setMyClientsOnly] = useState(true);
+  const [myClientsOnly, setMyClientsOnly] = useState(
+    getMyClientsFilterFromCookie(currentUser?.isServiceProvider === true)
+  );
+
+  // Save myClientsOnly filter to cookie whenever it changes
+  useEffect(() => {
+    saveMyClientsFilterToCookie(myClientsOnly);
+  }, [myClientsOnly]);
 
   // Queries
   const { data: clientsData, loading: clientsLoading, refetch } = useQuery(GET_CLIENTS, {

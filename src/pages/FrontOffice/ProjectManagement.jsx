@@ -72,6 +72,10 @@ import {
   ACTIONS,
   generatePermission,
 } from "../../config/permissions";
+import {
+  getMyClientsFilterFromCookie,
+  saveMyClientsFilterToCookie,
+} from "../../utils/myClientsFilterUtils";
 
 const { Text } = Typography;
 const { Option } = Select;
@@ -150,9 +154,14 @@ const ProjectManagement = () => {
   const [clientFilter, setClientFilter] = useState("all");
   const [workTypeFilter, setWorkTypeFilter] = useState("all");
   const [myClientsOnly, setMyClientsOnly] = useState(
-    user?.isServiceProvider === true
+    getMyClientsFilterFromCookie(user?.isServiceProvider === true)
   );
   const [deadlineDateRange, setDeadlineDateRange] = useState([null, null]);
+
+  // Save myClientsOnly filter to cookie whenever it changes
+  useEffect(() => {
+    saveMyClientsFilterToCookie(myClientsOnly);
+  }, [myClientsOnly]);
 
   // Infinite scroll state
   const [page, setPage] = useState(1);
@@ -430,7 +439,8 @@ const ProjectManagement = () => {
     clientFilter,
     workTypeFilter,
     myClientsOnly,
-    buildFilters,
+    user?.id,
+    deadlineDateRange,
     refetchProjects,
   ]);
 
