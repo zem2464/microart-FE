@@ -339,6 +339,52 @@ const Dashboard = () => {
       .slice(0, 5);
   }, [projectsData]);
 
+  // ===== LAYOUT PLANNING: Pre-calculate all section visibility =====
+  // Quick Stats Cards visibility
+  const quickStatsCards = [
+    { id: 'usersOnLeave', visible: true },
+    { id: 'taskOrProjects', visible: true },
+    { id: 'approvalsOrProgress', visible: true },
+    { id: 'revenueOrProjects', visible: canManageTransactions || !isAdmin },
+  ];
+  const visibleQuickStatsCount = quickStatsCards.filter(c => c.visible).length;
+  const quickStatColSpan = Math.floor(24 / visibleQuickStatsCount);
+
+  // Middle Section Cards
+  const showTeamAvailability = usersOnLeave.today.length > 0 || usersOnLeave.upcoming.length > 0;
+  const showProjectOverview = canManageProjects && projectsData;
+  const showPendingLeavesCard = canApproveLeaves && pendingLeaves.length > 0;
+  
+  // Bottom Section Cards (Two-Column Layout Planning)
+  const showActiveProjects = myProjectProgress.length > 0;
+  const showWorkBreakdown = myTaskStats.byWorkType.length > 0;
+  const showProjectsNeedingInvoice = canManageTransactions && projectsNeedingInvoice.length > 0;
+  
+  const bottomTwoColumnLayout = showActiveProjects && showWorkBreakdown ? 'two-col' : 
+                               (showActiveProjects || showWorkBreakdown ? 'one-col' : 'hidden');
+  const bottomColSpan = bottomTwoColumnLayout === 'two-col' ? 12 : 24;
+
+  // Main Content Section (Three-Column Layout Planning)
+  const showUpcomingDeadlines = upcomingDeadlines.length > 0 && canManageProjects;
+  
+  // Calculate widths for 3-column layout based on middle column visibility
+  // Left: Team & Activity (always visible)
+  // Middle: Upcoming Deadlines (conditional)
+  // Right: Actions & Alerts (always visible)
+  let mainLeftColSpan, mainMiddleColSpan, mainRightColSpan;
+  
+  if (showUpcomingDeadlines) {
+    // Both middle and right: 8-8-8 split
+    mainLeftColSpan = 8;
+    mainMiddleColSpan = 8;
+    mainRightColSpan = 8;
+  } else {
+    // No middle: 8-16 split (left stays smaller for Team, right gets full space for Actions)
+    mainLeftColSpan = 8;
+    mainMiddleColSpan = 0; // Hidden
+    mainRightColSpan = 16;
+  }
+
   // Calculate total estimated revenue from active projects
   const activeRevenue = useMemo(() => {
     if (!projectsData?.projects?.projects) return 0;
@@ -586,10 +632,10 @@ const Dashboard = () => {
           />
         )}
 
-      {/* Enhanced Quick Stats Row */}
+      {/* Enhanced Quick Stats Row - Responsive column span based on visible cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 16 }}>
         {/* Users on Leave Today */}
-        <Col xs={24} sm={12} lg={6} style={{ display: "flex" }}>
+        <Col xs={24} sm={24} lg={quickStatColSpan} style={{ display: "flex" }}>
           <Card
             hoverable={usersOnLeave.today.length > 0}
             style={{
@@ -598,6 +644,7 @@ const Dashboard = () => {
               cursor: usersOnLeave.today.length > 0 ? "pointer" : "default",
               height: "100%",
               width: "100%",
+              minHeight: 132,
               transition: "all 0.3s ease",
             }}
             bodyStyle={{
@@ -633,7 +680,7 @@ const Dashboard = () => {
         </Col>
 
         {/* My Tasks or Active Projects */}
-        <Col xs={24} sm={12} lg={6} style={{ display: "flex" }}>
+        <Col xs={24} sm={24} lg={quickStatColSpan} style={{ display: "flex" }}>
           <Card
             hoverable
             style={{
@@ -645,9 +692,10 @@ const Dashboard = () => {
               cursor: isAdmin || isManager ? "pointer" : "default",
               height: "100%",
               width: "100%",
+              minHeight: 132,
               transition: "all 0.3s ease",
             }}
-            bodyStyle={{ display: "flex", flexDirection: "column", flex: 1 }}
+            bodyStyle={{ display: "flex", flexDirection: "column", flex: 1, padding: "16px" }}
             onClick={() => (isAdmin || isManager) && navigate("/projects")}
           >
             {isAdmin || isManager ? (
@@ -696,10 +744,10 @@ const Dashboard = () => {
                     />
                   </Space>
                   <Title level={3} style={{ margin: 0, color: "#52c41a" }}>
-                    {myTaskStats.totalTasks}
+                    {myTaskStats.total}
                   </Title>
                   <Text type="secondary" style={{ fontSize: 11 }}>
-                    {myTaskStats.completedImages} images completed
+                    {myTaskStats.total} images completed
                   </Text>
                 </Space>
               </Spin>
@@ -708,7 +756,7 @@ const Dashboard = () => {
         </Col>
 
         {/* Pending Approvals or Completion Rate */}
-        <Col xs={24} sm={12} lg={6} style={{ display: "flex" }}>
+        <Col xs={24} sm={24} lg={quickStatColSpan} style={{ display: "flex" }}>
           {canApproveLeaves && pendingLeaves.length > 0 ? (
             <Card
               hoverable
@@ -718,10 +766,11 @@ const Dashboard = () => {
                 cursor: "pointer",
                 height: "100%",
                 width: "100%",
+                minHeight: 132,
                 position: "relative",
                 transition: "all 0.3s ease",
               }}
-              bodyStyle={{ display: "flex", flexDirection: "column", flex: 1 }}
+              bodyStyle={{ display: "flex", flexDirection: "column", flex: 1, padding: "16px" }}
               onClick={() => navigate("/leave-approvals")}
             >
               <Badge
@@ -761,8 +810,9 @@ const Dashboard = () => {
                 borderLeft: "4px solid #722ed1",
                 height: "100%",
                 width: "100%",
+                minHeight: 132,
               }}
-              bodyStyle={{ display: "flex", flexDirection: "column", flex: 1 }}
+              bodyStyle={{ display: "flex", flexDirection: "column", flex: 1, padding: "16px" }}
             >
               <Space direction="vertical" size={4} style={{ width: "100%" }}>
                 <Space
@@ -794,7 +844,7 @@ const Dashboard = () => {
 
         {/* Active Revenue or Projects Needing Invoice */}
         {canManageTransactions ? (
-          <Col xs={24} sm={12} lg={6} style={{ display: "flex" }}>
+          <Col xs={24} sm={24} lg={quickStatColSpan} style={{ display: "flex" }}>
             <Card
               hoverable={projectsNeedingInvoice.length > 0}
               style={{
@@ -807,9 +857,10 @@ const Dashboard = () => {
                   projectsNeedingInvoice.length > 0 ? "pointer" : "default",
                 height: "100%",
                 width: "100%",
+                minHeight: 132,
                 transition: "all 0.3s ease",
               }}
-              bodyStyle={{ display: "flex", flexDirection: "column", flex: 1 }}
+              bodyStyle={{ display: "flex", flexDirection: "column", flex: 1, padding: "16px" }}
               onClick={() =>
                 projectsNeedingInvoice.length > 0 && navigate("/projects")
               }
@@ -864,15 +915,16 @@ const Dashboard = () => {
             </Card>
           </Col>
         ) : (
-          <Col xs={24} sm={12} lg={6} style={{ display: "flex" }}>
+          <Col xs={24} sm={24} lg={quickStatColSpan} style={{ display: "flex" }}>
             <Card
               style={{
                 borderRadius: 8,
                 borderLeft: "4px solid #13c2c2",
                 height: "100%",
                 width: "100%",
+                minHeight: 132,
               }}
-              bodyStyle={{ display: "flex", flexDirection: "column", flex: 1 }}
+              bodyStyle={{ display: "flex", flexDirection: "column", flex: 1, padding: "16px" }}
             >
               <Space direction="vertical" size={4} style={{ width: "100%" }}>
                 <Space
@@ -900,10 +952,10 @@ const Dashboard = () => {
         )}
       </Row>
 
-      {/* Main Content - 3 Column Layout */}
+      {/* Main Content - 3 Column Layout with Smart Width Planning */}
       <Row gutter={[16, 16]} align="top">
         {/* Left Column - Team & Activity */}
-        <Col xs={24} lg={8} style={{ display: "flex" }}>
+        <Col xs={24} lg={mainLeftColSpan} style={{ display: "flex" }}>
           <Space
             direction="vertical"
             size={12}
@@ -1037,8 +1089,8 @@ const Dashboard = () => {
         </Col>
 
         {/* Middle Column - Projects & Deadlines */}
-        {upcomingDeadlines.length > 0 && (
-          <Col xs={24} lg={8} style={{ display: "flex" }}>
+        {showUpcomingDeadlines && (
+          <Col xs={24} lg={mainMiddleColSpan} style={{ display: "flex" }}>
             <Space
               direction="vertical"
               size={12}
@@ -1141,7 +1193,7 @@ const Dashboard = () => {
           </Col>
         )}
         {/* Right Column - Actions & Alerts */}
-        <Col xs={24} lg={16} style={{ display: "flex" }}>
+        <Col xs={24} lg={mainRightColSpan} style={{ display: "flex" }}>
           <Space
             direction="vertical"
             size={12}
@@ -1257,13 +1309,15 @@ const Dashboard = () => {
               >
                 <Spin spinning={projectsLoading}>
                   <Row gutter={[12, 12]}>
-                    <Col span={6}>
+                    <Col span={6} style={{ display: "flex" }}>
                       <Card
                         size="small"
                         style={{
                           textAlign: "center",
                           background: "#e6f7ff",
                           border: "1px solid #91d5ff",
+                          width: "100%",
+                          minHeight: 96,
                         }}
                       >
                         <Statistic
@@ -1274,13 +1328,15 @@ const Dashboard = () => {
                         />
                       </Card>
                     </Col>
-                    <Col span={6}>
+                    <Col span={6} style={{ display: "flex" }}>
                       <Card
                         size="small"
                         style={{
                           textAlign: "center",
                           background: "#f6ffed",
                           border: "1px solid #b7eb8f",
+                          width: "100%",
+                          minHeight: 96,
                         }}
                       >
                         <Statistic
@@ -1291,13 +1347,15 @@ const Dashboard = () => {
                         />
                       </Card>
                     </Col>
-                    <Col span={6}>
+                    <Col span={6} style={{ display: "flex" }}>
                       <Card
                         size="small"
                         style={{
                           textAlign: "center",
                           background: "#f9f0ff",
                           border: "1px solid #d3adf7",
+                          width: "100%",
+                          minHeight: 96,
                         }}
                       >
                         <Statistic
@@ -1308,7 +1366,7 @@ const Dashboard = () => {
                         />
                       </Card>
                     </Col>
-                    <Col span={6}>
+                    <Col span={6} style={{ display: "flex" }}>
                       <Card
                         size="small"
                         style={{
@@ -1321,6 +1379,8 @@ const Dashboard = () => {
                             projectStats.pendingInvoice > 0
                               ? "1px solid #ffa39e"
                               : "1px solid #b7eb8f",
+                          width: "100%",
+                          minHeight: 96,
                         }}
                       >
                         <Statistic
@@ -1342,9 +1402,10 @@ const Dashboard = () => {
               </Card>
             )}
             <Row gutter={[12, 12]}>
-              <Col span={12}>
+              {showActiveProjects && (
+              <Col xs={24} sm={24} lg={bottomColSpan} style={{ display: "flex" }}>
                 {/* My Active Projects (for all users with active projects) */}
-                {myProjectProgress.length > 0 && (
+                {showActiveProjects && (
                   <Card
                     title={
                       <Space>
@@ -1426,9 +1487,11 @@ const Dashboard = () => {
                   </Card>
                 )}
               </Col>
-              <Col span={12}>
+              )}
+              {showWorkBreakdown && (
+              <Col xs={24} sm={24} lg={bottomColSpan} style={{ display: "flex" }}>
                 {/* My Work Breakdown (for all users) */}
-                {myTaskStats.byWorkType.length > 0 && (
+                {showWorkBreakdown && (
                   <Card
                     title={
                       <Space>
@@ -1498,6 +1561,7 @@ const Dashboard = () => {
                   </Card>
                 )}
               </Col>
+              )}
             </Row>
             {/* Projects Needing Invoice */}
             {canManageTransactions && projectsNeedingInvoice.length > 0 && (

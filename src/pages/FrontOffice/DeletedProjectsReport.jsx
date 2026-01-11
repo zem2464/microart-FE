@@ -76,11 +76,13 @@ const DeletedProjectsReport = () => {
     notifyOnNetworkStatusChange: true,
   });
 
-  // Extract projects from response (backend already filters deleted projects)
+  // Extract projects from response and filter for deleted projects only
   useEffect(() => {
     const projects = projectsData?.projects?.projects || [];
+    // Filter to show only deleted projects (backend returns all when includeDeleted: true)
+    const deletedProjects = projects.filter(project => project.deletedAt !== null);
     if (page === 1) {
-      setAllProjects(projects);
+      setAllProjects(deletedProjects);
     }
   }, [projectsData, page]);
 
@@ -112,12 +114,14 @@ const DeletedProjectsReport = () => {
 
           const prevProjects = prev?.projects?.projects || [];
           const newProjects = fetchMoreResult?.projects?.projects || [];
+          // Filter for deleted projects only
+          const newDeletedProjects = newProjects.filter(project => project.deletedAt !== null);
 
           return {
             ...fetchMoreResult,
             projects: {
               ...fetchMoreResult.projects,
-              projects: [...prevProjects, ...newProjects],
+              projects: [...prevProjects, ...newDeletedProjects],
             },
           };
         },
