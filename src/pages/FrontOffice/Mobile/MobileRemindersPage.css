@@ -1,0 +1,422 @@
+/* iPhone Reminders Style */
+
+.mobile-reminders-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: #f2f2f7;
+  padding-bottom: 100px;
+}
+
+.mobile-reminders-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  background: #f2f2f7;
+}
+
+.mobile-reminders-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 20px 12px 20px;
+  background: #f2f2f7;
+}
+
+.mobile-reminders-title {
+  font-size: 34px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
+  letter-spacing: -0.5px;
+}
+
+.mobile-reminders-add-btn {
+  padding: 0;
+  border: none;
+  background: transparent;
+  height: auto;
+  width: auto;
+}
+
+.mobile-reminders-add-btn:hover {
+  background: transparent;
+}
+
+/* iPhone-style List Cards */
+.mobile-reminders-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 0 20px 20px 20px;
+  background: #f2f2f7;
+}
+
+.mobile-reminder-tab {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.mobile-reminder-tab:active {
+  transform: scale(0.98);
+}
+
+.mobile-reminder-tab.active {
+  border-color: #1890ff;
+  background: #e6f7ff;
+}
+
+.tab-icon {
+  font-size: 28px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #f5f5f5;
+}
+
+.mobile-reminder-tab.active .tab-icon {
+  background: #1890ff;
+  filter: grayscale(100%) brightness(200%);
+}
+
+.tab-info {
+  flex: 1;
+}
+
+.tab-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #000;
+  margin-bottom: 2px;
+}
+
+.tab-count {
+  font-size: 22px;
+  font-weight: 700;
+  color: #8e8e93;
+}
+
+.mobile-reminder-tab.active .tab-count {
+  color: #1890ff;
+}
+
+/* Stats Display - matching web version */
+.reminder-stats {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  margin: 0 20px 20px 20px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  border: 1px solid #e5e5ea;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-label {
+  font-size: 13px;
+  color: #8e8e93;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 24px;
+  font-weight: 700;
+  color: #000;
+}
+
+.stat-value.pending {
+  color: #fa8c16;
+}
+
+.stat-value.completed {
+  color: #52c41a;
+}
+
+/* iPhone-style Reminder List */
+.mobile-reminder-list {
+  padding: 0 20px;
+}
+
+.mobile-reminder-item {
+  background: #fff;
+  border-radius: 12px;
+  padding: 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #e5e5ea;
+}
+
+.mobile-reminder-item:active {
+  background: #f5f5f5;
+  transform: scale(0.99);
+}
+
+.mobile-reminder-item.completed {
+  opacity: 0.6;
+}
+
+/* Completion Circle - iPhone Style */
+.reminder-circle {
+  width: 24px;
+  height: 24px;
+  border: 2px solid #c7c7cc;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-top: 2px;
+}
+
+.reminder-circle:active {
+  transform: scale(0.9);
+}
+
+.reminder-circle.checked {
+  background: #1890ff;
+  border-color: #1890ff;
+}
+
+.check-mark {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+/* Content */
+.reminder-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.reminder-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.reminder-title {
+  font-size: 17px;
+  font-weight: 400;
+  color: #000;
+  line-height: 1.3;
+  word-break: break-word;
+}
+
+.reminder-title.strikethrough {
+  text-decoration: line-through;
+  color: #8e8e93;
+}
+
+.reminder-flag {
+  font-size: 14px;
+}
+
+.reminder-description {
+  font-size: 15px;
+  color: #8e8e93;
+  line-height: 1.4;
+  margin-bottom: 6px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.reminder-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.reminder-date {
+  font-size: 13px;
+  color: #8e8e93;
+  font-weight: 400;
+}
+
+/* Chevron */
+.reminder-chevron {
+  font-size: 20px;
+  color: #c7c7cc;
+  font-weight: 300;
+  margin-top: 2px;
+}
+
+/* Floating Add Button - iPhone Style */
+.floating-add-btn {
+  position: fixed;
+  bottom: 100px;
+  right: 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: #1890ff;
+  color: #fff;
+  border: none;
+  box-shadow: 0 4px 12px rgba(24, 144, 255, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 100;
+}
+
+.floating-add-btn:active {
+  transform: scale(0.9);
+}
+
+@supports (padding: max(0px)) {
+  .floating-add-btn {
+    bottom: max(100px, calc(100px + env(safe-area-inset-bottom)));
+  }
+}
+
+.mobile-reminder-top {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.mobile-reminder-status-btn {
+  padding: 0;
+  height: 32px;
+  width: 32px;
+  min-width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.mobile-reminder-title-section {
+  flex: 1;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.mobile-reminder-title {
+  font-weight: 600;
+  font-size: 14px;
+  color: #000;
+  margin-bottom: 4px;
+  word-break: break-word;
+  white-space: normal;
+}
+
+.mobile-reminder-title.completed {
+  color: #8c8c8c;
+  text-decoration: line-through;
+}
+
+.mobile-reminder-date {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.mobile-reminder-flag-btn {
+  padding: 0;
+  height: 32px;
+  width: 32px;
+  min-width: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.mobile-reminder-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Modal Styles */
+.mobile-reminder-modal {
+  /* Modal will be full screen on mobile */
+}
+
+.mobile-reminder-modal .ant-modal-content {
+  padding: 16px;
+}
+
+/* Drawer Styles */
+.mobile-reminder-detail-drawer {
+  /* Override drawer styles for mobile */
+}
+
+.mobile-reminder-detail-drawer .ant-drawer-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.mobile-reminder-detail-drawer .ant-drawer-body {
+  padding: 16px;
+  overflow-y: auto;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .mobile-reminders-header {
+    padding: 8px;
+  }
+
+  .mobile-reminders-tabs {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .mobile-reminder-item {
+    padding: 8px;
+  }
+
+  .mobile-reminder-top {
+    gap: 8px;
+  }
+
+  .mobile-reminder-title {
+    font-size: 13px;
+  }
+
+  .mobile-reminders-title {
+    font-size: 16px;
+  }
+}
+
+/* Safe area support */
+@supports (padding: max(0px)) {
+  .mobile-reminder-detail-drawer .ant-drawer-body {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}

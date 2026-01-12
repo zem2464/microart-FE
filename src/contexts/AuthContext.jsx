@@ -23,8 +23,23 @@ import {
 import { getDeviceRegistrationInfo } from "../utils/deviceDetection";
 import { reconnectWebSocket } from "../apolloClient";
 import { clearElectronCookies } from "../utils/electronCookieSync";
+import { MOBILE_ROUTES } from "../config/mobileRoutes";
 
 const AuthContext = createContext();
+
+// Helper function to detect mobile devices
+const isMobileDevice = () => {
+  const width = window.innerWidth;
+  const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+  
+  // Check screen width
+  const isSmallScreen = width <= 768;
+  
+  // Check user agent for mobile devices
+  const isMobileUA = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+  
+  return isSmallScreen || isMobileUA;
+};
 
 export const AuthProvider = ({ children }) => {
   const navigate = useNavigate();
@@ -287,7 +302,13 @@ export const AuthProvider = ({ children }) => {
           reconnectWebSocket();
         }, 1000);
 
-        navigate("/");
+        // Check if user is on mobile device and redirect accordingly
+        if (isMobileDevice()) {
+          navigate(MOBILE_ROUTES.REMINDERS); // Redirect to mobile pages
+        } else {
+          navigate("/"); // Redirect to desktop dashboard
+        }
+        
         return { success: true };
       }
       return { success: false, error: "No user returned" };

@@ -11,10 +11,12 @@ import {
 import { ConfigProvider, theme, Layout } from "antd";
 import BackOfficeLayout from "./layouts/BackOfficeLayout";
 import FrontOfficeLayout from "./layouts/FrontOfficeLayout";
+import MobileOnlyLayout from "./layouts/MobileOnlyLayout";
 import Login from "./pages/Login";
 import SetInitialPassword from "./pages/SetInitialPassword";
 import ChangeExpirePassword from "./pages/ChangeExpirePassword";
 import { isPathValidForLayout, getDefaultRouteForLayout } from "./config/routeConfig";
+import { isMobileRoute, getMobileDefaultRoute, getMobileEquivalentRoute, MOBILE_ROUTES } from "./config/mobileRoutes";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ViewModeProvider, useViewMode } from "./contexts/ViewModeContext";
 import { AppDrawerProvider } from "./contexts/DrawerContext";
@@ -29,6 +31,12 @@ import notificationService from "./services/NotificationService";
 import { useTaskNotifications } from "./hooks/useTaskNotifications";
 import { useElectron, useSplashScreen } from "./hooks/useElectron";
 import { initWebSocketManager, cleanupWebSocketManager } from "./apolloClient";
+import { useCombinedMobileDetection } from "./hooks/useMobileDetection";
+import MobileChatPage from "./pages/FrontOffice/Mobile/MobileChatPage";
+import MobileRemindersPage from "./pages/FrontOffice/Mobile/MobileRemindersPage";
+import MobileProjectsPage from "./pages/FrontOffice/Mobile/MobileProjectsPage";
+import MobileClientsPage from "./pages/FrontOffice/Mobile/MobileClientsPage";
+import MobileReportsPage from "./pages/FrontOffice/Mobile/MobileReportsPage";
 
 const { defaultAlgorithm } = theme;
 
@@ -41,15 +49,37 @@ function AppContent() {
   const navigate = useNavigate();
   const location = useLocation();
   const [previousLayout, setPreviousLayout] = useState(effectiveLayout);
+  const isMobile = useCombinedMobileDetection();
   
   // Direct check before hook
   console.log('[AppContent] window.electron at render:', window.electron);
   console.log('[AppContent] window.electron.isElectron:', window.electron?.isElectron);
+  console.log('[AppContent] isMobile:', isMobile);
   
   const isElectron = useElectron();
   console.log('[AppContent] useElectron() returned:', isElectron);
   
   const { showSplash, setShowSplash } = useSplashScreen();
+  
+  // Handle mobile-only route restrictions
+  useEffect(() => {
+    if (!user || !isMobile) return;
+
+    const currentPath = location.pathname;
+    console.log('[App] Mobile check - current path:', currentPath);
+
+    // Check if current route is allowed on mobile
+    if (!isMobileRoute(currentPath)) {
+      console.log('[App] Current path not allowed on mobile, redirecting to reminders');
+      // Try to find mobile equivalent route
+      const mobileEquivalent = getMobileEquivalentRoute(currentPath);
+      if (mobileEquivalent) {
+        navigate(mobileEquivalent, { replace: true });
+      } else {
+        navigate(getMobileDefaultRoute(), { replace: true });
+      }
+    }
+  }, [isMobile, location.pathname, user, navigate]);
   
   // Handle layout switching - redirect to default route if current route is invalid for the new layout
   useEffect(() => {
@@ -200,11 +230,17 @@ function AppContent() {
 
   console.log(user);
 
-  // Determine layout based on view mode preference
+  // Determine layout based on view mode preference and device type
   const getLayoutComponent = () => {
     if (!user) return null;
+    
+    // Mobile users only get mobile layout
+    if (isMobile) {
+      return MobileOnlyLayout;
+    }
+
     console.log("Effective Layout:", effectiveLayout);
-    // Use the effective layout from ViewModeContext
+    // Use the effective layout from ViewModeContext for desktop users
     if (effectiveLayout === "backoffice") {
       return BackOfficeLayout;
     }
@@ -255,13 +291,52 @@ function AppContent() {
           element={!user ? <ChangeExpirePassword /> : <Navigate to="/" replace />}
         />
         
-        {/* Protected Routes - Only accessible when logged in */}
+        {/* Mobile Routes - Only accessible on mobile devices */}
+        {user && isMobile && (
+          <>
+            <Route
+              path={MOBILE_ROUTES.HOME}
+              element={<MobileOnlyLayout><MobileRemindersPage /></MobileOnlyLayout>}
+            />
+            <Route
+              path={MOBILE_ROUTES.CHAT}
+              element={<MobileOnlyLayout><MobileChatPage /></MobileOnlyLayout>}
+            />
+            <Route
+              path={MOBILE_ROUTES.CHAT_WITH_ROOM}
+              element={<MobileOnlyLayout><MobileChatPage /></MobileOnlyLayout>}
+            />
+            <Route
+              path={MOBILE_ROUTES.REMINDERS}
+              element={<MobileOnlyLayout><MobileRemindersPage /></MobileOnlyLayout>}
+            />
+            <Route
+              path={MOBILE_ROUTES.PROJECTS}
+              element={<MobileOnlyLayout><MobileProjectsPage /></MobileOnlyLayout>}
+            />
+            <Route
+              path={MOBILE_ROUTES.CLIENTS}
+              element={<MobileOnlyLayout><MobileClientsPage /></MobileOnlyLayout>}
+            />
+            <Route
+              path={MOBILE_ROUTES.REPORTS}
+              element={<MobileOnlyLayout><MobileReportsPage /></MobileOnlyLayout>}
+            />
+            {/* Fallback for any other mobile routes */}
+            <Route
+              path="/mobile/*"
+              element={<MobileOnlyLayout><MobileRemindersPage /></MobileOnlyLayout>}
+            />
+          </>
+        )}
+        
+        {/* Protected Routes - Only accessible when logged in (Desktop) */}
         <Route
           path="/*"
           element={
-            user && LayoutComponent ? (
+            user && LayoutComponent && !isMobile ? (
               <LayoutComponent />
-            ) : user ? (
+            ) : user && !isMobile ? (
                 <div className="flex items-center justify-center min-h-screen">
                   <div className="text-center">
                     <h2 className="text-xl font-semibold mb-2">Access Denied</h2>

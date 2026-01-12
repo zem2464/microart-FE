@@ -1,0 +1,257 @@
+/* Mobile Projects Page Styles */
+
+.mobile-projects-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  background: white;
+  padding-bottom: 12px;
+}
+
+.mobile-projects-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+}
+
+.mobile-projects-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 12px;
+  background: white;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.mobile-stat-card {
+  padding: 12px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.mobile-stat-value {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1890ff;
+  margin-bottom: 4px;
+}
+
+.mobile-stat-label {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.mobile-projects-search {
+  padding: 12px;
+  background: white;
+  border-bottom: 1px solid #f0f0f0;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.mobile-projects-search-input {
+  width: 100%;
+}
+
+.mobile-projects-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background: white;
+  border-bottom: 1px solid #f0f0f0;
+  position: sticky;
+  top: 44px;
+  z-index: 9;
+}
+
+.mobile-projects-tab-btn {
+  flex: 1;
+  height: 32px;
+  border-radius: 16px;
+  font-size: 12px;
+}
+
+.mobile-project-item {
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.mobile-project-item:active {
+  background-color: #f5f5f5;
+}
+
+.mobile-project-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.mobile-project-code {
+  font-weight: 600;
+  font-size: 13px;
+  color: #1890ff;
+}
+
+.mobile-project-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #000;
+  margin-bottom: 4px;
+  word-break: break-word;
+  white-space: normal;
+}
+
+.mobile-project-client {
+  font-size: 13px;
+  color: #8c8c8c;
+  margin-bottom: 8px;
+}
+
+.mobile-project-progress {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.mobile-project-progress > :first-child {
+  flex: 1;
+}
+
+.mobile-project-progress-text {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.mobile-project-dates {
+  display: flex;
+  justify-content: space-between;
+}
+
+/* Project Detail View */
+.mobile-project-detail {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.mobile-project-detail-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  background: white;
+  position: sticky;
+  top: 0;
+  z-index: 20;
+}
+
+.mobile-project-detail-back {
+  min-width: 36px;
+  height: 36px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.mobile-project-detail-title {
+  flex: 1;
+  font-weight: 600;
+  font-size: 16px;
+  color: #1890ff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mobile-project-detail-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+  background: white;
+}
+
+.mobile-detail-card {
+  margin-bottom: 12px !important;
+}
+
+.mobile-detail-card:last-child {
+  margin-bottom: 0 !important;
+}
+
+.detail-section {
+  margin-bottom: 8px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-value {
+  font-size: 13px;
+  color: #262626;
+  margin-top: 4px;
+  word-break: break-word;
+  white-space: normal;
+}
+
+/* Responsive adjustments */
+@media (max-width: 480px) {
+  .mobile-projects-stats {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    padding: 8px;
+  }
+
+  .mobile-stat-card {
+    padding: 8px;
+  }
+
+  .mobile-stat-value {
+    font-size: 18px;
+  }
+
+  .mobile-projects-search {
+    padding: 8px;
+  }
+
+  .mobile-projects-tabs {
+    padding: 8px;
+    gap: 6px;
+  }
+
+  .mobile-projects-tab-btn {
+    font-size: 11px;
+  }
+
+  .mobile-project-item {
+    padding: 8px;
+  }
+
+  .mobile-project-name {
+    font-size: 13px;
+  }
+
+  .mobile-project-detail-content {
+    padding: 8px;
+  }
+
+  .mobile-detail-card {
+    margin-bottom: 8px !important;
+  }
+}
+
+/* Safe area support */
+@supports (padding: max(0px)) {
+  .mobile-project-detail-content {
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+}
