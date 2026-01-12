@@ -83,7 +83,7 @@ const TASK_STATUS = {
     icon: <SyncOutlined spin />,
   },
   REVIEW: {
-    label: "Ready QC",
+    label: "Review",
     color: "purple",
     icon: <ExclamationCircleOutlined />,
   },
@@ -92,13 +92,8 @@ const TASK_STATUS = {
     color: "green",
     icon: <CheckCircleOutlined />,
   },
-  DELIVERED: {
-    label: "Delivered",
-    color: "cyan",
-    icon: <CheckCircleOutlined />,
-  },
   REVISION: {
-    label: "Re-Open",
+    label: "Reopen",
     color: "orange",
     icon: <ExclamationCircleOutlined />,
   },

@@ -758,6 +758,20 @@ const ProjectManagement = () => {
   };
 
   const handleEditProject = (project) => {
+    // Check if project has invoice - cannot edit
+    const hasInvoice = project.invoice || project.invoiceId;
+    if (hasInvoice) {
+      message.error("Cannot edit a project that has an invoice generated. Project is locked.");
+      return;
+    }
+
+    // Check if project is delivered - cannot edit (except changing to reopen)
+    const isDelivered = (project.status || "").toLowerCase() === "delivered";
+    if (isDelivered) {
+      message.error("Cannot edit a delivered project. Change status to REOPEN first if you need to make changes.");
+      return;
+    }
+
     showProjectFormDrawer(project, "edit", () => {
       refetchProjects();
     });
@@ -1014,6 +1028,33 @@ const ProjectManagement = () => {
       message.error("You don't have permission to edit project status");
       return;
     }
+
+    // Find the project to validate
+    const project = allProjects.find((p) => p.id === projectId);
+    if (!project) {
+      message.error("Project not found");
+      return;
+    }
+
+    // Check if project has invoice
+    const hasInvoice = project.invoice || project.invoiceId;
+    const isDelivered = (currentStatus || "").toLowerCase() === "delivered";
+
+    // Projects with invoices: Only allow changing to REOPEN if delivered
+    if (hasInvoice) {
+      if (!isDelivered) {
+        message.error("Cannot change status of a project with an invoice. Only delivered projects can be reopened.");
+        return;
+      }
+      // For delivered projects with invoice, only allow REOPEN status
+      // This will be enforced in the dropdown options below
+    }
+
+    // Delivered projects (without invoice): Only allow changing to REOPEN
+    if (isDelivered && !hasInvoice) {
+      // Will only show REOPEN option in dropdown
+    }
+
     setEditingStatus((prev) => ({ ...prev, [projectId]: true }));
     setTempValues((prev) => ({
       ...prev,
@@ -1177,13 +1218,24 @@ const ProjectManagement = () => {
           record.invoice?.status === "fully_paid" ||
           record.invoice?.balanceAmount <= 0;
         const isCompleted = record.status?.toLowerCase() === "completed";
+        const isDelivered = record.status?.toLowerCase() === "delivered";
 
-        // If project is completed, show ONLY delivered or reopen option (invoice not required)
-        const filteredStatusOptions = isCompleted
-          ? statusOptions.filter(
-              (opt) => opt.value === "delivered" || opt.value === "reopen"
-            )
-          : statusOptions;
+        // If project has invoice OR is delivered (without invoice), only show REOPEN option
+        let filteredStatusOptions;
+        if (hasInvoice || isDelivered) {
+          // Projects with invoices or delivered: Only allow changing to REOPEN
+          filteredStatusOptions = statusOptions.filter(
+            (opt) => opt.value === "reopen"
+          );
+        } else if (isCompleted) {
+          // If project is completed (no invoice), show ONLY delivered or reopen option
+          filteredStatusOptions = statusOptions.filter(
+            (opt) => opt.value === "delivered" || opt.value === "reopen"
+          );
+        } else {
+          // All other statuses: show all options
+          filteredStatusOptions = statusOptions;
+        }
 
         if (isEditing) {
           return (
@@ -1387,12 +1439,33 @@ const ProjectManagement = () => {
             />
           </Tooltip>
           {canEditProjects &&
-            (record.status || "").toString().toUpperCase() !== "COMPLETED" && (
+            (record.status || "").toString().toUpperCase() !== "COMPLETED" && 
+            !record.invoice && !record.invoiceId &&
+            (record.status || "").toLowerCase() !== "delivered" && (
               <Tooltip title="Edit">
                 <Button
                   type="text"
                   icon={<EditOutlined />}
                   onClick={() => handleEditProject(record)}
+                />
+              </Tooltip>
+            )}
+          {canEditProjects &&
+            ((record.status || "").toString().toUpperCase() === "COMPLETED" ||
+             record.invoice || record.invoiceId ||
+             (record.status || "").toLowerCase() === "delivered") && (
+              <Tooltip title={
+                record.invoice || record.invoiceId
+                  ? "Cannot edit: Invoice generated"
+                  : (record.status || "").toLowerCase() === "delivered"
+                  ? "Cannot edit: Project delivered"
+                  : "Cannot edit: Project completed"
+              }>
+                <Button
+                  type="text"
+                  icon={<EditOutlined />}
+                  disabled
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
                 />
               </Tooltip>
             )}

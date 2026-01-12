@@ -198,23 +198,29 @@ const InvoiceDetailDrawer = ({ invoice, invoiceId, onClose, onExtraRender }) => 
                   key: 'rate',
                   width: '20%',
                   align: 'right',
-                  render: (rate) => <Text>₹{parseFloat(rate).toFixed(2)}</Text>,
+                  render: (rate, record) => {
+                    const finalRate = (rate !== undefined && rate !== null) ? rate : (record.grading?.defaultRate || 0);
+                    return <Text>₹{parseFloat(finalRate).toFixed(2)}</Text>;
+                  },
                 },
                 {
                   title: 'Amount',
                   key: 'amount',
                   width: '30%',
                   align: 'right',
-                  render: (_, record) => (
-                    <Text strong>
-                      ₹{(parseFloat(record.imageQuantity) * parseFloat(record.customRate)).toFixed(2)}
-                    </Text>
-                  ),
+                  render: (_, record) => {
+                    const finalRate = (record.customRate !== undefined && record.customRate !== null) ? record.customRate : (record.grading?.defaultRate || 0);
+                    const amount = parseFloat(record.imageQuantity) * parseFloat(finalRate);
+                    return <Text strong>₹{amount.toFixed(2)}</Text>;
+                  },
                 },
               ]}
               summary={(pageData) => {
                 const totalAmount = pageData.reduce(
-                  (sum, item) => sum + (parseFloat(item.imageQuantity) * parseFloat(item.customRate)),
+                  (sum, item) => {
+                    const finalRate = (item.customRate !== undefined && item.customRate !== null) ? item.customRate : (item.grading?.defaultRate || 0);
+                    return sum + (parseFloat(item.imageQuantity) * parseFloat(finalRate));
+                  },
                   0
                 );
                 return (
