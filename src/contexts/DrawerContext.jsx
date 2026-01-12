@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useCallback } from 'react';
 import { Space, Button, message } from 'antd';
 import ModuleDrawer from '../components/common/ModuleDrawer';
 import TaskTypeForm from '../components/TaskTypeForm';
@@ -56,7 +56,7 @@ export const AppDrawerProvider = ({ children }) => {
 	const [projectDetailDrawer, setProjectDetailDrawer] = useState({ open: false, project: null });
 	
 	// New Project Detail Drawer (accepts projectId only)
-	const [projectDetailDrawerV2, setProjectDetailDrawerV2] = useState({ open: false, projectId: null, title: 'Project Details' });
+	const [projectDetailDrawerV2, setProjectDetailDrawerV2] = useState({ open: false, projectId: null, title: 'Project Details', onClose: null });
 	
 	// Task Detail Drawer (accepts taskId only)
 	const [taskDetailDrawerV2, setTaskDetailDrawerV2] = useState({ open: false, taskId: null });
@@ -81,13 +81,21 @@ export const AppDrawerProvider = ({ children }) => {
 	const closeProjectDetailDrawer = () => setProjectDetailDrawer({ open: false, project: null });
 	
 	// New V2 functions for redesigned drawer
-	const showProjectDetailDrawerV2 = (projectId) => setProjectDetailDrawerV2({ open: true, projectId, title: 'Project Details' });
-	const closeProjectDetailDrawerV2 = () => setProjectDetailDrawerV2({ open: false, projectId: null, title: 'Project Details' });
-	const updateProjectDetailDrawerTitle = (title) => setProjectDetailDrawerV2(prev => ({ ...prev, title }));
+	const showProjectDetailDrawerV2 = useCallback((projectId, onClose = null) => setProjectDetailDrawerV2({ open: true, projectId, title: 'Project Details', onClose }), []);
+	const closeProjectDetailDrawerV2 = useCallback(() => {
+		setProjectDetailDrawerV2(prev => {
+			// Call onClose callback if it exists
+			if (prev.onClose && typeof prev.onClose === 'function') {
+				prev.onClose();
+			}
+			return { open: false, projectId: null, title: 'Project Details', onClose: null };
+		});
+	}, []);
+	const updateProjectDetailDrawerTitle = useCallback((title) => setProjectDetailDrawerV2(prev => ({ ...prev, title })), []);
 	
 	// Task Detail Drawer V2 functions
-	const showTaskDetailDrawerV2 = (taskId) => setTaskDetailDrawerV2({ open: true, taskId });
-	const closeTaskDetailDrawerV2 = () => setTaskDetailDrawerV2({ open: false, taskId: null });
+	const showTaskDetailDrawerV2 = useCallback((taskId) => setTaskDetailDrawerV2({ open: true, taskId }), []);
+	const closeTaskDetailDrawerV2 = useCallback(() => setTaskDetailDrawerV2({ open: false, taskId: null }), []);
 
 	// Invoice Detail Drawer functions
 	const showInvoiceDetailDrawer = (invoiceOrId) => {

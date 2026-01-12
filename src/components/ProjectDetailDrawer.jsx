@@ -1,16 +1,16 @@
-import React, { useState, useEffect } from "react";
-import { useQuery, useMutation, useReactiveVar, useApolloClient } from "@apollo/client";
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
+import { useReactiveVar } from "@apollo/client";
 import {
   Spin,
   Alert,
   Typography,
   Tag,
+  Tooltip,
   Empty,
   Statistic,
   Row,
   Col,
   Card,
-  Tooltip,
   Progress,
   Input,
   Button,
@@ -23,34 +23,34 @@ import {
   DatePicker,
 } from "antd";
 import {
-  EditOutlined,
-  CalendarOutlined,
-  ReloadOutlined,
   ClockCircleOutlined,
   FolderOutlined,
   CopyOutlined,
+  EditOutlined,
+  CalendarOutlined,
+  ReloadOutlined,
   FilePdfOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import {
   GET_PROJECT_DETAIL,
   GET_AVAILABLE_USERS,
-  ACTIVATE_PROJECT,
-  DELETE_PROJECT,
-  UPDATE_PROJECT,
 } from "../graphql/projectQueries";
-import { UPDATE_CLIENT } from "../gql/clients";
 import { GET_TASKS } from "../gql/tasks";
 import { GET_GRADINGS_BY_WORK_TYPES } from "../gql/gradings";
-// Use work types query that includes sortOrder for proper ordering
-import { GET_WORK_TYPES } from "../gql/workTypes";
 import { GET_PROJECT_AUDIT_HISTORY } from "../gql/auditLogs";
 import AuditDisplay from "./common/AuditDisplay.jsx";
 import TasksTable from "./common/TasksTable";
 import { generateBaseColumns } from "./common/TasksTableColumns";
 import { useAppDrawer } from "../contexts/DrawerContext";
 import { AppDrawerContext } from "../contexts/DrawerContext";
-import { GENERATE_PROJECT_INVOICE } from "../gql/clientLedger";
+import ProjectDetailHeader from "./ProjectDetailHeader";
+import ProjectDetailModals from "./ProjectDetailModals";
+import ProjectReminderNotesPopover from "./ProjectReminderNotesPopover.jsx";
+import ReminderNotesModal from "./ReminderNotesModal";
+import { useProjectDetailData } from "../hooks/useProjectDetailData";
+import { useProjectActions } from "../hooks/useProjectActions";
 import {
   hasPermission,
   MODULES,
@@ -76,13 +76,17 @@ const STATUS_MAP = {
   REQUESTED: { label: "Pending Approval", color: "purple" },
 };
 
+/**
+ * Optimized ProjectDetailDrawer Component
+ * Refactored to use custom hooks and memoized child components
+ * to prevent unnecessary re-renders and improve performance
+ */
 const ProjectDetailDrawer = ({ projectId }) => {
   const currentUser = useReactiveVar(userCacheVar);
-  const { updateProjectDetailDrawerTitle } = useAppDrawer();
+  const { updateProjectDetailDrawerTitle, closeProjectDetailDrawerV2 } = useAppDrawer();
   const drawerCtx = React.useContext(AppDrawerContext);
-  const client = useApolloClient();
 
-  // State declarations
+  // Local state
   const [projectNotesInput, setProjectNotesInput] = useState("");
   const [clientNotesInput, setClientNotesInput] = useState("");
   const [quoteVisible, setQuoteVisible] = useState(false);
@@ -91,99 +95,55 @@ const ProjectDetailDrawer = ({ projectId }) => {
   const [statusValue, setStatusValue] = useState("");
   const [dueDateModalVisible, setDueDateModalVisible] = useState(false);
   const [dueDateValue, setDueDateValue] = useState(null);
-  const [statusSelectOpen, setStatusSelectOpen] = useState(false);
+  const [reminderNotesModalVisible, setReminderNotesModalVisible] = useState(false);
 
-  // Fetch project details
-  const { data, loading, error, refetch } = useQuery(GET_PROJECT_DETAIL, {
-    variables: { id: projectId },
-    skip: !projectId,
-    fetchPolicy: "no-cache",
-  });
-
-  // Fetch tasks separately with project filter - include all statuses including completed
+  // Custom hook for data fetching (eliminates ~150 lines of query code)
   const {
-    data: tasksData,
-    loading: tasksLoading,
-    refetch: refetchTasks,
-  } = useQuery(GET_TASKS, {
-    variables: {
-      filters: projectId ? { projectId } : undefined,
-      page: 1,
-      limit: 500, // plenty for project detail view
-    },
-    skip: !projectId,
-    fetchPolicy: "no-cache",
-  });
+    project,
+    tasks,
+    auditLogs,
+    users,
+    workTypes: allWorkTypes,
+    gradings: gradingsData,
+    loading,
+    error,
+    refetch,
+  } = useProjectDetailData(projectId);
 
-  // Fetch combined audit logs for project and all its tasks (like Jira ticket history)
+  // Custom hook for mutations (eliminates ~100 lines of mutation code)
   const {
-    data: auditData,
-    loading: auditLoading,
-    refetch: refetchAudit,
-  } = useQuery(GET_PROJECT_AUDIT_HISTORY, {
-    variables: { projectId },
-    skip: !projectId,
-    fetchPolicy: "no-cache",
+    updateProject: updateProjectMutation,
+    updateClient: updateClientMutation,
+    deleteProject: deleteProjectMutation,
+    generateInvoice,
+    invoicing,
+  } = useProjectActions({
+    refetch,
+    closeDrawer: closeProjectDetailDrawerV2,
   });
 
-  // Fetch available users for assignment
-  const {
-    data: usersData,
-    loading: usersLoading,
-  } = useQuery(GET_AVAILABLE_USERS, {
-    variables: { limit: 1000, offset: 0 },
-    fetchPolicy: "cache-first",
-  });
+  // Aliases for backward compatibility with existing code
+  const auditData = { projectAuditHistory: auditLogs };
+  const auditLoading = loading.audit;
+  const isInitialLoad = loading.project;
+  const isRefetching = false; // Network status not exposed from hook
+  const cachedProject = project; // Hook handles caching internally
 
-  // Fetch work types
-  const {
-    data: workTypesData,
-    loading: workTypesLoading,
-  } = useQuery(GET_WORK_TYPES, {
-    fetchPolicy: "cache-first",
-  });
-
-  // Mutations
-  const [updateProject] = useMutation(UPDATE_PROJECT, {
-    onCompleted: () => {
-      message.success("Project updated successfully");
-      refetch();
-    },
-    onError: (error) => message.error(error.message),
-  });
-
-  const [updateClient] = useMutation(UPDATE_CLIENT, {
-    onCompleted: () => {
-      message.success("Client notes updated");
-      refetch();
-    },
-    onError: (error) => message.error(error.message),
-  });
-
-  // Mutations - Using cache eviction and refetchQueries to ensure updates reflect
-  const project = data?.project;
-  const tasks = tasksData?.tasks?.tasks || [];
-
-  // Fetch gradings for all project workTypes to get workType mappings
-  // This ensures we have workType info even when project query doesn't populate it
-  const {
-    data: gradingsData,
-    loading: gradingsLoading,
-  } = useQuery(GET_GRADINGS_BY_WORK_TYPES, {
-    variables: { workTypeIds: project?.projectWorkTypes?.map((pwt) => pwt.workTypeId) || [] },
-    skip: !project?.projectWorkTypes?.length,
-    fetchPolicy: "cache-first",
-  });
+  // Permissions
   const hasLimitedRead = hasPermission(
     currentUser,
     generatePermission(MODULES.PROJECTS, ACTIONS.LIMTEREAD)
   );
   const canShowQuote =
-    ["ACTIVE", "IN_PROGRESS"].includes((project?.status || "").toString().toUpperCase()) &&
+    ["ACTIVE", "IN_PROGRESS"].includes(
+      (project?.status || "").toString().toUpperCase()
+    ) &&
     !(project?.invoiceId || project?.invoice?.id) &&
     !hasLimitedRead;
   const hasInvoice = !!(project?.invoiceId || project?.invoice?.id);
-  const completedTasks = tasks.filter((task) => (task.status || "").toString().toUpperCase() === "COMPLETED").length;
+  const completedTasks = tasks.filter(
+    (task) => (task.status || "").toString().toUpperCase() === "COMPLETED"
+  ).length;
   const totalTasks = tasks.length || 0;
   const allTasksCompleted = totalTasks > 0 && completedTasks === totalTasks;
 
@@ -203,215 +163,357 @@ const ProjectDetailDrawer = ({ projectId }) => {
     currentUser,
     generatePermission(MODULES.PROJECTS, ACTIONS.UPDATE)
   );
-  
-  // Update drawer title when project loads
-  useEffect(() => {
-    if (project) {
-      setStatusValue((project.status || "").toLowerCase());
-      setDueDateValue(project.deadlineDate ? dayjs(project.deadlineDate) : null);
-      const statusConfig = STATUS_MAP[project.status?.toUpperCase()] || {};
-      const titleElement = (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', paddingRight: 24 }}>
-          <Space size="middle">
-            <span>{project.projectCode}</span>
-            <span style={{ color: '#8c8c8c', fontWeight: 'normal' }}>|</span>
-            <span style={{ fontWeight: 'normal' }}>{project.name}</span>
-            <Tag color={statusConfig.color || 'blue'}>
-              {statusConfig.label || project.status}
-            </Tag>
-          </Space>
-          <Space>
-            {canEditProjects && (
-              <Button
-                type="primary"
-                icon={<EditOutlined />}
-                size="small"
-                onClick={handleEditProject}
-              >
-                Edit
-              </Button>
-            )}
-            {canEditProjects && (
-              <Select
-                value={statusValue}
-                onChange={(value) => {
-                  // Save immediately with the selected value to avoid stale state
-                  setStatusValue(value);
-                  handleSaveStatus(value);
-                }}
-                style={{ width: 150 }}
-                size="small"
-                placeholder="Change Status"
-                showSearch
-                filterOption={(input, option) =>
-                  (option?.label ?? "")
-                    .toString()
-                    .toLowerCase()
-                    .includes(input.toLowerCase())
-                }
-                options={(() => {
-                  const options = Object.entries(STATUS_MAP).map(([key, cfg]) => ({
+
+  // Memoized helper functions
+  const buildQuoteFromProject = useCallback((proj) => {
+    if (!proj) return null;
+    const now = dayjs();
+    const identifier =
+      proj.projectCode || proj.projectNumber || proj.id || "PROJECT";
+    const items = (proj.projectGradings || []).length
+      ? proj.projectGradings.map((pg, idx) => {
+          const quantity = Number(pg.imageQuantity || 0);
+          const rate = Number(pg.customRate || pg.grading?.defaultRate || 0);
+          const amount = quantity * rate;
+          return {
+            line: idx + 1,
+            description: pg.grading?.name || "Service",
+            quantity,
+            rate,
+            amount,
+          };
+        })
+      : [
+          {
+            line: 1,
+            description: proj.grading?.name || "Service",
+            quantity:
+              proj.imageQuantity ||
+              proj.totalImageQuantity ||
+              proj.imageQuantityInvoiced ||
+              0,
+            rate: Number(proj.grading?.defaultRate || 0),
+          },
+        ].map((item) => ({ ...item, amount: item.quantity * item.rate }));
+
+    const subtotal = items.reduce(
+      (sum, item) => sum + Number(item.amount || 0),
+      0
+    );
+    const discountAmount = Math.max(Number(proj.discountAmount || 0), 0);
+    const taxableBase = Math.max(subtotal - discountAmount, 0);
+    const taxRate = Number(
+      proj.taxRate || proj.taxPercent || proj.taxPercentage || 0
+    );
+    const taxAmount = Math.max((taxableBase * taxRate) / 100, 0);
+    const totalAmount = Math.max(taxableBase + taxAmount, 0);
+    const totalImages = items.reduce(
+      (sum, item) => sum + Number(item.quantity || 0),
+      0
+    );
+
+    return {
+      quoteNumber: `QT-${identifier}-${now.format("YYMMDDHHmm")}`,
+      quoteDate: now.toISOString(),
+      validUntil: proj.quoteValidUntil || now.add(7, "day").toISOString(),
+      client: proj.client,
+      project: proj,
+      items,
+      subtotal,
+      discountAmount,
+      taxRate,
+      taxAmount,
+      totalAmount,
+      totalImages,
+      notes: proj.description,
+    };
+  }, []);
+
+  const handleOpenQuote = useCallback(() => {
+    const draft = buildQuoteFromProject(project);
+    setQuoteData(draft);
+    setQuoteVisible(true);
+  }, [project, buildQuoteFromProject]);
+
+  const handleEditProject = useCallback(() => {
+    drawerCtx?.showProjectFormDrawer?.(project, "edit", () => {
+      refetch.all();
+    });
+  }, [project, drawerCtx, refetch]);
+
+  const handleSaveStatus = useCallback(async (nextValue) => {
+    const valueToSave = (nextValue ?? statusValue) || "";
+    if (!valueToSave) return;
+    try {
+      message.loading({ content: "Updating status...", key: "status" });
+      await updateProjectMutation({
+        id: project.id,
+        input: { status: valueToSave.toUpperCase() },
+      });
+      message.success({
+        content: "Status updated",
+        key: "status",
+        duration: 2,
+      });
+      setStatusModalVisible(false);
+      setStatusValue(valueToSave);
+      // Refetch handled by mutation hook
+    } catch (err) {
+      message.error({ content: err.message, key: "status" });
+    }
+  }, [statusValue, updateProjectMutation, project?.id]);
+
+  // Memoize the title element to prevent unnecessary re-renders
+  const titleElement = useMemo(() => {
+    if (!project) return "Project Details";
+    
+    const statusConfig = STATUS_MAP[project.status?.toUpperCase()] || {};
+    const clientType = project?.client?.clientType;
+    const isPaid = !!(
+      project?.invoice?.status === "fully_paid" ||
+      (project?.invoice?.balanceAmount ?? 0) <= 0
+    );
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          width: "100%",
+          paddingRight: 24,
+        }}
+      >
+        <Space size="middle">
+          <span>{project.projectCode}</span>
+          <span style={{ color: "#8c8c8c", fontWeight: "normal" }}>|</span>
+          <span style={{ fontWeight: "normal" }}>{project.name}</span>
+          <Tag color={statusConfig.color || "blue"}>
+            {statusConfig.label || project.status}
+          </Tag>
+          <ProjectReminderNotesPopover projectId={project?.id} />
+        </Space>
+        <Space>
+          {canEditProjects && (
+            <Button
+              type="primary"
+              icon={<EditOutlined />}
+              size="small"
+              onClick={handleEditProject}
+            >
+              Edit
+            </Button>
+          )}
+          {canEditProjects && (
+            <Select
+              value={statusValue}
+              onChange={(value) => {
+                // Save immediately with the selected value to avoid stale state
+                setStatusValue(value);
+                handleSaveStatus(value);
+              }}
+              style={{ width: 150 }}
+              size="small"
+              placeholder="Change Status"
+              showSearch
+              filterOption={(input, option) =>
+                (option?.label ?? "")
+                  .toString()
+                  .toLowerCase()
+                  .includes(input.toLowerCase())
+              }
+              options={(() => {
+                const options = Object.entries(STATUS_MAP).map(
+                  ([key, cfg]) => ({
                     value: key.toLowerCase(),
                     label: cfg.label,
                     color: cfg.color,
-                  }));
-                  const isCompleted = (project?.status || "").toLowerCase() === "completed";
-                  // If project is completed, show ONLY delivered or reopen option (invoice not required)
-                  const filtered = isCompleted
-                    ? options.filter((opt) => opt.value === "delivered" || opt.value === "reopen")
-                    : options;
+                  })
+                );
+                const isCompleted =
+                  (project?.status || "").toLowerCase() === "completed";
+                // If project is completed, show ONLY delivered or reopen option (invoice not required)
+                const filtered = isCompleted
+                  ? options.filter(
+                      (opt) =>
+                        opt.value === "delivered" || opt.value === "reopen"
+                    )
+                  : options;
 
-                  const clientType = project?.client?.clientType;
-                  const isPaid = !!(project?.invoice?.status === "fully_paid" || (project?.invoice?.balanceAmount ?? 0) <= 0);
-
-                  return filtered.map((option) => {
-                    let disabled = false;
-                    let title = "";
-                    if (option.value === "delivered") {
-                      // Only restrict if project has invoice AND is walk-in client AND invoice not paid / missing permission
-                      if (hasInvoice && clientType === "walkIn") {
-                        if (!canApproveProjects) {
-                          disabled = true;
-                          title = "Permission required to deliver walk-in projects";
-                        } else if (!isPaid) {
-                          disabled = true;
-                          title = "Invoice must be paid for walk-in projects";
-                        }
+                return filtered.map((option) => {
+                  let disabled = false;
+                  let title = "";
+                  if (option.value === "delivered") {
+                    // Only restrict if project has invoice AND is walk-in client AND invoice not paid / missing permission
+                    if (hasInvoice && clientType === "walkIn") {
+                      if (!canApproveProjects) {
+                        disabled = true;
+                        title =
+                          "Permission required to deliver walk-in projects";
+                      } else if (!isPaid) {
+                        disabled = true;
+                        title = "Invoice must be paid for walk-in projects";
                       }
-                      // For projects without invoice or permanent clients: No restrictions
                     }
-                    return {
-                      ...option,
-                      disabled,
-                      label: disabled ? (
-                        <Tooltip title={title}>{option.label} 🔒</Tooltip>
-                      ) : (
-                        option.label
-                      ),
-                    };
-                  });
-                })()}
-              />
-            )}
-            {canEditProjects && (
-              <Button
-                icon={<CalendarOutlined />}
-                size="small"
-                onClick={() => setDueDateModalVisible(true)}
-              >
-                Change Due Date
-              </Button>
-            )}
+                    // For projects without invoice or permanent clients: No restrictions
+                  }
+                  return {
+                    ...option,
+                    disabled,
+                    label: disabled ? (
+                      <Tooltip title={title}>{option.label} 🔒</Tooltip>
+                    ) : (
+                      option.label
+                    ),
+                  };
+                });
+              })()}
+            />
+          )}
+          {canEditProjects && (
             <Button
-              icon={<ReloadOutlined />}
+              icon={<CalendarOutlined />}
               size="small"
-              onClick={() => {
-                refetch();
-                refetchTasks();
-                refetchAudit();
-              }}
+              onClick={() => setDueDateModalVisible(true)}
             >
-              Refresh
+              Change Due Date
             </Button>
-            {canShowQuote && (
-              <Button
-                size="small"
-                icon={<FilePdfOutlined />}
-                onClick={handleOpenQuote}
-              >
-                View Quote
-              </Button>
-            )}
-            {canDeleteProjects && (project.status || '').toString().toUpperCase() !== 'COMPLETED' && (
+          )}
+          <Button
+            icon={<FileTextOutlined />}
+            size="small"
+            onClick={() => setReminderNotesModalVisible(true)}
+          >
+            Add Note
+          </Button>
+          <Button
+            icon={<ReloadOutlined />}
+            size="small"
+            onClick={() => {
+              refetch.project();
+              refetch.tasks();
+              refetch.audit();
+            }}
+          >
+            Refresh
+          </Button>
+          {canShowQuote && (
+            <Button
+              size="small"
+              icon={<FilePdfOutlined />}
+              onClick={handleOpenQuote}
+            >
+              View Quote
+            </Button>
+          )}
+          {canDeleteProjects &&
+            (project.status || "").toString().toUpperCase() !==
+              "COMPLETED" && (
               <Button
                 danger
                 size="small"
                 onClick={() => {
                   Modal.confirm({
-                    title: 'Delete project?',
-                    content: 'This action cannot be undone.',
-                    okType: 'danger',
-                    onOk: () => deleteProject({ variables: { id: project.id } }),
+                    title: "Delete project?",
+                    content: "This action cannot be undone.",
+                    okType: "danger",
+                    onOk: () =>
+                      deleteProjectMutation({ id: project.id }),
                   });
                 }}
               >
                 Delete
               </Button>
             )}
-          </Space>
-        </div>
+        </Space>
+      </div>
+    );
+  }, [
+    project,
+    statusValue,
+    canEditProjects,
+    canShowQuote,
+    canDeleteProjects,
+    canApproveProjects,
+    hasInvoice,
+    handleEditProject,
+    handleSaveStatus,
+    handleOpenQuote,
+    deleteProjectMutation,
+    refetch.project,
+    refetch.tasks,
+    refetch.audit,
+  ]);
+
+  // Track previous title key values to prevent unnecessary updates
+  const prevTitleKey = useRef("");
+
+  // Update drawer title when title element changes
+  useEffect(() => {
+    if (project) {
+      setStatusValue((project.status || "").toLowerCase());
+      setDueDateValue(
+        project.deadlineDate ? dayjs(project.deadlineDate) : null
       );
+    }
+  }, [project]);
+
+  // Update drawer title only when meaningful values change
+  useEffect(() => {
+    // Create a key from values that should trigger title update
+    const titleKey = `${project?.id}-${project?.projectCode}-${project?.name}-${project?.status}-${statusValue}`;
+    
+    // Only update if the key has actually changed
+    if (titleKey !== prevTitleKey.current) {
+      prevTitleKey.current = titleKey;
       updateProjectDetailDrawerTitle(titleElement);
     }
-  }, [project, statusValue, dueDateValue, canEditProjects]);
+  }, [project?.id, project?.projectCode, project?.name, project?.status, statusValue, titleElement, updateProjectDetailDrawerTitle]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     setProjectNotesInput(project?.notes || "");
-      const clientNotesFromTasks = Array.isArray(tasks) && tasks.length > 0
-        ? (tasks[0]?.project?.client?.clientNotes || tasks[0]?.clientNotes)
+    const clientNotesFromTasks =
+      Array.isArray(tasks) && tasks.length > 0
+        ? tasks[0]?.project?.client?.clientNotes || tasks[0]?.clientNotes
         : null;
-      setClientNotesInput(clientNotesFromTasks || "");
-    }, [project?.notes, tasks]);
+    setClientNotesInput(clientNotesFromTasks || "");
+  }, [project?.notes, tasks]);
 
-    const handleUpdateNotes = async () => {
-      try {
-        const mutations = [];
-        if (project?.id) {
-          mutations.push(updateProject({ variables: { id: project.id, input: { notes: projectNotesInput } } }));
-        }
-        const clientId = project?.client?.id || (tasks[0]?.project?.client?.id);
-        if (clientId) {
-          mutations.push(updateClient({ variables: { id: clientId, input: { clientNotes: clientNotesInput } } }));
-        }
-        await Promise.all(mutations);
-        message.success("Notes updated successfully");
-        refetch();
-        refetchTasks();
-      } catch (e) {
-        message.error(`Failed to update notes: ${e.message}`);
+  const handleUpdateNotes = async () => {
+    try {
+      const mutations = [];
+      if (project?.id) {
+        mutations.push(
+          updateProjectMutation({
+            id: project.id,
+            input: { notes: projectNotesInput },
+          })
+        );
       }
-    };
-  const users = usersData?.availableUsers || [];
-  const allWorkTypes = workTypesData?.workTypes || [];
-
-  const [activateProject, { loading: activating }] = useMutation(ACTIVATE_PROJECT, {
-    fetchPolicy: "no-cache",
-    onCompleted: () => {
-      message.success("Project activated");
-      refetch();
-    },
-    onError: (err) => message.error(err.message),
-  });
-
-  const [deleteProject, { loading: deleting }] = useMutation(DELETE_PROJECT, {
-    fetchPolicy: "no-cache",
-    onCompleted: () => {
-      message.success("Project deleted");
-      drawerCtx?.closeProjectDetailDrawerV2?.();
-    },
-    onError: (err) => message.error(err.message),
-  });
-
-  const [generateInvoice, { loading: invoicing }] = useMutation(GENERATE_PROJECT_INVOICE, {
-    fetchPolicy: "no-cache",
-    onCompleted: (data) => {
-      if (data?.generateProjectInvoice?.success) {
-        message.success(data.generateProjectInvoice.message || "Invoice generated");
-        refetch();
-      } else {
-        message.error(data?.generateProjectInvoice?.message || "Failed to generate invoice");
+      const clientId = project?.client?.id || tasks[0]?.project?.client?.id;
+      if (clientId && clientNotesInput) {
+        mutations.push(
+          updateClientMutation({
+            id: clientId,
+            input: { clientNotes: clientNotesInput },
+          })
+        );
       }
-    },
-    onError: (err) => message.error(err.message),
-  });
+      await Promise.all(mutations);
+      message.success("Notes updated successfully");
+      refetch.all();
+    } catch (e) {
+      message.error(`Failed to update notes: ${e.message}`);
+    }
+  };
 
   // Base columns for TasksTable - show all columns except project/client/dates
   const baseColumns = generateBaseColumns({
     showProjectCode: false, // Hide project column (we're in project detail)
-    showClientInfo: false,  // Hide client column (we're in project detail)
-    showOrderDate: false,   // Hide order date (shown in header)
-    showGrading: true,      // Show grading column (multiple gradings per project)
-    showPriority: true,     // Show priority
+    showClientInfo: false, // Hide client column (we're in project detail)
+    showOrderDate: false, // Hide order date (shown in header)
+    showGrading: true, // Show grading column (multiple gradings per project)
+    showPriority: true, // Show priority
   });
 
   // Generate folder name matching ProjectManagement format
@@ -485,101 +587,20 @@ const ProjectDetailDrawer = ({ projectId }) => {
     }
   };
 
-  const buildQuoteFromProject = (proj) => {
-    if (!proj) return null;
-    const now = dayjs();
-    const identifier = proj.projectCode || proj.projectNumber || proj.id || "PROJECT";
-    const items = (proj.projectGradings || []).length
-      ? proj.projectGradings.map((pg, idx) => {
-          const quantity = Number(pg.imageQuantity || 0);
-          const rate = Number(pg.customRate || pg.grading?.defaultRate || 0);
-          const amount = quantity * rate;
-          return {
-            line: idx + 1,
-            description: pg.grading?.name || "Service",
-            quantity,
-            rate,
-            amount,
-          };
-        })
-      : [
-          {
-            line: 1,
-            description: proj.grading?.name || "Service",
-            quantity:
-              proj.imageQuantity ||
-              proj.totalImageQuantity ||
-              proj.imageQuantityInvoiced ||
-              0,
-            rate: Number(proj.grading?.defaultRate || 0),
-          },
-        ].map((item) => ({ ...item, amount: item.quantity * item.rate }));
-
-    const subtotal = items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-    const discountAmount = Math.max(Number(proj.discountAmount || 0), 0);
-    const taxableBase = Math.max(subtotal - discountAmount, 0);
-    const taxRate = Number(proj.taxRate || proj.taxPercent || proj.taxPercentage || 0);
-    const taxAmount = Math.max((taxableBase * taxRate) / 100, 0);
-    const totalAmount = Math.max(taxableBase + taxAmount, 0);
-    const totalImages = items.reduce((sum, item) => sum + Number(item.quantity || 0), 0);
-
-    return {
-      quoteNumber: `QT-${identifier}-${now.format("YYMMDDHHmm")}`,
-      quoteDate: now.toISOString(),
-      validUntil: proj.quoteValidUntil || now.add(7, "day").toISOString(),
-      client: proj.client,
-      project: proj,
-      items,
-      subtotal,
-      discountAmount,
-      taxRate,
-      taxAmount,
-      totalAmount,
-      totalImages,
-      notes: proj.description,
-    };
-  };
-
-  const handleOpenQuote = () => {
-    const draft = buildQuoteFromProject(project);
-    setQuoteData(draft);
-    setQuoteVisible(true);
-  };
-
-  const handleEditProject = () => {
-    drawerCtx?.showProjectFormDrawer?.(project, 'edit', () => {
-      refetch();
-      refetchTasks();
-    });
-  };
-
-  const handleSaveStatus = async (nextValue) => {
-    const valueToSave = (nextValue ?? statusValue) || "";
-    if (!valueToSave) return;
-    try {
-      message.loading({ content: "Updating status...", key: "status" });
-      await updateProject({ variables: { id: project.id, input: { status: valueToSave.toUpperCase() } } });
-      message.success({ content: "Status updated", key: "status", duration: 2 });
-      setStatusModalVisible(false);
-      setStatusSelectOpen(false);
-      refetch();
-    } catch (err) {
-      message.error({ content: err.message, key: "status" });
-    }
-  };
-
   const handleSaveDueDate = async () => {
     try {
       message.loading({ content: "Updating due date...", key: "due" });
-      await updateProject({
-        variables: {
-          id: project.id,
-          input: { deadlineDate: dueDateValue ? dueDateValue.toDate().toISOString() : null },
+      await updateProjectMutation({
+        id: project.id,
+        input: {
+          deadlineDate: dueDateValue
+            ? dueDateValue.toDate().toISOString()
+            : null,
         },
       });
       message.success({ content: "Due date updated", key: "due", duration: 2 });
       setDueDateModalVisible(false);
-      refetch();
+      // Refetch handled by mutation hook
     } catch (err) {
       message.error({ content: err.message, key: "due" });
     }
@@ -590,10 +611,18 @@ const ProjectDetailDrawer = ({ projectId }) => {
     try {
       message.loading({ content: "Generating quote PDF...", key: "quote-pdf" });
       await generateQuotationPDF(quoteData);
-      message.success({ content: "Quotation downloaded", key: "quote-pdf", duration: 2 });
+      message.success({
+        content: "Quotation downloaded",
+        key: "quote-pdf",
+        duration: 2,
+      });
     } catch (err) {
       console.error("Quote PDF error", err);
-      message.error({ content: "Failed to generate quotation", key: "quote-pdf", duration: 2 });
+      message.error({
+        content: "Failed to generate quotation",
+        key: "quote-pdf",
+        duration: 2,
+      });
     }
   };
 
@@ -610,20 +639,22 @@ const ProjectDetailDrawer = ({ projectId }) => {
     if (projectGradings.length === 0) return [];
 
     // Sort projectWorkTypes by workType.sortOrder to maintain BackOffice configuration order
-    const sortedProjectWorkTypes = [...project.projectWorkTypes].sort((a, b) => {
-      const workTypeA = allWorkTypes.find((wt) => wt.id === a.workTypeId);
-      const workTypeB = allWorkTypes.find((wt) => wt.id === b.workTypeId);
-      const sortOrderA = workTypeA?.sortOrder ?? 999;
-      const sortOrderB = workTypeB?.sortOrder ?? 999;
-      
-      // Sort by sortOrder first, then by name
-      if (sortOrderA !== sortOrderB) {
-        return sortOrderA - sortOrderB;
+    const sortedProjectWorkTypes = [...project.projectWorkTypes].sort(
+      (a, b) => {
+        const workTypeA = allWorkTypes.find((wt) => wt.id === a.workTypeId);
+        const workTypeB = allWorkTypes.find((wt) => wt.id === b.workTypeId);
+        const sortOrderA = workTypeA?.sortOrder ?? 999;
+        const sortOrderB = workTypeB?.sortOrder ?? 999;
+
+        // Sort by sortOrder first, then by name
+        if (sortOrderA !== sortOrderB) {
+          return sortOrderA - sortOrderB;
+        }
+        const nameA = workTypeA?.name || "";
+        const nameB = workTypeB?.name || "";
+        return nameA.localeCompare(nameB);
       }
-      const nameA = workTypeA?.name || '';
-      const nameB = workTypeB?.name || '';
-      return nameA.localeCompare(nameB);
-    });
+    );
 
     // Create tabs based on sorted projectWorkTypes
     return sortedProjectWorkTypes
@@ -640,12 +671,12 @@ const ProjectDetailDrawer = ({ projectId }) => {
         const workTypeGradings = projectGradings.filter((pg) => {
           const gradingId = pg.gradingId || pg.grading?.id;
           const gradingWorkTypeId = pg.grading?.workType?.id;
-          
+
           // Primary: If grading already has workType populated, use it
           if (gradingWorkTypeId) {
             return String(gradingWorkTypeId) === String(workTypeId);
           }
-          
+
           // Fallback 1: Check gradings data fetched from GraphQL
           // This query returns all gradings for the project's workTypes with workType populated
           if (gradingsData?.gradingsByWorkType?.length > 0) {
@@ -659,20 +690,24 @@ const ProjectDetailDrawer = ({ projectId }) => {
             // If grading not in fetched data, exclude it (doesn't belong to any project workType)
             return false;
           }
-          
+
           // Fallback 2: If gradings data not loaded yet, check tasks for workType info
           const hasTaskInWorkType = tasks.some((task) => {
             const taskGradingId = task.gradingTask?.grading?.id;
             if (String(taskGradingId) !== String(gradingId)) return false;
-            
+
             const taskProjectGradings = task.project?.projectGradings || [];
             const matchingGrading = taskProjectGradings.find(
               (tpg) => String(tpg.grading?.id) === String(gradingId)
             );
-            const taskGradingWorkTypeId = matchingGrading?.grading?.workType?.id;
-            return taskGradingWorkTypeId && String(taskGradingWorkTypeId) === String(workTypeId);
+            const taskGradingWorkTypeId =
+              matchingGrading?.grading?.workType?.id;
+            return (
+              taskGradingWorkTypeId &&
+              String(taskGradingWorkTypeId) === String(workTypeId)
+            );
           });
-          
+
           return hasTaskInWorkType;
         });
 
@@ -687,13 +722,17 @@ const ProjectDetailDrawer = ({ projectId }) => {
             // Get ALL tasks for this specific grading
             const gradingTasks = tasks.filter((task) => {
               const taskGradingId = task.gradingTask?.grading?.id;
-              return taskGradingId && String(taskGradingId) === String(gradingId);
+              return (
+                taskGradingId && String(taskGradingId) === String(gradingId)
+              );
             });
 
             // Organize tasks by task type for display
             const tasksByType = {};
             gradingTasks.forEach((task) => {
-              const taskTypeId = task.taskType?.id ? String(task.taskType.id) : "no-tasktype";
+              const taskTypeId = task.taskType?.id
+                ? String(task.taskType.id)
+                : "no-tasktype";
               tasksByType[taskTypeId] = task;
             });
 
@@ -744,14 +783,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
 
   const workTypeTabs = getWorkTypeTabsData() || [];
 
-  if (loading || tasksLoading) {
-    return (
-      <div style={{ textAlign: "center", padding: "50px" }}>
-        <Spin size="large" />
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <Alert
@@ -763,61 +794,44 @@ const ProjectDetailDrawer = ({ projectId }) => {
     );
   }
 
+  // Show spinner only on initial load, not on refetch
+  if (isInitialLoad) {
+    return (
+      <div style={{ textAlign: "center", padding: "100px 0" }}>
+        <Spin size="large" />
+      </div>
+    );
+  }
+
   if (!project) {
     return <Empty description="Project not found" />;
   }
 
-  const totalImages = project.totalImageQuantity || project.imageQuantity || 0;
-  const completedImages = tasks.reduce(
-    (sum, task) => sum + (task.completedImageQuantity || 0),
-    0
-  );
-
   return (
-    <div style={{ padding: "0" }}>
-      {/* Project Statistics */}
-      {/* <Row gutter={16} style={{ marginBottom: 24 }}>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic
-              title="Total Tasks"
-              value={totalTasks}
-              prefix={<CheckCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic
-              title="Completed"
-              value={completedTasks}
-              suffix={`/ ${totalTasks}`}
-              valueStyle={{ color: "#3f8600" }}
-              prefix={<CheckCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic
-              title="Total Images"
-              value={totalImages}
-              prefix={<FileImageOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col span={6}>
-          <Card size="small">
-            <Statistic
-              title="Completed Images"
-              value={completedImages}
-              suffix={`/ ${totalImages}`}
-              valueStyle={{ color: "#3f8600" }}
-              prefix={<FileImageOutlined />}
-            />
-          </Card>
-        </Col>
-      </Row> */}
+    <div style={{ padding: "0", position: "relative", overflow: "auto" }}>
+      {/* Subtle loading indicator when refetching - doesn't block content */}
+      {isRefetching && cachedProject && (
+        <div
+          style={{
+            position: "absolute",
+            top: 16,
+            right: 16,
+            zIndex: 100,
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            backgroundColor: "rgba(24, 144, 255, 0.1)",
+            padding: "8px 16px",
+            borderRadius: "4px",
+            border: "1px solid #1890ff",
+          }}
+        >
+          <Spin size="small" />
+          <span style={{ color: "#1890ff", fontSize: "12px" }}>
+            Updating...
+          </span>
+        </div>
+      )}
 
       {/* Project Details Card */}
       <Card size="small" style={{ marginBottom: 16 }}>
@@ -889,10 +903,12 @@ const ProjectDetailDrawer = ({ projectId }) => {
         </Row>
       </Card>
 
-
-
       {/* Notes Section */}
-      <Card title={<Title level={4}>Notes</Title>} size="small" style={{ marginBottom: 16 }}>
+      <Card
+        title={<Title level={4}>Notes</Title>}
+        size="small"
+        style={{ marginBottom: 16 }}
+      >
         <Row gutter={12}>
           <Col span={12}>
             <Text strong>Project Internal Notes:</Text>
@@ -915,8 +931,12 @@ const ProjectDetailDrawer = ({ projectId }) => {
             />
           </Col>
         </Row>
-        <div style={{ marginTop: 12, textAlign: 'right' }}>
-          <Button type="primary" onClick={handleUpdateNotes} disabled={!canEditProjects}>
+        <div style={{ marginTop: 12, textAlign: "right" }}>
+          <Button
+            type="primary"
+            onClick={handleUpdateNotes}
+            disabled={!canEditProjects}
+          >
             Update Notes
           </Button>
         </div>
@@ -924,47 +944,120 @@ const ProjectDetailDrawer = ({ projectId }) => {
 
       {/* Client Information Section */}
       {project?.client && (
-        <Card title={<Title level={4}>Client Information</Title>} size="small" style={{ marginBottom: 16 }}>
+        <Card
+          title={<Title level={4}>Client Information</Title>}
+          size="small"
+          style={{ marginBottom: 16 }}
+        >
           <Row gutter={[24, 12]}>
             {/* Client Notes */}
             <Col span={8}>
-              <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
+              <Text
+                style={{
+                  fontSize: "12px",
+                  color: "#6B778C",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
                 <strong>Client Notes</strong>
               </Text>
               {project.client.clientNotes ? (
-                <Tag color="blue" style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px", maxWidth: "100%", whiteSpace: "normal", height: "auto" }}>
+                <Tag
+                  color="blue"
+                  style={{
+                    fontSize: "13px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                    maxWidth: "100%",
+                    whiteSpace: "normal",
+                    height: "auto",
+                  }}
+                >
                   {project.client.clientNotes}
                 </Tag>
               ) : (
-                <Tag style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>-</Tag>
+                <Tag
+                  style={{
+                    fontSize: "13px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                  }}
+                >
+                  -
+                </Tag>
               )}
             </Col>
 
             {/* Color Correction Style */}
             <Col span={8}>
-              <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
+              <Text
+                style={{
+                  fontSize: "12px",
+                  color: "#6B778C",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
                 <strong>Color Correction Style</strong>
               </Text>
               {project.client.colorCorrectionStyle ? (
-                <Tag color="cyan" style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>
+                <Tag
+                  color="cyan"
+                  style={{
+                    fontSize: "13px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                  }}
+                >
                   {project.client.colorCorrectionStyle}
                 </Tag>
               ) : (
-                <Tag style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>-</Tag>
+                <Tag
+                  style={{
+                    fontSize: "13px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                  }}
+                >
+                  -
+                </Tag>
               )}
             </Col>
 
             {/* Transfer Mode */}
             <Col span={8}>
-              <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
+              <Text
+                style={{
+                  fontSize: "12px",
+                  color: "#6B778C",
+                  display: "block",
+                  marginBottom: "8px",
+                }}
+              >
                 <strong>Transfer Mode</strong>
               </Text>
               {project.client.transferMode ? (
-                <Tag color="purple" style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>
+                <Tag
+                  color="purple"
+                  style={{
+                    fontSize: "13px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                  }}
+                >
                   {project.client.transferMode}
                 </Tag>
               ) : (
-                <Tag style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px" }}>-</Tag>
+                <Tag
+                  style={{
+                    fontSize: "13px",
+                    padding: "6px 12px",
+                    borderRadius: "6px",
+                  }}
+                >
+                  -
+                </Tag>
               )}
             </Col>
           </Row>
@@ -972,49 +1065,76 @@ const ProjectDetailDrawer = ({ projectId }) => {
       )}
 
       {/* Custom Fields Section */}
-      {project?.customFields && typeof project.customFields === "object" && Object.keys(project.customFields).length > 0 && (
-        <Card title={<Title level={4}>Additional Fields</Title>} size="small" style={{ marginBottom: 16 }}>
-          <Row gutter={[24, 12]}>
-            {Object.entries(project.customFields).map(([fieldKey, fieldValue], index) => {
-              // Format field label from key
-              const formatFieldLabel = (key) => {
-                return key
-                  .replace(/([A-Z])/g, " $1") // Add space before capital letters
-                  .replace(/_/g, " ") // Replace underscores with spaces
-                  .trim()
-                  .split(" ")
-                  .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                  .join(" ");
-              };
+      {project?.customFields &&
+        typeof project.customFields === "object" &&
+        Object.keys(project.customFields).length > 0 && (
+          <Card
+            title={<Title level={4}>Additional Fields</Title>}
+            size="small"
+            style={{ marginBottom: 16 }}
+          >
+            <Row gutter={[24, 12]}>
+              {Object.entries(project.customFields).map(
+                ([fieldKey, fieldValue], index) => {
+                  // Format field label from key
+                  const formatFieldLabel = (key) => {
+                    return key
+                      .replace(/([A-Z])/g, " $1") // Add space before capital letters
+                      .replace(/_/g, " ") // Replace underscores with spaces
+                      .trim()
+                      .split(" ")
+                      .map(
+                        (word) => word.charAt(0).toUpperCase() + word.slice(1)
+                      )
+                      .join(" ");
+                  };
 
-              // Format field value for display
-              const formatFieldValue = (value) => {
-                if (value === null || value === undefined || value === "") {
-                  return "-";
-                }
-                if (Array.isArray(value)) {
-                  return value.join(", ");
-                }
-                if (typeof value === "boolean") {
-                  return value ? "Yes" : "No";
-                }
-                return String(value);
-              };
+                  // Format field value for display
+                  const formatFieldValue = (value) => {
+                    if (value === null || value === undefined || value === "") {
+                      return "-";
+                    }
+                    if (Array.isArray(value)) {
+                      return value.join(", ");
+                    }
+                    if (typeof value === "boolean") {
+                      return value ? "Yes" : "No";
+                    }
+                    return String(value);
+                  };
 
-              return (
-                <Col span={8} key={`${fieldKey}-${index}`}>
-                  <Text style={{ fontSize: "12px", color: "#6B778C", display: "block", marginBottom: "8px" }}>
-                    <strong>{formatFieldLabel(fieldKey)}</strong>
-                  </Text>
-                  <Tag color="blue" style={{ fontSize: "13px", padding: "6px 12px", borderRadius: "6px", maxWidth: "100%", whiteSpace: "normal", height: "auto" }}>
-                    {formatFieldValue(fieldValue)}
-                  </Tag>
-                </Col>
-              );
-            })}
-          </Row>
-        </Card>
-      )}
+                  return (
+                    <Col span={8} key={`${fieldKey}-${index}`}>
+                      <Text
+                        style={{
+                          fontSize: "12px",
+                          color: "#6B778C",
+                          display: "block",
+                          marginBottom: "8px",
+                        }}
+                      >
+                        <strong>{formatFieldLabel(fieldKey)}</strong>
+                      </Text>
+                      <Tag
+                        color="blue"
+                        style={{
+                          fontSize: "13px",
+                          padding: "6px 12px",
+                          borderRadius: "6px",
+                          maxWidth: "100%",
+                          whiteSpace: "normal",
+                          height: "auto",
+                        }}
+                      >
+                        {formatFieldValue(fieldValue)}
+                      </Tag>
+                    </Col>
+                  );
+                }
+              )}
+            </Row>
+          </Card>
+        )}
 
       {/* Work Types Tables */}
       {workTypeTabs.length === 0 ? (
@@ -1052,19 +1172,45 @@ const ProjectDetailDrawer = ({ projectId }) => {
                 taskTypes={workType.taskTypes || []}
                 users={users}
                 projectId={projectId}
+                refetchTasks={refetch.tasks}
                 refetchQueries={[
                   {
                     query: GET_TASKS,
                     variables: {
-                      filters: { 
+                      filters: {
                         projectId: projectId,
-                        statuses: ["TODO", "IN_PROGRESS", "REVIEW", "REVISION", "COMPLETED", "CANCELLED", "ON_HOLD"],
-                        includeInactive: true
+                        statuses: [
+                          "TODO",
+                          "IN_PROGRESS",
+                          "REVIEW",
+                          "REVISION",
+                          "COMPLETED",
+                          "CANCELLED",
+                          "ON_HOLD",
+                        ],
+                        includeInactive: true,
                       },
                       page: 1,
                       limit: 1000,
                       sortBy: "createdAt",
                       sortOrder: "DESC",
+                    },
+                  },
+                  {
+                    query: GET_PROJECT_DETAIL,
+                    variables: { id: projectId },
+                  },
+                  {
+                    query: GET_PROJECT_AUDIT_HISTORY,
+                    variables: { projectId },
+                  },
+                  {
+                    query: GET_GRADINGS_BY_WORK_TYPES,
+                    variables: {
+                      workTypeIds:
+                        project?.projectWorkTypes?.map(
+                          (pwt) => pwt.workTypeId
+                        ) || [],
                     },
                   },
                 ]}
@@ -1112,16 +1258,29 @@ const ProjectDetailDrawer = ({ projectId }) => {
               <Row gutter={[16, 12]}>
                 <Col span={8}>
                   <Text type="secondary">Quote Number</Text>
-                  <div><Text strong>{quoteData.quoteNumber}</Text></div>
+                  <div>
+                    <Text strong>{quoteData.quoteNumber}</Text>
+                  </div>
                 </Col>
                 <Col span={8}>
                   <Text type="secondary">Quote Date</Text>
-                  <div><Text strong>{dayjs(quoteData.quoteDate).format("DD MMM YYYY")}</Text></div>
+                  <div>
+                    <Text strong>
+                      {dayjs(quoteData.quoteDate).format("DD MMM YYYY")}
+                    </Text>
+                  </div>
                 </Col>
                 <Col span={8}>
                   <Text type="secondary">Valid Until</Text>
                   <div>
-                    <Text strong type={dayjs(quoteData.validUntil).isBefore(dayjs()) ? "danger" : undefined}>
+                    <Text
+                      strong
+                      type={
+                        dayjs(quoteData.validUntil).isBefore(dayjs())
+                          ? "danger"
+                          : undefined
+                      }
+                    >
                       {dayjs(quoteData.validUntil).format("DD MMM YYYY")}
                     </Text>
                   </div>
@@ -1132,16 +1291,24 @@ const ProjectDetailDrawer = ({ projectId }) => {
             <Card size="small" title={<Text strong>Client & Project</Text>}>
               <Descriptions bordered size="small" column={2}>
                 <Descriptions.Item label="Client" span={1}>
-                  {quoteData.client?.displayName || quoteData.client?.companyName || quoteData.client?.clientCode || "N/A"}
+                  {quoteData.client?.displayName ||
+                    quoteData.client?.companyName ||
+                    quoteData.client?.clientCode ||
+                    "N/A"}
                 </Descriptions.Item>
                 <Descriptions.Item label="Contact" span={1}>
-                  {quoteData.client?.email || quoteData.client?.contactNoPersonal || quoteData.client?.mobile || "-"}
+                  {quoteData.client?.email ||
+                    quoteData.client?.contactNoPersonal ||
+                    quoteData.client?.mobile ||
+                    "-"}
                 </Descriptions.Item>
                 <Descriptions.Item label="Project Code" span={1}>
                   {quoteData.project?.projectCode || "N/A"}
                 </Descriptions.Item>
                 <Descriptions.Item label="Project Name" span={1}>
-                  {quoteData.project?.name || quoteData.project?.description || "N/A"}
+                  {quoteData.project?.name ||
+                    quoteData.project?.description ||
+                    "N/A"}
                 </Descriptions.Item>
                 <Descriptions.Item label="Images" span={1}>
                   {quoteData.totalImages}
@@ -1165,11 +1332,42 @@ const ProjectDetailDrawer = ({ projectId }) => {
                 pagination={false}
                 bordered
                 columns={[
-                  { title: "#", dataIndex: "line", width: "5%", align: "center" },
-                  { title: "Description", dataIndex: "description", width: "45%", render: (value) => <Text strong>{value}</Text> },
-                  { title: "Qty", dataIndex: "quantity", width: "15%", align: "center" },
-                  { title: "Rate", dataIndex: "rate", width: "15%", align: "right", render: (rate) => `₹${Number(rate || 0).toLocaleString()}` },
-                  { title: "Amount", dataIndex: "amount", width: "20%", align: "right", render: (amount) => <Text strong>₹{Number(amount || 0).toLocaleString()}</Text> },
+                  {
+                    title: "#",
+                    dataIndex: "line",
+                    width: "5%",
+                    align: "center",
+                  },
+                  {
+                    title: "Description",
+                    dataIndex: "description",
+                    width: "45%",
+                    render: (value) => <Text strong>{value}</Text>,
+                  },
+                  {
+                    title: "Qty",
+                    dataIndex: "quantity",
+                    width: "15%",
+                    align: "center",
+                  },
+                  {
+                    title: "Rate",
+                    dataIndex: "rate",
+                    width: "15%",
+                    align: "right",
+                    render: (rate) => `₹${Number(rate || 0).toLocaleString()}`,
+                  },
+                  {
+                    title: "Amount",
+                    dataIndex: "amount",
+                    width: "20%",
+                    align: "right",
+                    render: (amount) => (
+                      <Text strong>
+                        ₹{Number(amount || 0).toLocaleString()}
+                      </Text>
+                    ),
+                  },
                 ]}
                 summary={() => (
                   <Table.Summary fixed>
@@ -1178,7 +1376,9 @@ const ProjectDetailDrawer = ({ projectId }) => {
                         <Text strong>Subtotal</Text>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell colSpan={2} align="right">
-                        <Text strong>₹{quoteData.subtotal.toLocaleString()}</Text>
+                        <Text strong>
+                          ₹{quoteData.subtotal.toLocaleString()}
+                        </Text>
                       </Table.Summary.Cell>
                     </Table.Summary.Row>
                     {quoteData.discountAmount > 0 && (
@@ -1187,14 +1387,17 @@ const ProjectDetailDrawer = ({ projectId }) => {
                           <Text strong>Discount</Text>
                         </Table.Summary.Cell>
                         <Table.Summary.Cell colSpan={2} align="right">
-                          <Text type="danger">-₹{quoteData.discountAmount.toLocaleString()}</Text>
+                          <Text type="danger">
+                            -₹{quoteData.discountAmount.toLocaleString()}
+                          </Text>
                         </Table.Summary.Cell>
                       </Table.Summary.Row>
                     )}
                     <Table.Summary.Row style={{ backgroundColor: "#fafafa" }}>
                       <Table.Summary.Cell colSpan={3}>
                         <Text strong>
-                          Tax{quoteData.taxRate ? ` (${quoteData.taxRate}%)` : ""}
+                          Tax
+                          {quoteData.taxRate ? ` (${quoteData.taxRate}%)` : ""}
                         </Text>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell colSpan={2} align="right">
@@ -1203,10 +1406,15 @@ const ProjectDetailDrawer = ({ projectId }) => {
                     </Table.Summary.Row>
                     <Table.Summary.Row style={{ backgroundColor: "#e6fffb" }}>
                       <Table.Summary.Cell colSpan={3}>
-                        <Text strong style={{ fontSize: "16px" }}>Total Quote Amount</Text>
+                        <Text strong style={{ fontSize: "16px" }}>
+                          Total Quote Amount
+                        </Text>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell colSpan={2} align="right">
-                        <Text strong style={{ fontSize: "16px", color: "#13c2c2" }}>
+                        <Text
+                          strong
+                          style={{ fontSize: "16px", color: "#13c2c2" }}
+                        >
                           ₹{quoteData.totalAmount.toLocaleString()}
                         </Text>
                       </Table.Summary.Cell>
@@ -1226,7 +1434,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
         open={statusModalVisible}
         onCancel={() => {
           setStatusModalVisible(false);
-          setStatusSelectOpen(false);
         }}
         onOk={handleSaveStatus}
         okButtonProps={{ disabled: !statusValue }}
@@ -1237,19 +1444,21 @@ const ProjectDetailDrawer = ({ projectId }) => {
             value={statusValue}
             onChange={setStatusValue}
             style={{ width: "100%" }}
-            open={statusSelectOpen}
-            onDropdownVisibleChange={(open) => setStatusSelectOpen(open)}
             options={(() => {
               const options = Object.entries(STATUS_MAP).map(([key, cfg]) => ({
                 value: key.toLowerCase(),
                 label: cfg.label,
               }));
-              
+
               // If completed, show only "delivered" or "reopen" (invoice not required)
-              if ((project?.status || '').toString().toUpperCase() === 'COMPLETED') {
-                return options.filter(opt => opt.value === 'delivered' || opt.value === 'reopen');
+              if (
+                (project?.status || "").toString().toUpperCase() === "COMPLETED"
+              ) {
+                return options.filter(
+                  (opt) => opt.value === "delivered" || opt.value === "reopen"
+                );
               }
-              
+
               return options;
             })()}
           />
@@ -1273,6 +1482,14 @@ const ProjectDetailDrawer = ({ projectId }) => {
           />
         </Space>
       </Modal>
+
+      {/* Reminder Notes Modal */}
+      <ReminderNotesModal
+        visible={reminderNotesModalVisible}
+        projectId={projectId}
+        onClose={() => setReminderNotesModalVisible(false)}
+        onSuccess={() => refetch.all()}
+      />
     </div>
   );
 };

@@ -28,6 +28,7 @@ import {
   EyeOutlined,
   PlayCircleOutlined,
   ReloadOutlined,
+  FileTextOutlined,
 } from "@ant-design/icons";
 import { useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import {
@@ -43,6 +44,7 @@ import { GET_GRADINGS } from "../../graphql/gradingQueries";
 import { useAppDrawer } from "../../contexts/DrawerContext";
 import dayjs from "dayjs";
 import { userCacheVar } from "../../cache/userCacheVar";
+import ReminderNotesModal from "../../components/ReminderNotesModal";
 import {
   getMyClientsFilterFromCookie,
   saveMyClientsFilterToCookie,
@@ -84,6 +86,8 @@ const ProjectList = () => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [modalVisible, setModalVisible] = useState(false);
   const [modalType, setModalType] = useState("view"); // 'view', 'create', 'edit'
+  const [reminderNotesModalVisible, setReminderNotesModalVisible] = useState(false);
+  const [reminderNotesProjectId, setReminderNotesProjectId] = useState(null);
   const [form] = Form.useForm();
   const [myClientsOnly, setMyClientsOnly] = useState(
     getMyClientsFilterFromCookie(currentUser?.isServiceProvider === true)
@@ -350,7 +354,7 @@ const ProjectList = () => {
     {
       title: "Actions",
       key: "actions",
-      width: 120,
+      width: 150,
       fixed: "right",
       render: (_, record) => (
         <Space size="small">
@@ -360,6 +364,17 @@ const ProjectList = () => {
               icon={<EyeOutlined />}
               size="small"
               onClick={() => handleView(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Add Note">
+            <Button
+              type="link"
+              icon={<FileTextOutlined />}
+              size="small"
+              onClick={() => {
+                setReminderNotesProjectId(record.id);
+                setReminderNotesModalVisible(true);
+              }}
             />
           </Tooltip>
           <Tooltip title="Edit Project">
@@ -703,6 +718,17 @@ const ProjectList = () => {
           />
         )}
       </Modal>
+
+      {/* Reminder Notes Modal */}
+      <ReminderNotesModal
+        visible={reminderNotesModalVisible}
+        projectId={reminderNotesProjectId}
+        onClose={() => {
+          setReminderNotesModalVisible(false);
+          setReminderNotesProjectId(null);
+        }}
+        onSuccess={() => refetchProjects()}
+      />
     </div>
   );
 };

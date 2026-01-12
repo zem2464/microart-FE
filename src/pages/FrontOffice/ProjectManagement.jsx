@@ -63,6 +63,7 @@ import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import { GENERATE_PROJECT_INVOICE } from "../../gql/clientLedger";
 // tasks are loaded in ProjectDetail drawer when needed
 import { AppDrawerContext } from "../../contexts/DrawerContext";
+import ReminderNotesModal from "../../components/ReminderNotesModal";
 import dayjs from "dayjs";
 import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../../cache/userCacheVar";
@@ -187,6 +188,11 @@ const ProjectManagement = () => {
   const [editingStatus, setEditingStatus] = useState({});
   const [tempValues, setTempValues] = useState({});
 
+  // Reminder notes modal state
+  const [reminderNotesModalVisible, setReminderNotesModalVisible] =
+    useState(false);
+  const [reminderNotesProjectId, setReminderNotesProjectId] = useState(null);
+
   // Build filters object for GraphQL query
   const buildFilters = useCallback(() => {
     const filters = {};
@@ -220,13 +226,20 @@ const ProjectManagement = () => {
     // Add deadline date range filter
     if (deadlineDateRange && deadlineDateRange[0] && deadlineDateRange[1]) {
       filters.dateRange = {
-        start: deadlineDateRange[0].startOf('day').toISOString(),
-        end: deadlineDateRange[1].endOf('day').toISOString(),
+        start: deadlineDateRange[0].startOf("day").toISOString(),
+        end: deadlineDateRange[1].endOf("day").toISOString(),
       };
     }
 
     return filters;
-  }, [statusFilter, clientFilter, workTypeFilter, myClientsOnly, user?.id, deadlineDateRange]);
+  }, [
+    statusFilter,
+    clientFilter,
+    workTypeFilter,
+    myClientsOnly,
+    user?.id,
+    deadlineDateRange,
+  ]);
 
   // GraphQL Queries
   const {
@@ -738,18 +751,21 @@ const ProjectManagement = () => {
   };
 
   const handleDeleteProject = (project) => {
-    let voidReasonInput = '';
+    let voidReasonInput = "";
     Modal.confirm({
       title: "Are you sure you want to delete this project?",
       content: (
         <div>
           <p style={{ marginBottom: 16 }}>
-            This will permanently delete "{project.projectCode}" and all associated data.
+            This will permanently delete "{project.projectCode}" and all
+            associated data.
           </p>
           <Input.TextArea
             placeholder="Please provide a reason for deleting this project (required)"
             rows={3}
-            onChange={(e) => { voidReasonInput = e.target.value; }}
+            onChange={(e) => {
+              voidReasonInput = e.target.value;
+            }}
             autoFocus
           />
         </div>
@@ -758,14 +774,14 @@ const ProjectManagement = () => {
       okType: "danger",
       cancelText: "Cancel",
       onOk: () => {
-        if (!voidReasonInput || voidReasonInput.trim() === '') {
-          message.error('Void reason is required');
-          return Promise.reject('Void reason required');
+        if (!voidReasonInput || voidReasonInput.trim() === "") {
+          message.error("Void reason is required");
+          return Promise.reject("Void reason required");
         }
         return deleteProject({
-          variables: { 
+          variables: {
             id: project.id,
-            voidReason: voidReasonInput.trim() 
+            voidReason: voidReasonInput.trim(),
           },
         });
       },
@@ -1146,12 +1162,11 @@ const ProjectManagement = () => {
         const isCompleted = record.status?.toLowerCase() === "completed";
 
         // If project is completed, show ONLY delivered or reopen option (invoice not required)
-        const filteredStatusOptions =
-          isCompleted
-            ? statusOptions.filter(
-                (opt) => opt.value === "delivered" || opt.value === "reopen"
-              )
-            : statusOptions;
+        const filteredStatusOptions = isCompleted
+          ? statusOptions.filter(
+              (opt) => opt.value === "delivered" || opt.value === "reopen"
+            )
+          : statusOptions;
 
         if (isEditing) {
           return (
@@ -1342,6 +1357,16 @@ const ProjectManagement = () => {
               onClick={() => handleViewProject(record)}
             />
           </Tooltip>
+          <Tooltip title="Add Note">
+            <Button
+              type="text"
+              icon={<FileTextOutlined />}
+              onClick={() => {
+                setReminderNotesProjectId(record.id);
+                setReminderNotesModalVisible(true);
+              }}
+            />
+          </Tooltip>
           {canEditProjects &&
             (record.status || "").toString().toUpperCase() !== "COMPLETED" && (
               <Tooltip title="Edit">
@@ -1493,242 +1518,265 @@ const ProjectManagement = () => {
           <Row gutter={16} align="middle" style={{ marginBottom: 12 }}>
             {/* Inline Statistics - Compact Badges */}
             <Col flex="auto">
-              <Space size={16} style={{ display: "flex", justifyContent: "space-between", width: "100%" }}>
-                <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-                <Space
-                  size={4}
+              <Space
+                size={16}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  width: "100%",
+                }}
+              >
+                <div
                   style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
+                    display: "flex",
+                    gap: 16,
+                    alignItems: "center",
+                    flexWrap: "wrap",
                   }}
-                  className="hover:bg-gray-100"
-                  onClick={() => setStatusFilter("DRAFT")}
                 >
-                  <EditOutlined style={{ fontSize: 16, color: "#faad14" }} />
-                  <Text strong style={{ fontSize: 14 }}>
-                    Draft:
-                  </Text>
-                  <Tag
-                    color="orange"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                    }}
+                    className="hover:bg-gray-100"
+                    onClick={() => setStatusFilter("DRAFT")}
                   >
-                    {stats.draft}
-                  </Tag>
-                </Space>
-                <Space
-                  size={4}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
-                  }}
-                  className="hover:bg-gray-100"
-                  onClick={() => setStatusFilter("all")}
-                >
-                  <ProjectOutlined style={{ fontSize: 16, color: "#1890ff" }} />
-                  <Text strong style={{ fontSize: 14 }}>
-                    Total:
-                  </Text>
-                  <Tag
-                    color="blue"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
-                  >
-                    {stats.total}
-                  </Tag>
-                </Space>
-                <Space
-                  size={4}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
-                  }}
-                  className="hover:bg-gray-100"
-                  onClick={() => setStatusFilter("ACTIVE")}
-                >
-                  <PlayCircleOutlined
-                    style={{ fontSize: 16, color: "#52c41a" }}
-                  />
-                  <Text strong style={{ fontSize: 14 }}>
-                    Active:
-                  </Text>
-                  <Tag
-                    color="green"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
-                  >
-                    {stats.active}
-                  </Tag>
-                </Space>
-                <Space
-                  size={4}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
-                  }}
-                  className="hover:bg-gray-100"
-                  onClick={() => setStatusFilter("IN_PROGRESS")}
-                >
-                  <ClockCircleOutlined
-                    style={{ fontSize: 16, color: "#1890ff" }}
-                  />
-                  <Text strong style={{ fontSize: 14 }}>
-                    In Progress:
-                  </Text>
-                  <Tag
-                    color="blue"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
-                  >
-                    {stats.inProgress}
-                  </Tag>
-                </Space>
-                <Space
-                  size={4}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
-                  }}
-                  className="hover:bg-gray-100"
-                  onClick={() => setStatusFilter("REOPEN")}
-                >
-                  <ReloadOutlined style={{ fontSize: 16, color: "#eb2f96" }} />
-                  <Text strong style={{ fontSize: 14 }}>
-                    Reopen:
-                  </Text>
-                  <Tag
-                    color="magenta"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
-                  >
-                    {stats.reopen}
-                  </Tag>
-                </Space>
-                <Space
-                  size={4}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
-                    backgroundColor:
-                      stats.noInvoice > 0 ? "#fff7e6" : "transparent",
-                    border: stats.noInvoice > 0 ? "1px solid #ffa940" : "none",
-                  }}
-                  className="hover:bg-orange-100"
-                  onClick={() => setStatusFilter("NO_INVOICE")}
-                >
-                  <ExclamationCircleOutlined
-                    style={{ fontSize: 16, color: "#fa8c16" }}
-                  />
-                  <Text strong style={{ fontSize: 14 }}>
-                    Completed (No Invoice):
-                  </Text>
-                  <Tag
-                    color="orange"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
-                  >
-                    {stats.noInvoice}
-                  </Tag>
-                </Space>
-                <Space
-                  size={4}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
-                    backgroundColor:
-                      stats.notDelivered > 0 ? "#e6f7ff" : "transparent",
-                    border:
-                      stats.notDelivered > 0 ? "1px solid #1890ff" : "none",
-                  }}
-                  className="hover:bg-blue-100"
-                  onClick={() => setStatusFilter("COMPLETED")}
-                >
-                  <CheckCircleOutlined
-                    style={{ fontSize: 16, color: "#1890ff" }}
-                  />
-                  <Text strong style={{ fontSize: 14 }}>
-                    Not Delivered:
-                  </Text>
-                  <Tag
-                    color="cyan"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
-                  >
-                    {stats.notDelivered}
-                  </Tag>
-                </Space>
-                <Space
-                  size={4}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
-                    backgroundColor:
-                      stats.deliveredNoInvoice > 0 ? "#f6e7ff" : "transparent",
-                    border:
-                      stats.deliveredNoInvoice > 0 ? "1px solid #b37feb" : "none",
-                  }}
-                  className="hover:bg-purple-100"
-                  onClick={() => setStatusFilter("DELIVERED_NO_INVOICE")}
-                >
-                  <CheckCircleOutlined
-                    style={{ fontSize: 16, color: "#b37feb" }}
-                  />
-                  <Text strong style={{ fontSize: 14 }}>
-                    Delivered (No Invoice):
-                  </Text>
-                  <Tag
-                    color="purple"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
-                  >
-                    {stats.deliveredNoInvoice}
-                  </Tag>
-                </Space>
-                <Space
-                  size={4}
-                  style={{
-                    cursor: "pointer",
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    transition: "background-color 0.3s",
-                  }}
-                  className="hover:bg-gray-100"
-                  onClick={() => setStatusFilter("REQUESTED")}
-                >
-                  <CheckCircleOutlined
-                    style={{ fontSize: 16, color: "#722ed1" }}
-                  />
-                  <Text strong style={{ fontSize: 14 }}>
-                    Fly-on-Credit:
-                  </Text>
-                  <Tag
-                    color="purple"
-                    style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
-                  >
-                    {stats.flyOnCredit}
-                  </Tag>
-                </Space>
-                {user?.isServiceProvider && (
-                  <Space>
-                    {/* My Clients Only filter - visible only for service providers */}
-                    <Checkbox
-                      checked={myClientsOnly}
-                      onChange={(e) => setMyClientsOnly(e.target.checked)}
+                    <EditOutlined style={{ fontSize: 16, color: "#faad14" }} />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Draft:
+                    </Text>
+                    <Tag
+                      color="orange"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
-                      <Text strong style={{ fontSize: 14 }}>
-                        My Clients
-                      </Text>
-                    </Checkbox>
+                      {stats.draft}
+                    </Tag>
                   </Space>
-                )}
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                    }}
+                    className="hover:bg-gray-100"
+                    onClick={() => setStatusFilter("all")}
+                  >
+                    <ProjectOutlined
+                      style={{ fontSize: 16, color: "#1890ff" }}
+                    />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Total:
+                    </Text>
+                    <Tag
+                      color="blue"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                    >
+                      {stats.total}
+                    </Tag>
+                  </Space>
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                    }}
+                    className="hover:bg-gray-100"
+                    onClick={() => setStatusFilter("ACTIVE")}
+                  >
+                    <PlayCircleOutlined
+                      style={{ fontSize: 16, color: "#52c41a" }}
+                    />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Active:
+                    </Text>
+                    <Tag
+                      color="green"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                    >
+                      {stats.active}
+                    </Tag>
+                  </Space>
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                    }}
+                    className="hover:bg-gray-100"
+                    onClick={() => setStatusFilter("IN_PROGRESS")}
+                  >
+                    <ClockCircleOutlined
+                      style={{ fontSize: 16, color: "#1890ff" }}
+                    />
+                    <Text strong style={{ fontSize: 14 }}>
+                      In Progress:
+                    </Text>
+                    <Tag
+                      color="blue"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                    >
+                      {stats.inProgress}
+                    </Tag>
+                  </Space>
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                    }}
+                    className="hover:bg-gray-100"
+                    onClick={() => setStatusFilter("REOPEN")}
+                  >
+                    <ReloadOutlined
+                      style={{ fontSize: 16, color: "#eb2f96" }}
+                    />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Reopen:
+                    </Text>
+                    <Tag
+                      color="magenta"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                    >
+                      {stats.reopen}
+                    </Tag>
+                  </Space>
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                      backgroundColor:
+                        stats.noInvoice > 0 ? "#fff7e6" : "transparent",
+                      border:
+                        stats.noInvoice > 0 ? "1px solid #ffa940" : "none",
+                    }}
+                    className="hover:bg-orange-100"
+                    onClick={() => setStatusFilter("NO_INVOICE")}
+                  >
+                    <ExclamationCircleOutlined
+                      style={{ fontSize: 16, color: "#fa8c16" }}
+                    />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Completed (No Invoice):
+                    </Text>
+                    <Tag
+                      color="orange"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                    >
+                      {stats.noInvoice}
+                    </Tag>
+                  </Space>
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                      backgroundColor:
+                        stats.notDelivered > 0 ? "#e6f7ff" : "transparent",
+                      border:
+                        stats.notDelivered > 0 ? "1px solid #1890ff" : "none",
+                    }}
+                    className="hover:bg-blue-100"
+                    onClick={() => setStatusFilter("COMPLETED")}
+                  >
+                    <CheckCircleOutlined
+                      style={{ fontSize: 16, color: "#1890ff" }}
+                    />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Not Delivered:
+                    </Text>
+                    <Tag
+                      color="cyan"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                    >
+                      {stats.notDelivered}
+                    </Tag>
+                  </Space>
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                      backgroundColor:
+                        stats.deliveredNoInvoice > 0
+                          ? "#f6e7ff"
+                          : "transparent",
+                      border:
+                        stats.deliveredNoInvoice > 0
+                          ? "1px solid #b37feb"
+                          : "none",
+                    }}
+                    className="hover:bg-purple-100"
+                    onClick={() => setStatusFilter("DELIVERED_NO_INVOICE")}
+                  >
+                    <CheckCircleOutlined
+                      style={{ fontSize: 16, color: "#b37feb" }}
+                    />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Delivered (No Invoice):
+                    </Text>
+                    <Tag
+                      color="purple"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                    >
+                      {stats.deliveredNoInvoice}
+                    </Tag>
+                  </Space>
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                    }}
+                    className="hover:bg-gray-100"
+                    onClick={() => setStatusFilter("REQUESTED")}
+                  >
+                    <CheckCircleOutlined
+                      style={{ fontSize: 16, color: "#722ed1" }}
+                    />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Fly-on-Credit:
+                    </Text>
+                    <Tag
+                      color="purple"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                    >
+                      {stats.flyOnCredit}
+                    </Tag>
+                  </Space>
+                  {user?.isServiceProvider && (
+                    <Space>
+                      {/* My Clients Only filter - visible only for service providers */}
+                      <Checkbox
+                        checked={myClientsOnly}
+                        onChange={(e) => setMyClientsOnly(e.target.checked)}
+                      >
+                        <Text strong style={{ fontSize: 14 }}>
+                          My Clients
+                        </Text>
+                      </Checkbox>
+                    </Space>
+                  )}
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <Tooltip title="Refresh">
@@ -2275,181 +2323,17 @@ const ProjectManagement = () => {
           </div>
         )}
       </Modal>
-    </div>
-  );
-};
 
-// Project Details Component
-const ProjectDetails = ({ project, tasks, tasksLoading, onBack }) => {
-  const completedTasks = tasks.filter(
-    (task) => task.status === "completed"
-  ).length;
-  const totalTasks = tasks.length;
-  const progressPercent =
-    totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
-
-  return (
-    <div>
-      <div style={{ marginBottom: 16 }}>
-        <Button onClick={onBack}>← Back to Projects</Button>
-      </div>
-
-      <Row gutter={16}>
-        <Col span={16}>
-          <Card title={project.projectCode} style={{ marginBottom: 16 }}>
-            <Descriptions column={2}>
-              <Descriptions.Item label="Project Number">
-                <Text code>{project.projectNumber}</Text>
-              </Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Tag
-                  color={
-                    (STATUS_MAP[project.status.toLowerCase()] || {}).color ||
-                    "default"
-                  }
-                >
-                  {(STATUS_MAP[project.status.toLowerCase()] || {}).label ||
-                    project.status}
-                </Tag>
-              </Descriptions.Item>
-              <Descriptions.Item label="Client">
-                {project.client ? getClientDisplayName(project.client) : "N/A"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Work Type">
-                {project.workType?.name || "N/A"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Grading">
-                {project.grading?.name || "N/A"} - ₹
-                {project.grading?.defaultRate || 0}
-              </Descriptions.Item>
-              <Descriptions.Item label="Budget">
-                {project.estimatedCost
-                  ? `₹${project.estimatedCost.toLocaleString()}`
-                  : "N/A"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Deadline">
-                {project.deadlineDate
-                  ? dayjs(project.deadlineDate).format("MMMM DD, YYYY")
-                  : "No deadline"}
-              </Descriptions.Item>
-              <Descriptions.Item label="Created">
-                {dayjs(project.createdAt).format("MMMM DD, YYYY")}
-              </Descriptions.Item>
-            </Descriptions>
-
-            {project.description && (
-              <>
-                <Divider />
-                <Text strong>Description:</Text>
-                <div style={{ marginTop: 8 }}>
-                  <Text>{project.description}</Text>
-                </div>
-              </>
-            )}
-          </Card>
-
-          <Card title="Project Tasks" loading={tasksLoading}>
-            {tasks.length > 0 ? (
-              <Table
-                dataSource={tasks}
-                rowKey="id"
-                pagination={false}
-                size="small"
-                columns={[
-                  {
-                    title: "Task Number",
-                    dataIndex: "taskNumber",
-                    key: "taskNumber",
-                    render: (text) => <Text code>{text}</Text>,
-                  },
-                  {
-                    title: "Description",
-                    dataIndex: "description",
-                    key: "description",
-                  },
-                  {
-                    title: "Status",
-                    dataIndex: "status",
-                    key: "status",
-                    render: (status) => (
-                      <Tag
-                        color={
-                          status === "completed"
-                            ? "green"
-                            : status === "IN_PROGRESS"
-                            ? "blue"
-                            : "orange"
-                        }
-                      >
-                        {status}
-                      </Tag>
-                    ),
-                  },
-                  {
-                    title: "Assigned To",
-                    dataIndex: ["assignedTo", "firstName"],
-                    key: "assignedTo",
-                    render: (firstName, record) =>
-                      firstName
-                        ? `${firstName} ${record.assignedTo?.lastName || ""}`
-                        : "Unassigned",
-                  },
-                  {
-                    title: "Created",
-                    dataIndex: "createdAt",
-                    key: "createdAt",
-                    render: (date) => dayjs(date).format("MMM DD, YYYY"),
-                  },
-                ]}
-              />
-            ) : (
-              <Empty description="No tasks created yet" />
-            )}
-          </Card>
-        </Col>
-
-        <Col span={8}>
-          <Card title="Project Progress" style={{ marginBottom: 16 }}>
-            <div style={{ textAlign: "center", marginBottom: 16 }}>
-              <Progress
-                type="circle"
-                percent={progressPercent}
-                format={() => `${completedTasks}/${totalTasks}`}
-              />
-            </div>
-            <Statistic
-              title="Tasks completed"
-              value={completedTasks}
-              suffix={`/ ${totalTasks}`}
-            />
-          </Card>
-
-          <Card title="Project Timeline">
-            <Timeline
-              items={[
-                {
-                  children: `Created on ${dayjs(project.createdAt).format(
-                    "MMM DD, YYYY"
-                  )}`,
-                  color: "blue",
-                },
-                project.status === "ACTIVE" && {
-                  children: "Project activated",
-                  color: "green",
-                },
-                project.deadlineDate && {
-                  children: `Deadline: ${dayjs(project.deadlineDate).format(
-                    "MMM DD, YYYY"
-                  )}`,
-                  color: dayjs(project.deadlineDate).isAfter(dayjs())
-                    ? "orange"
-                    : "red",
-                },
-              ].filter(Boolean)}
-            />
-          </Card>
-        </Col>
-      </Row>
+      {/* Reminder Notes Modal */}
+      <ReminderNotesModal
+        visible={reminderNotesModalVisible}
+        projectId={reminderNotesProjectId}
+        onClose={() => {
+          setReminderNotesModalVisible(false);
+          setReminderNotesProjectId(null);
+        }}
+        onSuccess={() => refetchProjects()}
+      />
     </div>
   );
 };

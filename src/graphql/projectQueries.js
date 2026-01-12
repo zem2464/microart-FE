@@ -815,6 +815,25 @@ export const GET_PROJECT_DETAIL = gql`
         updatedAt
       }
       
+      # Credit Request Information (for fly-on-credit projects)
+      creditRequest {
+        id
+        requestedAmount
+        availableCredit
+        creditLimit
+        excessAmount
+        status
+        intendedStatus
+        requestNotes
+        approvedBy
+        approvedAt
+        approvalNotes
+        rejectedBy
+        rejectedAt
+        createdAt
+        updatedAt
+      }
+      
       # Creator and Updater
       creator {
         id
@@ -828,6 +847,55 @@ export const GET_PROJECT_DETAIL = gql`
         firstName
         lastName
         email
+      }
+    }
+  }
+`;
+
+// Project Subscriptions
+export const PROJECT_UPDATED_SUBSCRIPTION = gql`
+  subscription ProjectUpdated($projectId: ID!) {
+    projectUpdated(projectId: $projectId) {
+      id
+      projectCode
+      name
+      status
+      priority
+      deadlineDate
+      totalImageQuantity
+      estimatedCost
+      actualCost
+      completedTaskCount
+      taskCount
+      updatedAt
+    }
+  }
+`;
+
+export const PROJECT_TASKS_UPDATED_SUBSCRIPTION = gql`
+  subscription ProjectTasksUpdated($projectId: ID!) {
+    projectTasksUpdated(projectId: $projectId) {
+      projectId
+      taskId
+      updateType
+      task {
+        id
+        taskCode
+        status
+        priority
+        completedImageQuantity
+        imageQuantity
+        taskAssignments {
+          id
+          userId
+          imageQuantity
+          completedImageQuantity
+          user {
+            id
+            firstName
+            lastName
+          }
+        }
       }
     }
   }

@@ -43,7 +43,10 @@ import {
   BULK_UPDATE_TASK_STATUS,
   GET_TASKS_DASHBOARD,
 } from "../../gql/tasks";
-import { GET_AVAILABLE_USERS, UPDATE_PROJECT } from "../../graphql/projectQueries";
+import {
+  GET_AVAILABLE_USERS,
+  UPDATE_PROJECT,
+} from "../../graphql/projectQueries";
 import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import { GET_GRADINGS_BY_WORK_TYPE } from "../../graphql/gradingQueries";
 import { userCacheVar } from "../../cache/userCacheVar";
@@ -53,6 +56,7 @@ import {
   DELETE_TASK_ASSIGNMENT,
   UPDATE_TASK_ASSIGNMENT,
 } from "../../gql/taskAssignments";
+import ProjectReminderNotesPopover from "../../components/ProjectReminderNotesPopover.jsx";
 import {
   getTaskFiltersFromCookie,
   saveTaskFiltersToCookie,
@@ -164,6 +168,11 @@ const TaskTable = () => {
     currentUser?.isServiceProvider === true ? savedFilters.myClientsOnly : false
   );
   const [dueDateRange, setDueDateRange] = useState([null, null]);
+
+  // Reminder notes state - cache notes by projectId
+  const [projectReminderNotesCache, setProjectReminderNotesCache] = useState(
+    {}
+  );
 
   // Reset filters to default values
   const handleResetFilters = useCallback(() => {
@@ -362,8 +371,8 @@ const TaskTable = () => {
 
     // Add due date range filter
     if (dueDateRange && dueDateRange[0] && dueDateRange[1]) {
-      filters.dueDateFrom = dueDateRange[0].startOf('day').toISOString();
-      filters.dueDateTo = dueDateRange[1].endOf('day').toISOString();
+      filters.dueDateFrom = dueDateRange[0].startOf("day").toISOString();
+      filters.dueDateTo = dueDateRange[1].endOf("day").toISOString();
     }
 
     return filters;
@@ -477,7 +486,7 @@ const TaskTable = () => {
   // Update project mutation (for deadline changes)
   const [updateProject] = useMutation(UPDATE_PROJECT, {
     onCompleted: async (data) => {
-      console.log('[updateProject] Mutation completed with data:', data);
+      console.log("[updateProject] Mutation completed with data:", data);
       message.success("Project deadline updated successfully");
       // Refetch tasks with the latest filters applied
       await refetchTasks({
@@ -493,7 +502,7 @@ const TaskTable = () => {
       setIsInlineUpdating(false);
     },
     onError: (error) => {
-      console.error('[updateProject] Mutation error:', error);
+      console.error("[updateProject] Mutation error:", error);
       message.error(`Failed to update project deadline: ${error.message}`);
       setIsInlineUpdating(false);
     },
@@ -778,7 +787,7 @@ const TaskTable = () => {
       const taskTypeId = task.taskType?.id
         ? String(task.taskType.id)
         : "no-tasktype";
-      
+
       // NOTE: This overwrites previous tasks with the same taskTypeId
       // For grading-based filtering, we rely on tasksByTypeForGrading created later
       grouped[workTypeId].projects[projectId].tasks[taskTypeId] = task;
@@ -865,7 +874,8 @@ const TaskTable = () => {
           gradings.forEach((grading, idx) => {
             // Get the actual grading ID from the nested grading object
             // grading here is a ProjectGrading with nested grading object
-            const gradingId = grading.grading?.id || grading.gradingId || grading.id;
+            const gradingId =
+              grading.grading?.id || grading.gradingId || grading.id;
 
             // Filter tasks for this specific grading
             const gradingTasks = projectData.tasksList.filter((task) => {
@@ -1257,9 +1267,14 @@ const TaskTable = () => {
       } else if (field === "dueDate") {
         // Update project deadline instead of task due date
         setIsInlineUpdating(true);
-        console.log(`[saveTaskCell] Updating project deadline for project ${task.projectId}:`, {
-          deadlineDate: editedData.dueDate ? dayjs(editedData.dueDate).toISOString() : null
-        });
+        console.log(
+          `[saveTaskCell] Updating project deadline for project ${task.projectId}:`,
+          {
+            deadlineDate: editedData.dueDate
+              ? dayjs(editedData.dueDate).toISOString()
+              : null,
+          }
+        );
         await updateProject({
           variables: {
             id: task.projectId,
@@ -1318,12 +1333,21 @@ const TaskTable = () => {
         title: "Project / Client",
         dataIndex: "projectCode",
         key: "project",
-        width: 180,
+        width: 200,
         fixed: "left",
         ellipsis: true,
         render: (text, record) => (
-          <div style={{ fontSize: 12 }}>
-            <div style={{ color: "#262626", fontWeight: 600, marginBottom: 2 }}>
+          <div style={{ fontSize: 12 }} className="overflow-visible">
+            <div
+              style={{
+                color: "#262626",
+                fontWeight: 600,
+                marginBottom: 2,
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+              }}
+            >
               <Button
                 type="link"
                 size="small"
@@ -1333,6 +1357,7 @@ const TaskTable = () => {
                 {text}
                 {record.projectName ? ` - ${record.projectName}` : ""}
               </Button>
+              <ProjectReminderNotesPopover projectId={record.projectId} />
             </div>
             <div style={{ color: "#66666", fontSize: 14, fontWeight: 600 }}>
               {record.clientCode}

@@ -359,16 +359,19 @@ const ClientForm = ({
     // Create a map to avoid duplicates
     const userMap = new Map();
     
-    // Step 1: Add ALL users from the API with full details
+    // Step 1: Add only users with isServiceProvider flag set to true
     users.forEach(user => {
-      userMap.set(user.id, {
-        id: user.id,
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        email: user.email,
-        // Include all other user fields
-        ...user
-      });
+      // Filter to only include service providers
+      if (user.isServiceProvider) {
+        userMap.set(user.id, {
+          id: user.id,
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          email: user.email,
+          // Include all other user fields
+          ...user
+        });
+      }
     });
     
     // Step 2: For each service provider in client, ensure we have the full user data
