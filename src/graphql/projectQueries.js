@@ -711,6 +711,12 @@ export const GET_PROJECT_STATS = gql`
       noInvoiceCount
       noInvoiceEstimatedCost
       noInvoiceActualCost
+      totalNoInvoiceCount
+      totalNoInvoiceEstimatedCost
+      totalNoInvoiceActualCost
+      totalInvoiceCount
+      totalInvoiceEstimatedCost
+      totalInvoiceActualCost
       notDeliveredCount
       notDeliveredEstimatedCost
       notDeliveredActualCost

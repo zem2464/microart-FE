@@ -92,6 +92,11 @@ const TASK_STATUS = {
     color: "green",
     icon: <CheckCircleOutlined />,
   },
+  DELIVERED: {
+    label: "Delivered",
+    color: "cyan",
+    icon: <CheckCircleOutlined />,
+  },
   REVISION: {
     label: "Re-Open",
     color: "orange",

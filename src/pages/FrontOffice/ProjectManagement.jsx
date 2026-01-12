@@ -200,6 +200,17 @@ const ProjectManagement = () => {
     if (statusFilter !== "all") {
       if (statusFilter === "NO_INVOICE") {
         filters.noInvoice = true;
+        // Default to completed status for this filter
+      } else if (statusFilter === "TOTAL_NO_INVOICE") {
+        // Show all projects without any invoice (any status) - use special flag
+        filters.noInvoice = true;
+        filters.totalNoInvoice = true; // Flag to indicate no status restriction
+      } else if (statusFilter === "TOTAL_INVOICE") {
+        // Show all projects WITH invoices (any status)
+        filters.hasInvoice = true;
+      } else if (statusFilter === "DELIVERED") {
+        // Show all delivered projects
+        filters.status = "DELIVERED";
       } else if (statusFilter === "DELIVERED_NO_INVOICE") {
         // Combine status + noInvoice to derive delivered-without-invoice server-side
         filters.status = "DELIVERED";
@@ -720,8 +731,10 @@ const ProjectManagement = () => {
     reopen: statsMap.reopen?.count || 0,
     flyOnCredit: projectStatsResponse.flyOnCreditCount || 0, // Use dedicated fly-on-credit count from response
     noInvoice: projectStatsResponse.noInvoiceCount || 0, // Completed projects without invoices
+    totalInvoice: projectStatsResponse.totalInvoiceCount || 0, // All projects WITH invoices (any status)
     notDelivered: projectStatsResponse.notDeliveredCount || 0, // Completed projects with invoice but not delivered
-    deliveredNoInvoice: projectStatsResponse.deliveredNoInvoiceCount || 0, // Delivered projects without invoices (from backend)
+    delivered: projectStatsResponse.deliveredCount || 0, // All delivered projects
+    deliveredNoInvoice: projectStatsResponse.deliveredNoInvoiceCount || 0, // Delivered projects without invoices
     totalEstimatedCost: projectStats.reduce(
       (sum, s) => sum + (s.totalEstimatedCost || 0),
       0
@@ -930,7 +943,11 @@ const ProjectManagement = () => {
     const items = (project.projectGradings || []).length
       ? project.projectGradings.map((pg, idx) => {
           const quantity = Number(pg.imageQuantity || 0);
-          const rate = Number(pg.customRate || pg.grading?.defaultRate || 0);
+          const rate = Number(
+            pg.customRate !== undefined && pg.customRate !== null
+              ? pg.customRate
+              : (pg.grading?.defaultRate ?? 0)
+          );
           const amount = quantity * rate;
           return {
             line: idx + 1,
@@ -1301,7 +1318,9 @@ const ProjectManagement = () => {
                   >
                     {pg.grading?.name || pg.grading?.shortCode || "N/A"}
                     {!shouldHidePrices &&
-                      ` - ₹${pg.customRate || pg.grading?.defaultRate || 0}`}
+                      ` - ₹${(pg.customRate !== undefined && pg.customRate !== null)
+                        ? pg.customRate
+                        : (pg.grading?.defaultRate ?? 0)}`}
                   </Tag>
                 ))
               ) : (
@@ -1688,9 +1707,9 @@ const ProjectManagement = () => {
                       borderRadius: "4px",
                       transition: "background-color 0.3s",
                       backgroundColor:
-                        stats.notDelivered > 0 ? "#e6f7ff" : "transparent",
+                        stats.totalNoInvoice > 0 ? "#f6e7ff" : "transparent",
                       border:
-                        stats.notDelivered > 0 ? "1px solid #1890ff" : "none",
+                        stats.totalNoInvoice > 0 ? "1px solid #b37feb" : "none",
                     }}
                     className="hover:bg-blue-100"
                     onClick={() => setStatusFilter("COMPLETED")}
@@ -1706,6 +1725,34 @@ const ProjectManagement = () => {
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.notDelivered}
+                    </Tag>
+                  </Space>
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                      backgroundColor:
+                        stats.delivered > 0 ? "#f0f5ff" : "transparent",
+                      border:
+                        stats.delivered > 0 ? "1px solid #722ed1" : "none",
+                    }}
+                    className="hover:bg-purple-100"
+                    onClick={() => setStatusFilter("DELIVERED")}
+                  >
+                    <CheckCircleOutlined
+                      style={{ fontSize: 16, color: "#722ed1" }}
+                    />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Delivered:
+                    </Text>
+                    <Tag
+                      color="magenta"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                    >
+                      {stats.delivered}
                     </Tag>
                   </Space>
                   <Space
@@ -1738,6 +1785,34 @@ const ProjectManagement = () => {
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.deliveredNoInvoice}
+                    </Tag>
+                  </Space>
+                  <Space
+                    size={4}
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px 8px",
+                      borderRadius: "4px",
+                      transition: "background-color 0.3s",
+                      backgroundColor:
+                        stats.totalInvoice > 0 ? "#fef9e7" : "transparent",
+                      border:
+                        stats.totalInvoice > 0 ? "1px solid #eac42b" : "none",
+                    }}
+                    className="hover:bg-yellow-100"
+                    onClick={() => setStatusFilter("TOTAL_INVOICE")}
+                  >
+                    <ExclamationCircleOutlined
+                      style={{ fontSize: 16, color: "#eac42b" }}
+                    />
+                    <Text strong style={{ fontSize: 14 }}>
+                      Invoice Generated (All):
+                    </Text>
+                    <Tag
+                      color="gold"
+                      style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
+                    >
+                      {stats.totalInvoice}
                     </Tag>
                   </Space>
                   <Space
@@ -1881,6 +1956,7 @@ const ProjectManagement = () => {
                 <Option value="ACTIVE">Active</Option>
                 <Option value="IN_PROGRESS">In Progress</Option>
                 <Option value="COMPLETED">Completed</Option>
+                <Option value="DELIVERED">Delivered</Option>
                 <Option value="NO_INVOICE">No Invoice</Option>
                 <Option value="REQUESTED">Fly-on-Credit</Option>
                 <Option value="REOPEN">Reopen</Option>
@@ -2253,9 +2329,9 @@ const ProjectManagement = () => {
                           <Text>
                             ₹
                             {(
-                              pg.customRate ||
-                              pg.grading?.defaultRate ||
-                              0
+                              (pg.customRate !== undefined && pg.customRate !== null)
+                                ? pg.customRate
+                                : (pg.grading?.defaultRate ?? 0)
                             ).toLocaleString()}
                           </Text>
                           {" = "}

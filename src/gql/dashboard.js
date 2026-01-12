@@ -300,13 +300,27 @@ export const GET_MY_ACTIVE_PROJECTS = gql`
 export const GET_PROJECT_STATS_BY_STATUS = gql`
   query GetProjectStatsByStatus {
     projectStats {
-      totalProjects
-      activeProjects
-      completedProjects
-      onHoldProjects
-      cancelledProjects
-      totalRevenue
-      pendingRevenue
+      stats {
+        status
+        count
+        totalEstimatedCost
+        totalActualCost
+      }
+      flyOnCreditCount
+      flyOnCreditEstimatedCost
+      flyOnCreditActualCost
+      noInvoiceCount
+      noInvoiceEstimatedCost
+      noInvoiceActualCost
+      totalNoInvoiceCount
+      totalNoInvoiceEstimatedCost
+      totalNoInvoiceActualCost
+      notDeliveredCount
+      notDeliveredEstimatedCost
+      notDeliveredActualCost
+      deliveredNoInvoiceCount
+      deliveredNoInvoiceEstimatedCost
+      deliveredNoInvoiceActualCost
     }
   }
 `;

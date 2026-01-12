@@ -55,6 +55,7 @@ import {
   GET_COMPLETED_PROJECTS_NO_PAYMENT,
   GET_DASHBOARD_PENDING_LEAVES,
   GET_MY_ACTIVE_PROJECTS,
+  GET_PROJECT_STATS_BY_STATUS,
 } from "../../gql/dashboard";
 import dayjs from "dayjs";
 import isBetween from "dayjs/plugin/isBetween";
@@ -185,6 +186,18 @@ const Dashboard = () => {
     }
   );
 
+  // Query: Project statistics (accurate DB counts for all projects)
+  const { data: projectStatsData, loading: projectStatsLoading } = useQuery(
+    GET_PROJECT_STATS_BY_STATUS,
+    {
+      skip: !canManageProjects,
+      fetchPolicy: "cache-and-network",
+      onError: (error) => {
+        console.error("Project stats query error:", error);
+      },
+    }
+  );
+
   // Filter users on leave for today and next 7 days
   const usersOnLeave = useMemo(() => {
     if (!leaveData?.leaves?.leaves) return { today: [], upcoming: [] };
@@ -215,40 +228,46 @@ const Dashboard = () => {
     return { today: todayLeaves, upcoming: upcomingLeaves };
   }, [leaveData]);
 
-  // Calculate project statistics
+  // Calculate stats from project statistics (accurate DB data)
   const projectStats = useMemo(() => {
-    console.log("Calculating project stats, projectsData:", projectsData);
+    console.log("Project stats data:", projectStatsData);
 
-    if (!projectsData?.projects?.projects) {
-      console.log("No projects data available");
+    if (!projectStatsData?.projectStats) {
+      console.log("No project stats data available");
       return {
         total: 0,
         active: 0,
         inProgress: 0,
         completed: 0,
         delivered: 0,
-        pendingInvoice: 0,
+        noInvoice: 0,
       };
     }
 
-    const projects = projectsData.projects.projects;
-    console.log("Projects array:", projects);
-    console.log("Projects length:", projects.length);
-
-    const stats = {
-      total: projects.length,
-      active: projects.filter((p) => p.status === "active").length,
-      inProgress: projects.filter((p) => p.status === "in_progress").length,
-      completed: projects.filter((p) => p.status === "completed").length,
-      delivered: projects.filter((p) => p.status === "delivered").length,
-      pendingInvoice: projects.filter(
-        (p) => p.status === "completed" && !p.invoiceId
-      ).length,
+    const stats = projectStatsData.projectStats.stats || [];
+    const response = {
+      total: 0,
+      active: 0,
+      inProgress: 0,
+      completed: 0,
+      delivered: 0,
+      noInvoice: projectStatsData.projectStats.noInvoiceCount || 0,
     };
 
-    console.log("Calculated stats:", stats);
-    return stats;
-  }, [projectsData]);
+    // Calculate total counts from stats array
+    stats.forEach((stat) => {
+      if (stat.status === "active") response.active = stat.count || 0;
+      if (stat.status === "in_progress") response.inProgress = stat.count || 0;
+      if (stat.status === "completed") response.completed = stat.count || 0;
+      if (stat.status === "delivered") response.delivered = stat.count || 0;
+    });
+
+    // Total = sum of all status counts
+    response.total = stats.reduce((sum, s) => sum + (s.count || 0), 0);
+
+    console.log("Calculated stats from DB:", response);
+    return response;
+  }, [projectStatsData]);
 
   // Calculate my task statistics
   const myTaskStats = useMemo(() => {

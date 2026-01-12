@@ -104,7 +104,9 @@ export const generateInvoicePDF = async (invoiceData) => {
   if (invoiceData.project?.projectGradings?.length > 0) {
     invoiceData.project.projectGradings.forEach((grading, index) => {
       const quantity = grading.imageQuantity || 0;
-      const rate = grading.customRate || grading.grading?.defaultRate || 0;
+      const rate = (grading.customRate !== undefined && grading.customRate !== null)
+        ? grading.customRate
+        : (grading.grading?.defaultRate ?? 0);
       const amount = quantity * rate;
       
       tableData.push([

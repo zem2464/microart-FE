@@ -173,7 +173,11 @@ const ProjectDetailDrawer = ({ projectId }) => {
     const items = (proj.projectGradings || []).length
       ? proj.projectGradings.map((pg, idx) => {
           const quantity = Number(pg.imageQuantity || 0);
-          const rate = Number(pg.customRate || pg.grading?.defaultRate || 0);
+          const rate = Number(
+            pg.customRate !== undefined && pg.customRate !== null
+              ? pg.customRate
+              : pg.grading?.defaultRate || 0
+          );
           const amount = quantity * rate;
           return {
             line: idx + 1,

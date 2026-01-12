@@ -906,9 +906,9 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                                 (pg) => {
                                   const qty = pg.imageQuantity || 0;
                                   const rate =
-                                    pg.customRate ||
-                                    pg.grading?.defaultRate ||
-                                    0;
+                                    (pg.customRate !== undefined && pg.customRate !== null)
+                                      ? pg.customRate
+                                      : (pg.grading?.defaultRate ?? 0);
                                   const total = qty * rate;
                                   return `${
                                     pg.grading?.name || pg.grading?.shortCode

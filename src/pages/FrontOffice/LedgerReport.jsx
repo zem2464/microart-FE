@@ -472,7 +472,9 @@ const LedgerReport = () => {
       if (project?.projectGradings?.length > 0) {
         const lines = project.projectGradings.map((pg) => {
           const qty = pg.imageQuantity || 0;
-          const rate = pg.customRate || pg.grading?.defaultRate || 0;
+          const rate = (pg.customRate !== undefined && pg.customRate !== null)
+            ? pg.customRate
+            : (pg.grading?.defaultRate ?? 0);
           const total = qty * rate;
           return `${
             pg.grading?.name || pg.grading?.shortCode
@@ -606,7 +608,9 @@ const LedgerReport = () => {
       if (project?.projectGradings?.length > 0) {
         const lines = project.projectGradings.map((pg) => {
           const qty = pg.imageQuantity || 0;
-          const rate = pg.customRate || pg.grading?.defaultRate || 0;
+          const rate = (pg.customRate !== undefined && pg.customRate !== null)
+            ? pg.customRate
+            : (pg.grading?.defaultRate ?? 0);
           const total = qty * rate;
           return `${
             pg.grading?.name || pg.grading?.shortCode
@@ -786,7 +790,9 @@ const LedgerReport = () => {
         if (project?.projectGradings?.length > 0) {
           const lines = project.projectGradings.map((pg) => {
             const qty = pg.imageQuantity || 0;
-            const rate = pg.customRate || pg.grading?.defaultRate || 0;
+            const rate = (pg.customRate !== undefined && pg.customRate !== null)
+              ? pg.customRate
+              : (pg.grading?.defaultRate ?? 0);
             const total = qty * rate;
             return `${
               pg.grading?.name || pg.grading?.shortCode
@@ -1128,7 +1134,9 @@ const LedgerReport = () => {
         if (project?.projectGradings?.length > 0) {
           const lines = project.projectGradings.map((pg) => {
             const qty = pg.imageQuantity || 0;
-            const rate = pg.customRate || pg.grading?.defaultRate || 0;
+            const rate = (pg.customRate !== undefined && pg.customRate !== null)
+              ? pg.customRate
+              : (pg.grading?.defaultRate ?? 0);
             const total = qty * rate;
             return `${
               pg.grading?.name || pg.grading?.shortCode

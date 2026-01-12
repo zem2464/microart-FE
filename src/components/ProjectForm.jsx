@@ -239,14 +239,16 @@ const ProjectForm = ({
 
     // Use custom rate if provided, otherwise check client preferences, then default rate
     let rate = gradingData.customRate;
-    if (!rate && clientPreferences) {
-      const clientCustomGrading = clientPreferences.gradings?.find(
-        (g) => g.grading?.id === gradingData.gradingId
-      );
-      rate = clientCustomGrading?.customRate;
-    }
-    if (!rate) {
-      rate = gradingData.grading?.defaultRate || 0;
+    if (rate === undefined || rate === null) {
+      if (clientPreferences) {
+        const clientCustomGrading = clientPreferences.gradings?.find(
+          (g) => g.grading?.id === gradingData.gradingId
+        );
+        rate = clientCustomGrading?.customRate;
+      }
+      if (rate === undefined || rate === null) {
+        rate = gradingData.grading?.defaultRate || 0;
+      }
     }
 
     return rate * gradingData.imageQuantity;
@@ -725,8 +727,7 @@ const ProjectForm = ({
     )?.defaultRate;
     const initialRate =
       clientCustomRate !== undefined &&
-      clientCustomRate !== null &&
-      clientCustomRate > 0
+      clientCustomRate !== null
         ? clientCustomRate
         : gradingDefault || null;
     setPerImageRate(initialRate);
@@ -878,8 +879,7 @@ const ProjectForm = ({
         const clientCustomRate =
           clientPref &&
           clientPref.customRate !== undefined &&
-          clientPref.customRate !== null &&
-          clientPref.customRate > 0
+          clientPref.customRate !== null
             ? clientPref.customRate
             : null;
 
@@ -913,8 +913,7 @@ const ProjectForm = ({
       const gradingDefault = singleGrading.grading?.defaultRate;
       const initialRate =
         clientCustomRate !== undefined &&
-        clientCustomRate !== null &&
-        clientCustomRate > 0
+        clientCustomRate !== null
           ? clientCustomRate
           : gradingDefault || null;
       setPerImageRate(initialRate);
@@ -1339,13 +1338,11 @@ const ProjectForm = ({
         // Use same priority logic as display: customRate > clientPref.customRate > grading.defaultRate
         const effectiveRate =
           sg.customRate !== undefined &&
-          sg.customRate !== null &&
-          sg.customRate > 0
+          sg.customRate !== null
             ? sg.customRate
             : clientPref &&
               clientPref.customRate !== undefined &&
-              clientPref.customRate !== null &&
-              clientPref.customRate > 0
+              clientPref.customRate !== null
             ? clientPref.customRate
             : grading?.defaultRate || 0;
 
@@ -2664,8 +2661,7 @@ const ProjectForm = ({
                     const displayRate =
                       clientPref &&
                       clientPref.customRate !== undefined &&
-                      clientPref.customRate !== null &&
-                      clientPref.customRate > 0
+                      clientPref.customRate !== null
                         ? clientPref.customRate
                         : grading.defaultRate;
                     const shortCodeDisplay = grading.shortCode
@@ -2723,8 +2719,7 @@ const ProjectForm = ({
                       const displayRate =
                         clientPref &&
                         clientPref.customRate !== undefined &&
-                        clientPref.customRate !== null &&
-                        clientPref.customRate > 0
+                        clientPref.customRate !== null
                           ? clientPref.customRate
                           : grading.defaultRate;
                       const shortCodeDisplay = grading.shortCode
@@ -2800,13 +2795,11 @@ const ProjectForm = ({
               // Priority: customRate > clientPref.customRate > grading.defaultRate
               const effectiveRate =
                 selectedGrading.customRate !== undefined &&
-                selectedGrading.customRate !== null &&
-                selectedGrading.customRate > 0
+                selectedGrading.customRate !== null
                   ? selectedGrading.customRate
                   : clientPref &&
                     clientPref.customRate !== undefined &&
-                    clientPref.customRate !== null &&
-                    clientPref.customRate > 0
+                    clientPref.customRate !== null
                   ? clientPref.customRate
                   : grading?.defaultRate || 0;
 
@@ -2814,14 +2807,12 @@ const ProjectForm = ({
               const clientCustomRate =
                 clientPref &&
                 clientPref.customRate !== undefined &&
-                clientPref.customRate !== null &&
-                clientPref.customRate > 0
+                clientPref.customRate !== null
                   ? clientPref.customRate
                   : null;
               const hasCustomRate =
                 selectedGrading.customRate !== undefined &&
-                selectedGrading.customRate !== null &&
-                selectedGrading.customRate > 0;
+                selectedGrading.customRate !== null;
               const isUsingClientRate =
                 !hasCustomRate && clientCustomRate !== null;
 
