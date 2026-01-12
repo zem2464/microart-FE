@@ -56,6 +56,7 @@ jobs:
                   REACT_APP_VAPID_PUBLIC_KEY: ${{ secrets.REACT_APP_VAPID_PUBLIC_KEY }}
                   NODE_OPTIONS: --max-old-space-size=4096
                   CI: false
+                  GENERATE_SOURCEMAP: false
               run: npm run build
 
             - name: Configure AWS credentials
