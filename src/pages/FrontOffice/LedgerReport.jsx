@@ -27,10 +27,17 @@ import {
   EyeOutlined,
   SearchOutlined,
 } from "@ant-design/icons";
-import { useQuery } from "@apollo/client";
+import { useQuery, useReactiveVar } from "@apollo/client";
 import dayjs from "dayjs";
 import { GET_ALL_CLIENTS_BALANCE_SUMMARY } from "../../gql/clientLedger";
 import { GET_CLIENT_LEDGER_RANGE } from "../../gql/clientLedger";
+import { userCacheVar } from "../../cache/userCacheVar";
+import {
+  hasPermission,
+  MODULES,
+  ACTIONS,
+  generatePermission,
+} from "../../config/permissions";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -56,6 +63,14 @@ const formatCurrencyNoDecimal = (amount) =>
   }).format(amount || 0);
 
 const LedgerReport = () => {
+  const user = useReactiveVar(userCacheVar);
+
+  // Check if user has limited read permission
+  const hasLimitedRead = hasPermission(
+    user,
+    generatePermission(MODULES.PROJECTS, ACTIONS.LIMTEREAD)
+  );
+
   // State for selected client and filters
   const [selectedClient, setSelectedClient] = useState(null);
   const [dateFilterType, setDateFilterType] = useState("monthly");
@@ -1042,55 +1057,57 @@ const LedgerReport = () => {
 
   // Ledger table columns
   const columns = [
-    {
-      title: "Order Date",
-      key: "orderDate",
-      width: 100,
-      render: (_, r) => {
-        if (r.isBalanceRow) return null;
-        const project = r.invoice?.project;
-        return project?.createdAt
-          ? dayjs(project.createdAt).format("DD/MM/YYYY")
-          : "-";
+    ...(hasLimitedRead ? [] : [
+      {
+        title: "Order Date",
+        key: "orderDate",
+        width: 100,
+        render: (_, r) => {
+          if (r.isBalanceRow) return null;
+          const project = r.invoice?.project;
+          return project?.createdAt
+            ? dayjs(project.createdAt).format("DD/MM/YYYY")
+            : "-";
+        },
       },
-    },
-    {
-      title: "Invoice Date",
-      key: "invoiceDate",
-      width: 100,
-      render: (_, r) => {
-        if (r.isBalanceRow) return null;
-        return r.invoice?.invoiceDate
-          ? dayjs(r.invoice.invoiceDate).format("DD/MM/YYYY")
-          : "-";
+      {
+        title: "Invoice Date",
+        key: "invoiceDate",
+        width: 100,
+        render: (_, r) => {
+          if (r.isBalanceRow) return null;
+          return r.invoice?.invoiceDate
+            ? dayjs(r.invoice.invoiceDate).format("DD/MM/YYYY")
+            : "-";
+        },
       },
-    },
-    {
-      title: "Work Days",
-      key: "workDays",
-      width: 90,
-      render: (_, r) => {
-        if (r.isBalanceRow) return null;
-        const project = r.invoice?.project;
-        if (project?.createdAt && r.invoice?.invoiceDate) {
-          const days = dayjs(r.invoice.invoiceDate).diff(
-            dayjs(project.createdAt),
-            "day"
-          );
-          return `${days}d`;
-        }
-        return "-";
+      {
+        title: "Work Days",
+        key: "workDays",
+        width: 90,
+        render: (_, r) => {
+          if (r.isBalanceRow) return null;
+          const project = r.invoice?.project;
+          if (project?.createdAt && r.invoice?.invoiceDate) {
+            const days = dayjs(r.invoice.invoiceDate).diff(
+              dayjs(project.createdAt),
+              "day"
+            );
+            return `${days}d`;
+          }
+          return "-";
+        },
       },
-    },
-    {
-      title: "Invoice No.",
-      key: "invoiceNumber",
-      width: 120,
-      render: (_, r) => {
-        if (r.isBalanceRow) return null;
-        return r.invoice?.invoiceNumber || "-";
+      {
+        title: "Invoice No.",
+        key: "invoiceNumber",
+        width: 120,
+        render: (_, r) => {
+          if (r.isBalanceRow) return null;
+          return r.invoice?.invoiceNumber || "-";
+        },
       },
-    },
+    ]),
     {
       title: "Particulars",
       key: "particulars",
@@ -1153,45 +1170,47 @@ const LedgerReport = () => {
         return r.description || "-";
       },
     },
-    {
-      title: "Debit",
-      dataIndex: "debit",
-      key: "debit",
-      width: 110,
-      align: "right",
-      render: (v, r) => {
-        if (r.isBalanceRow) return null;
-        return v > 0 ? formatCurrency(v) : "-";
+    ...(hasLimitedRead ? [] : [
+      {
+        title: "Debit",
+        dataIndex: "debit",
+        key: "debit",
+        width: 110,
+        align: "right",
+        render: (v, r) => {
+          if (r.isBalanceRow) return null;
+          return v > 0 ? formatCurrency(v) : "-";
+        },
       },
-    },
-    {
-      title: "Credit",
-      dataIndex: "credit",
-      key: "credit",
-      width: 110,
-      align: "right",
-      render: (v, r) => {
-        if (r.isBalanceRow) return null;
-        return v > 0 ? formatCurrency(v) : "-";
+      {
+        title: "Credit",
+        dataIndex: "credit",
+        key: "credit",
+        width: 110,
+        align: "right",
+        render: (v, r) => {
+          if (r.isBalanceRow) return null;
+          return v > 0 ? formatCurrency(v) : "-";
+        },
       },
-    },
-    {
-      title: "Running Balance",
-      dataIndex: "runningBalance",
-      key: "runningBalance",
-      width: 130,
-      align: "right",
-      render: (v, r) => {
-        const color = v > 0 ? "#f5222d" : v < 0 ? "#52c41a" : "#1890ff";
-        const fontWeight = r.isBalanceRow ? 600 : 500;
-        const fontSize = r.isBalanceRow ? 14 : undefined;
-        return (
-          <Text style={{ color, fontWeight, fontSize }}>
-            {formatCurrency(v)}
-          </Text>
-        );
+      {
+        title: "Running Balance",
+        dataIndex: "runningBalance",
+        key: "runningBalance",
+        width: 130,
+        align: "right",
+        render: (v, r) => {
+          const color = v > 0 ? "#f5222d" : v < 0 ? "#52c41a" : "#1890ff";
+          const fontWeight = r.isBalanceRow ? 600 : 500;
+          const fontSize = r.isBalanceRow ? 14 : undefined;
+          return (
+            <Text style={{ color, fontWeight, fontSize }}>
+              {formatCurrency(v)}
+            </Text>
+          );
+        },
       },
-    },
+    ]),
   ];
 
   return (

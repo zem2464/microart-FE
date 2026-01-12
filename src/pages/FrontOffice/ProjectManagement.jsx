@@ -1497,7 +1497,8 @@ const ProjectManagement = () => {
               record.invoice?.id ||
               invoicedProjectIds.has(record.id)
             ) &&
-            !hasLimitedRead && (
+            !hasLimitedRead &&
+            !hasLimitedEdit && (
               <Tooltip title="View Quotation">
                 <Button
                   type="text"
@@ -1524,6 +1525,8 @@ const ProjectManagement = () => {
               record.invoice?.id ||
               invoicedProjectIds.has(record.id)
             ) &&
+            !hasLimitedRead &&
+            !hasLimitedEdit &&
             (canCreateFinance || record.client?.leaderId === user?.id) && (
               <Tooltip title="Complete & Generate Invoice">
                 <Button
@@ -1544,6 +1547,8 @@ const ProjectManagement = () => {
               record.invoice?.id ||
               invoicedProjectIds.has(record.id)
             ) &&
+            !hasLimitedRead &&
+            !hasLimitedEdit &&
             (canCreateFinance || record.client?.leaderId === user?.id) && (
               <Tooltip title="Generate Invoice">
                 <Button
@@ -1559,19 +1564,21 @@ const ProjectManagement = () => {
             )}
 
           {/* Show View Invoice button only when invoice is actually generated */}
-          {(record.invoice?.id || record.invoiceId) && (
-            <Tooltip title="View Invoice">
-              <Button
-                type="text"
-                icon={<FileTextOutlined />}
-                onClick={() => {
-                  const invoiceId = record.invoice?.id || record.invoiceId;
-                  console.log("Opening invoice drawer with ID:", invoiceId);
-                  showInvoiceDetailDrawer(invoiceId);
-                }}
-              />
-            </Tooltip>
-          )}
+          {(record.invoice?.id || record.invoiceId) &&
+            !hasLimitedRead &&
+            !hasLimitedEdit && (
+              <Tooltip title="View Invoice">
+                <Button
+                  type="text"
+                  icon={<FileTextOutlined />}
+                  onClick={() => {
+                    const invoiceId = record.invoice?.id || record.invoiceId;
+                    console.log("Opening invoice drawer with ID:", invoiceId);
+                    showInvoiceDetailDrawer(invoiceId);
+                  }}
+                />
+              </Tooltip>
+            )}
 
           {!["COMPLETED", "DELIVERED"].includes(
             (record.status || "").toString().toUpperCase()
