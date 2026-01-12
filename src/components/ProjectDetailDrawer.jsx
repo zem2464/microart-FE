@@ -70,7 +70,6 @@ const STATUS_MAP = {
   REVIEW: { label: "Review", color: "cyan" },
   REOPEN: { label: "Reopen", color: "geekblue" },
   COMPLETED: { label: "Completed", color: "success" },
-  CANCELLED: { label: "Cancelled", color: "error" },
   ON_HOLD: { label: "On Hold", color: "warning" },
   DELIVERED: { label: "Delivered", color: "purple" },
   REQUESTED: { label: "Pending Approval", color: "purple" },
@@ -134,12 +133,17 @@ const ProjectDetailDrawer = ({ projectId }) => {
     currentUser,
     generatePermission(MODULES.PROJECTS, ACTIONS.LIMTEREAD)
   );
+  const hasLimitedEdit = hasPermission(
+    currentUser,
+    generatePermission(MODULES.PROJECTS, ACTIONS.LIMITEDIT)
+  );
   const canShowQuote =
     ["ACTIVE", "IN_PROGRESS"].includes(
       (project?.status || "").toString().toUpperCase()
     ) &&
     !(project?.invoiceId || project?.invoice?.id) &&
-    !hasLimitedRead;
+    !hasLimitedRead &&
+    !hasLimitedEdit;
   const hasInvoice = !!(project?.invoiceId || project?.invoice?.id);
   const completedTasks = tasks.filter(
     (task) => (task.status || "").toString().toUpperCase() === "COMPLETED"
@@ -248,6 +252,68 @@ const ProjectDetailDrawer = ({ projectId }) => {
   const handleSaveStatus = useCallback(async (nextValue) => {
     const valueToSave = (nextValue ?? statusValue) || "";
     if (!valueToSave) return;
+    
+    // Validate DELIVERED status change
+    if (valueToSave.toLowerCase() === "delivered") {
+      if (!project) {
+        message.error("Project not found");
+        return;
+      }
+
+      // If project has invoice, validate based on client type
+      if (project.invoice || project.invoiceId) {
+        const clientType = project.client?.clientType;
+        const hasApprovePermission = hasPermission(
+          currentUser,
+          generatePermission(MODULES.PROJECTS, ACTIONS.APPROVE)
+        );
+        const isPaid =
+          project.invoice?.status === "fully_paid" ||
+          (project.invoice?.balanceAmount !== undefined &&
+            project.invoice?.balanceAmount <= 0);
+
+        if (clientType === "walkIn") {
+          // Walk-in clients with invoice: Need permission AND payment
+          if (!hasApprovePermission) {
+            message.error(
+              "You do not have permission to mark walk-in projects as delivered. Only users with project approval permission can do this."
+            );
+            return;
+          }
+
+          if (!isPaid) {
+            const balance = project.invoice?.balanceAmount || 0;
+            message.error(
+              `Cannot mark walk-in project as delivered: Invoice must be paid first. Current balance: ₹${balance.toFixed(
+                2
+              )}.`
+            );
+            return;
+          }
+        }
+        // Permanent clients with invoice: No additional checks
+      }
+      // Projects without invoice can be marked as delivered (no validation required)
+    }
+
+    // Validate REOPEN status change
+    if (valueToSave.toLowerCase() === "reopen") {
+      if (!project) {
+        message.error("Project not found");
+        return;
+      }
+      const invoicePaid =
+        project.invoice?.status === "fully_paid" ||
+        (project.invoice?.balanceAmount !== undefined &&
+          project.invoice?.balanceAmount <= 0);
+      if (invoicePaid) {
+        message.error(
+          "Cannot change to Reopen: invoice is fully paid/completed"
+        );
+        return;
+      }
+    }
+
     try {
       message.loading({ content: "Updating status...", key: "status" });
       await updateProjectMutation({
@@ -265,7 +331,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
     } catch (err) {
       message.error({ content: err.message, key: "status" });
     }
-  }, [statusValue, updateProjectMutation, project?.id]);
+  }, [statusValue, updateProjectMutation, project, currentUser]);
 
   // Memoize the title element to prevent unnecessary re-renders
   const titleElement = useMemo(() => {
@@ -298,16 +364,41 @@ const ProjectDetailDrawer = ({ projectId }) => {
           <ProjectReminderNotesPopover projectId={project?.id} />
         </Space>
         <Space>
-          {canEditProjects && (
-            <Button
-              type="primary"
-              icon={<EditOutlined />}
-              size="small"
-              onClick={handleEditProject}
-            >
-              Edit
-            </Button>
-          )}
+          {canEditProjects &&
+            (project.status || "").toString().toUpperCase() !== "COMPLETED" && 
+            !project.invoice && !project.invoiceId &&
+            (project.status || "").toLowerCase() !== "delivered" && (
+              <Button
+                type="primary"
+                icon={<EditOutlined />}
+                size="small"
+                onClick={handleEditProject}
+              >
+                Edit
+              </Button>
+            )}
+          {canEditProjects &&
+            ((project.status || "").toString().toUpperCase() === "COMPLETED" ||
+             project.invoice || project.invoiceId ||
+             (project.status || "").toLowerCase() === "delivered") && (
+              <Tooltip title={
+                project.invoice || project.invoiceId
+                  ? "Cannot edit: Invoice generated"
+                  : (project.status || "").toLowerCase() === "delivered"
+                  ? "Cannot edit: Project delivered"
+                  : "Cannot edit: Project completed"
+              }>
+                <Button
+                  type="primary"
+                  icon={<EditOutlined />}
+                  size="small"
+                  disabled
+                  style={{ opacity: 0.5, cursor: "not-allowed" }}
+                >
+                  Edit
+                </Button>
+              </Tooltip>
+            )}
           {canEditProjects && (
             <Select
               value={statusValue}
@@ -336,20 +427,32 @@ const ProjectDetailDrawer = ({ projectId }) => {
                 );
                 const isCompleted =
                   (project?.status || "").toLowerCase() === "completed";
-                // If project is completed, show ONLY delivered or reopen option (invoice not required)
-                const filtered = isCompleted
-                  ? options.filter(
-                      (opt) =>
-                        opt.value === "delivered" || opt.value === "reopen"
-                    )
-                  : options;
+                const isDelivered =
+                  (project?.status || "").toLowerCase() === "delivered";
+                
+                // If project has invoice OR is delivered (without invoice), only show REOPEN option
+                let filtered;
+                if (hasInvoice || isDelivered) {
+                  // Projects with invoices or delivered: Only allow changing to REOPEN
+                  filtered = options.filter((opt) => opt.value === "reopen");
+                } else if (isCompleted) {
+                  // If project is completed (no invoice), show ONLY delivered or reopen option
+                  filtered = options.filter(
+                    (opt) => opt.value === "delivered" || opt.value === "reopen"
+                  );
+                } else {
+                  // All other statuses: show all options
+                  filtered = options;
+                }
 
                 return filtered.map((option) => {
                   let disabled = false;
                   let title = "";
+                  
                   if (option.value === "delivered") {
-                    // Only restrict if project has invoice AND is walk-in client AND invoice not paid / missing permission
+                    // Only restrict if project has invoice AND is walk-in client AND invoice not paid
                     if (hasInvoice && clientType === "walkIn") {
+                      // Walk-in with invoice: Need permission AND payment
                       if (!canApproveProjects) {
                         disabled = true;
                         title =
@@ -360,7 +463,14 @@ const ProjectDetailDrawer = ({ projectId }) => {
                       }
                     }
                     // For projects without invoice or permanent clients: No restrictions
+                  } else if (option.value === "reopen") {
+                    // Reopen allowed only if invoice is not completed/fully paid
+                    if (isPaid) {
+                      disabled = true;
+                      title = "Cannot reopen when invoice is fully paid";
+                    }
                   }
+                  
                   return {
                     ...option,
                     disabled,
@@ -401,6 +511,66 @@ const ProjectDetailDrawer = ({ projectId }) => {
           >
             Refresh
           </Button>
+          {(project.status || "").toString().toUpperCase() === "ACTIVE" &&
+            allTasksCompleted &&
+            !(project.invoiceId || project.invoice?.id) &&
+            !hasLimitedRead &&
+            !hasLimitedEdit &&
+            (canCreateFinance || project.client?.leaderId === currentUser?.id) && (
+              <Tooltip title="Complete & Generate Invoice">
+                <Button
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  style={{ color: "#fa8c16" }}
+                  onClick={() => {
+                    // Implement complete project logic similar to ProjectManagement
+                    message.info("Complete & Generate Invoice functionality");
+                  }}
+                >
+                  Complete & Invoice
+                </Button>
+              </Tooltip>
+            )}
+          {["COMPLETED", "DELIVERED"].includes(
+            (project.status || "").toString().toUpperCase()
+          ) &&
+            !(project.invoiceId || project.invoice?.id) &&
+            !hasLimitedRead &&
+            !hasLimitedEdit &&
+            (canCreateFinance || project.client?.leaderId === currentUser?.id) && (
+              <Tooltip title="Generate Invoice">
+                <Button
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  style={{ color: "#1890ff" }}
+                  onClick={() => {
+                    if (generateInvoice && project?.id) {
+                      generateInvoice({ projectId: project.id });
+                    }
+                  }}
+                >
+                  Generate Invoice
+                </Button>
+              </Tooltip>
+            )}
+          {(project.invoice?.id || project.invoiceId) &&
+            !hasLimitedRead &&
+            !hasLimitedEdit && (
+              <Tooltip title="View Invoice">
+                <Button
+                  size="small"
+                  icon={<FileTextOutlined />}
+                  onClick={() => {
+                    const invoiceId = project.invoice?.id || project.invoiceId;
+                    if (drawerCtx?.showInvoiceDetailDrawer) {
+                      drawerCtx.showInvoiceDetailDrawer(invoiceId);
+                    }
+                  }}
+                >
+                  View Invoice
+                </Button>
+              </Tooltip>
+            )}
           {canShowQuote && (
             <Button
               size="small"
@@ -410,24 +580,27 @@ const ProjectDetailDrawer = ({ projectId }) => {
               View Quote
             </Button>
           )}
-          {canDeleteProjects &&
-            (project.status || "").toString().toUpperCase() !==
-              "COMPLETED" && (
-              <Button
-                danger
-                size="small"
-                onClick={() => {
-                  Modal.confirm({
-                    title: "Delete project?",
-                    content: "This action cannot be undone.",
-                    okType: "danger",
-                    onOk: () =>
-                      deleteProjectMutation({ id: project.id }),
-                  });
-                }}
-              >
-                Delete
-              </Button>
+          {![("COMPLETED"), "DELIVERED"].includes(
+            (project.status || "").toString().toUpperCase()
+          ) &&
+            canDeleteProjects && (
+              <Tooltip title="Delete">
+                <Button
+                  danger
+                  size="small"
+                  onClick={() => {
+                    Modal.confirm({
+                      title: "Delete project?",
+                      content: "This action cannot be undone.",
+                      okType: "danger",
+                      onOk: () =>
+                        deleteProjectMutation({ id: project.id }),
+                    });
+                  }}
+                >
+                  Delete
+                </Button>
+              </Tooltip>
             )}
         </Space>
       </div>
@@ -1189,7 +1362,6 @@ const ProjectDetailDrawer = ({ projectId }) => {
                           "REVIEW",
                           "REVISION",
                           "COMPLETED",
-                          "CANCELLED",
                           "ON_HOLD",
                         ],
                         includeInactive: true,

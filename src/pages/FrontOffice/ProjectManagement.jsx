@@ -89,7 +89,6 @@ const STATUS_MAP = {
   REVIEW: { label: "Review", color: "cyan" },
   DELIVERED: { label: "Delivered", color: "purple" },
   COMPLETED: { label: "Completed", color: "success" },
-  CANCELLED: { label: "Cancelled", color: "error" },
   ON_HOLD: { label: "On Hold", color: "warning" },
   REQUESTED: { label: "Pending Approval", color: "purple" },
   REOPEN: { label: "Reopen", color: "magenta" },
@@ -726,7 +725,6 @@ const ProjectManagement = () => {
     completed: statsMap.completed?.count || 0,
     inProgress: statsMap.in_progress?.count || 0,
     requested: statsMap.requested?.count || 0,
-    cancelled: statsMap.cancelled?.count || 0,
     onHold: statsMap.on_hold?.count || 0,
     reopen: statsMap.reopen?.count || 0,
     flyOnCredit: projectStatsResponse.flyOnCreditCount || 0, // Use dedicated fly-on-credit count from response
@@ -2040,7 +2038,6 @@ const ProjectManagement = () => {
                 <Option value="NO_INVOICE">No Invoice</Option>
                 <Option value="REQUESTED">Fly-on-Credit</Option>
                 <Option value="REOPEN">Reopen</Option>
-                <Option value="CANCELLED">Cancelled</Option>
               </Select>
             </Col>
             <Col span={4}>
