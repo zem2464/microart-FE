@@ -1,14 +1,9 @@
 import React, { useState } from 'react';
-import { Button, List, Tag, Space, Modal, Form, Input, DatePicker, Select, Checkbox, Typography, Empty, Spin, message, Tooltip, Badge, Drawer } from 'antd';
+import { Button, Tag, Space, Modal, Form, Input, DatePicker, Select, Typography, Empty, Spin, message, Drawer } from 'antd';
 import {
   PlusOutlined,
-  CheckCircleOutlined,
-  ClockCircleOutlined,
   DeleteOutlined,
   EditOutlined,
-  BellOutlined,
-  FlagOutlined,
-  FlagFilled,
 } from '@ant-design/icons';
 import { Avatar } from 'antd';
 import { useQuery, useMutation } from '@apollo/client';
@@ -203,19 +198,74 @@ const MobileRemindersPage = () => {
     return myCompletion;
   }).length;
 
-  // Sort reminders: flagged first, then by date
-  const sortedReminders = [...reminders].sort((a, b) => {
+  // Sort helper: flagged first, then by date (matches web ordering)
+  const sortReminders = (list) => [...list].sort((a, b) => {
     if (a.flagged !== b.flagged) {
       return a.flagged ? -1 : 1;
     }
-    return dayjs(a.dueDate || a.remindDate).diff(dayjs(b.dueDate || b.remindDate));
+    const aDate = dayjs(a.dueDate || a.remindDate);
+    const bDate = dayjs(b.dueDate || b.remindDate);
+
+    if (aDate.isValid() && bDate.isValid()) {
+      return aDate.diff(bDate);
+    }
+    if (aDate.isValid()) return -1;
+    if (bDate.isValid()) return 1;
+    return 0;
   });
 
-  const getStatusColor = (reminder) => {
-    if (reminder.completed) return 'success';
-    if (dayjs(reminder.remindDate).isBefore(dayjs(), 'day')) return 'error';
-    if (dayjs(reminder.remindDate).isSame(dayjs(), 'day')) return 'warning';
-    return 'processing';
+  // Group reminders by date (parity with web)
+  const groupRemindersByDate = (list) => {
+    const today = dayjs().startOf('day');
+    const tomorrow = dayjs().add(1, 'day').startOf('day');
+    const weekEnd = dayjs().endOf('week');
+
+    const groups = {
+      overdue: [],
+      today: [],
+      tomorrow: [],
+      thisWeek: [],
+      later: [],
+      noDueDate: [],
+    };
+
+    list.forEach((reminder) => {
+      const myCompletion = reminder.myAssignment?.isCompleted || false;
+      const baseDate = reminder.dueDate || reminder.remindDate;
+
+      if (!baseDate) {
+        groups.noDueDate.push(reminder);
+        return;
+      }
+
+      const dueDate = dayjs(baseDate).startOf('day');
+
+      if (!showCompleted && dueDate.isBefore(today) && !myCompletion) {
+        groups.overdue.push(reminder);
+      } else if (dueDate.isSame(today, 'day')) {
+        groups.today.push(reminder);
+      } else if (dueDate.isSame(tomorrow, 'day')) {
+        groups.tomorrow.push(reminder);
+      } else if (dueDate.isBefore(weekEnd) || dueDate.isSame(weekEnd, 'day')) {
+        groups.thisWeek.push(reminder);
+      } else if (dueDate.isBefore(today) && (myCompletion || showCompleted)) {
+        groups.later.push(reminder);
+      } else {
+        groups.later.push(reminder);
+      }
+    });
+
+    return groups;
+  };
+
+  const groupedReminders = groupRemindersByDate(reminders);
+  const sortedGroupedReminders = {
+    overdue: sortReminders(groupedReminders.overdue),
+    today: sortReminders(groupedReminders.today),
+    tomorrow: sortReminders(groupedReminders.tomorrow),
+    thisWeek: sortReminders(groupedReminders.thisWeek),
+    later: sortReminders(groupedReminders.later),
+    noDueDate: sortReminders(groupedReminders.noDueDate),
   };
 
   const getPriorityColor = (priority) => {
@@ -234,6 +284,107 @@ const MobileRemindersPage = () => {
   const getAssigneeDisplay = (reminder) => {
     if (!reminder.assignees?.length) return 'Not assigned';
     return reminder.assignees.map(a => `${a.firstName} ${a.lastName}`).join(', ');
+  };
+
+  const renderAssignments = (reminder) => {
+    const assignments = reminder.assignments || [];
+    if (!assignments.length) return null;
+
+    return (
+      <div className="reminder-assignments">
+        <span className="assign-label">Assigned</span>
+        <div className="assign-chip-row">
+          {assignments.map((assignment) => {
+            const firstName = assignment.user?.firstName || '';
+            const lastName = assignment.user?.lastName || '';
+            const initials = `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
+
+            return (
+              <div
+                key={assignment.userId || initials}
+                className={`assign-chip ${assignment.isCompleted ? 'done' : 'pending'}`}
+              >
+                <Avatar
+                  size={20}
+                  style={{
+                    backgroundColor: assignment.isCompleted ? '#52c41a' : '#1890ff',
+                    fontWeight: 'bold',
+                    fontSize: '10px',
+                  }}
+                >
+                  {initials || '?'}
+                </Avatar>
+                <span className="assign-name">{firstName.split(' ')[0] || 'User'}</span>
+                <span className="assign-status">{assignment.isCompleted ? '✓' : '⏳'}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderReminderCard = (reminder) => {
+    const myCompletion = reminder.myAssignment?.isCompleted || false;
+    const allCompleted = reminder.completed;
+    const totalAssigned = reminder.assignments?.length || 0;
+    const totalCompleted = reminder.assignments?.filter(a => a.isCompleted).length || 0;
+    const totalPending = totalAssigned - totalCompleted;
+    const dueDateValue = reminder.dueDate || reminder.remindDate;
+    const canToggle = !!reminder.myAssignment;
+
+    return (
+      <div 
+        key={reminder.id} 
+        className={`mobile-reminder-item ${myCompletion ? 'completed' : ''}`}
+        onClick={() => setDrawerDetail(reminder)}
+      >
+        {/* Completion circle (only interactive if assigned) */}
+        <div 
+          className={`reminder-circle ${myCompletion ? 'checked' : ''} ${!canToggle ? 'disabled' : ''}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (canToggle) {
+              handleToggleComplete(reminder);
+            }
+          }}
+        >
+          {myCompletion && <span className="check-mark">✓</span>}
+        </div>
+        
+        {/* Content */}
+        <div className="reminder-content">
+          <div className="reminder-title-row">
+            <span className={`reminder-title ${myCompletion ? 'strikethrough' : ''}`}>
+              {reminder.title}
+            </span>
+            {reminder.flagged && <span className="reminder-flag">🚩</span>}
+          </div>
+          {reminder.description && (
+            <div className="reminder-description">{reminder.description}</div>
+          )}
+          <div className="reminder-meta">
+            {dueDateValue && (
+              <span className="reminder-date">
+                {dayjs(dueDateValue).format('MMM D, YYYY')}
+                {reminder.remindTime && `, ${reminder.remindTime}`}
+              </span>
+            )}
+            {allCompleted && <span className="reminder-pill success">All completed</span>}
+            {!allCompleted && totalAssigned > 0 && (
+              <span className="reminder-pill neutral">{totalCompleted}/{totalAssigned} done</span>
+            )}
+            {totalPending > 0 && !myCompletion && (
+              <span className="reminder-pill warning">Pending</span>
+            )}
+          </div>
+          {renderAssignments(reminder)}
+        </div>
+
+        {/* Chevron */}
+        <div className="reminder-chevron">›</div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -295,64 +446,37 @@ const MobileRemindersPage = () => {
         </div>
       )}
 
-      {/* iPhone-style Reminders list */}
-      {sortedReminders.length === 0 ? (
+      {/* Grouped reminders (parity with web) */}
+      {totalReminders === 0 ? (
         <Empty
           description={showCompleted ? 'No completed reminders' : 'No reminders'}
           style={{ marginTop: '60px' }}
         />
       ) : (
-        <div className="mobile-reminder-list">
-          {sortedReminders
-            .filter((reminder) => {
-              const myCompletion = reminder.myAssignment?.isCompleted || false;
-              return showCompleted ? myCompletion : !myCompletion;
-            })
-            .map((reminder) => {
-              const myCompletion = reminder.myAssignment?.isCompleted || false;
-              return (
-                <div 
-                  key={reminder.id} 
-                  className={`mobile-reminder-item ${myCompletion ? 'completed' : ''}`}
-                  onClick={() => setDrawerDetail(reminder)}
-                >
-                  {/* Completion circle */}
-                  <div 
-                    className={`reminder-circle ${myCompletion ? 'checked' : ''}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleToggleComplete(reminder);
-                    }}
-                  >
-                    {myCompletion && <span className="check-mark">✓</span>}
-                  </div>
-                  
-                  {/* Content */}
-                  <div className="reminder-content">
-                    <div className="reminder-title-row">
-                      <span className={`reminder-title ${myCompletion ? 'strikethrough' : ''}`}>
-                        {reminder.title}
-                      </span>
-                      {reminder.flagged && (
-                        <span className="reminder-flag">🚩</span>
-                      )}
-                    </div>
-                    {reminder.description && (
-                      <div className="reminder-description">{reminder.description}</div>
-                    )}
-                    <div className="reminder-meta">
-                      <span className="reminder-date">
-                        {dayjs(reminder.dueDate || reminder.remindDate).format('MMM D, YYYY')}
-                        {reminder.remindTime && `, ${reminder.remindTime}`}
-                      </span>
-                    </div>
-                  </div>
+        <div className="reminder-groups">
+          {[
+            { key: 'overdue', title: 'Overdue', color: 'overdue', hide: showCompleted },
+            { key: 'today', title: 'Today', color: 'today' },
+            { key: 'tomorrow', title: 'Tomorrow', color: 'tomorrow' },
+            { key: 'thisWeek', title: 'This Week', color: 'this-week' },
+            { key: 'later', title: showCompleted ? 'Past' : 'Later', color: 'later' },
+            { key: 'noDueDate', title: 'No Due Date', color: 'no-date' },
+          ].map((section) => {
+            const items = sortedGroupedReminders[section.key] || [];
+            if (section.hide || items.length === 0) return null;
 
-                  {/* Chevron */}
-                  <div className="reminder-chevron">›</div>
+            return (
+              <div key={section.key} className="reminder-group">
+                <div className={`group-header ${section.color}`}>
+                  <span className="group-title">{section.title}</span>
+                  <span className="group-count">{items.length}</span>
                 </div>
-              );
-            })}
+                <div className="mobile-reminder-list">
+                  {items.map((reminder) => renderReminderCard(reminder))}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 

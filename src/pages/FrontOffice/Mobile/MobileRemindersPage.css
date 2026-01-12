@@ -151,6 +151,132 @@
   color: #52c41a;
 }
 
+/* Grouped Sections */
+.reminder-groups {
+  padding-bottom: 12px;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  margin: 10px 0 4px 0;
+}
+
+.group-title {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.1px;
+}
+
+.group-count {
+  padding: 2px 10px;
+  border-radius: 12px;
+  background: #f0f0f0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #595959;
+}
+
+.group-header.overdue .group-title { color: #ff4d4f; }
+.group-header.today .group-title { color: #1890ff; }
+.group-header.tomorrow .group-title { color: #52c41a; }
+.group-header.this-week .group-title { color: #595959; }
+.group-header.later .group-title { color: #8c8c8c; }
+.group-header.no-date .group-title { color: #8e8e93; }
+
+/* Assignment chips */
+.reminder-assignments {
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.assign-label {
+  font-size: 11px;
+  color: #8e8e93;
+  font-weight: 600;
+}
+
+.assign-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.assign-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  border: 1px solid #e5e5ea;
+  background: #f7f7f7;
+}
+
+.assign-chip.done {
+  background: #f6ffed;
+  border-color: #b7eb8f;
+}
+
+.assign-chip.pending {
+  background: #e6f7ff;
+  border-color: #91d5ff;
+}
+
+.assign-name {
+  font-size: 12px;
+  color: #262626;
+  font-weight: 600;
+}
+
+.assign-status {
+  font-size: 11px;
+  color: #faad14;
+}
+
+.assign-chip.done .assign-status {
+  color: #52c41a;
+}
+
+/* Status pills */
+.reminder-pill {
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: #f5f5f5;
+  color: #595959;
+}
+
+.reminder-pill.success {
+  background: #f6ffed;
+  color: #52c41a;
+}
+
+.reminder-pill.warning {
+  background: #fff7e6;
+  color: #fa8c16;
+}
+
+.reminder-pill.neutral {
+  background: #e6f7ff;
+  color: #1890ff;
+}
+
+/* Disable toggle for non-assignees */
+.reminder-circle.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.reminder-circle.disabled:active {
+  transform: none;
+}
+
 /* iPhone-style Reminder List */
 .mobile-reminder-list {
   padding: 0 20px;
