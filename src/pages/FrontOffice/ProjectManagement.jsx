@@ -1,4 +1,10 @@
-import React, { useState, useContext, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useContext,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 import {
   Card,
   Table,
@@ -279,13 +285,16 @@ const ProjectManagement = () => {
   ]);
 
   // Memoized query variables - updates when buildFilters changes
-  const projectQueryVariables = useMemo(() => ({
-    filters: buildFilters(),
-    page: 1,
-    limit: 20,
-    sortBy: "createdAt",
-    sortOrder: "DESC",
-  }), [buildFilters]);
+  const projectQueryVariables = useMemo(
+    () => ({
+      filters: buildFilters(),
+      page: 1,
+      limit: 20,
+      sortBy: "createdAt",
+      sortOrder: "DESC",
+    }),
+    [buildFilters]
+  );
 
   // GraphQL Queries
   const {
@@ -556,7 +565,15 @@ const ProjectManagement = () => {
   // Reset page when filters change
   useEffect(() => {
     setPage(1);
-  }, [statusFilter, clientFilter, workTypeFilter, myClientsOnly, searchText, deadlineDateRange, user?.id]);
+  }, [
+    statusFilter,
+    clientFilter,
+    workTypeFilter,
+    myClientsOnly,
+    searchText,
+    deadlineDateRange,
+    user?.id,
+  ]);
 
   // Populate invoicedProjectIds from server-provided project.invoiceId / project.invoice
   useEffect(() => {
@@ -751,14 +768,18 @@ const ProjectManagement = () => {
     // Check if project has invoice - cannot edit
     const hasInvoice = project.invoice || project.invoiceId;
     if (hasInvoice) {
-      message.error("Cannot edit a project that has an invoice generated. Project is locked.");
+      message.error(
+        "Cannot edit a project that has an invoice generated. Project is locked."
+      );
       return;
     }
 
     // Check if project is delivered - cannot edit (except changing to reopen)
     const isDelivered = (project.status || "").toLowerCase() === "delivered";
     if (isDelivered) {
-      message.error("Cannot edit a delivered project. Change status to REOPEN first if you need to make changes.");
+      message.error(
+        "Cannot edit a delivered project. Change status to REOPEN first if you need to make changes."
+      );
       return;
     }
 
@@ -950,7 +971,7 @@ const ProjectManagement = () => {
           const rate = Number(
             pg.customRate !== undefined && pg.customRate !== null
               ? pg.customRate
-              : (pg.grading?.defaultRate ?? 0)
+              : pg.grading?.defaultRate ?? 0
           );
           const amount = quantity * rate;
           return {
@@ -1033,7 +1054,9 @@ const ProjectManagement = () => {
     // Projects with invoices: Only allow changing to REOPEN if delivered
     if (hasInvoice) {
       if (!isDelivered) {
-        message.error("Cannot change status of a project with an invoice. Only delivered projects can be reopened.");
+        message.error(
+          "Cannot change status of a project with an invoice. Only delivered projects can be reopened."
+        );
         return;
       }
       // For delivered projects with invoice, only allow REOPEN status
@@ -1360,9 +1383,11 @@ const ProjectManagement = () => {
                   >
                     {pg.grading?.name || pg.grading?.shortCode || "N/A"}
                     {!shouldHidePrices &&
-                      ` - ₹${(pg.customRate !== undefined && pg.customRate !== null)
-                        ? pg.customRate
-                        : (pg.grading?.defaultRate ?? 0)}`}
+                      ` - ₹${
+                        pg.customRate !== undefined && pg.customRate !== null
+                          ? pg.customRate
+                          : pg.grading?.defaultRate ?? 0
+                      }`}
                   </Tag>
                 ))
               ) : (
@@ -1429,8 +1454,9 @@ const ProjectManagement = () => {
             />
           </Tooltip>
           {canEditProjects &&
-            (record.status || "").toString().toUpperCase() !== "COMPLETED" && 
-            !record.invoice && !record.invoiceId &&
+            (record.status || "").toString().toUpperCase() !== "COMPLETED" &&
+            !record.invoice &&
+            !record.invoiceId &&
             (record.status || "").toLowerCase() !== "delivered" && (
               <Tooltip title="Edit">
                 <Button
@@ -1442,15 +1468,18 @@ const ProjectManagement = () => {
             )}
           {canEditProjects &&
             ((record.status || "").toString().toUpperCase() === "COMPLETED" ||
-             record.invoice || record.invoiceId ||
-             (record.status || "").toLowerCase() === "delivered") && (
-              <Tooltip title={
-                record.invoice || record.invoiceId
-                  ? "Cannot edit: Invoice generated"
-                  : (record.status || "").toLowerCase() === "delivered"
-                  ? "Cannot edit: Project delivered"
-                  : "Cannot edit: Project completed"
-              }>
+              record.invoice ||
+              record.invoiceId ||
+              (record.status || "").toLowerCase() === "delivered") && (
+              <Tooltip
+                title={
+                  record.invoice || record.invoiceId
+                    ? "Cannot edit: Invoice generated"
+                    : (record.status || "").toLowerCase() === "delivered"
+                    ? "Cannot edit: Project delivered"
+                    : "Cannot edit: Project completed"
+                }
+              >
                 <Button
                   type="text"
                   icon={<EditOutlined />}
@@ -1603,14 +1632,18 @@ const ProjectManagement = () => {
     <div className="project-management">
       <div>
         {/* Filters and Actions with Inline Stats */}
-        <Card 
-          style={{ marginBottom: 16 }}
-          bodyStyle={{ padding: "8px 16px" }}
-        >
+        <Card style={{ marginBottom: 16 }} bodyStyle={{ padding: "8px 16px" }}>
           <Row gutter={[16, 16]} align="middle">
             {/* Inline Statistics - Compact Badges */}
             <Col span={24}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
                 <Text strong style={{ fontSize: 13, color: "#262626" }}>
                   Filters
                 </Text>
@@ -1619,16 +1652,16 @@ const ProjectManagement = () => {
                     <Checkbox
                       checked={myClientsOnly}
                       onChange={(e) => setMyClientsOnly(e.target.checked)}
-                      style={{ 
-                        backgroundColor: myClientsOnly ? "#e6f7ff" : "transparent",
+                      style={{
+                        backgroundColor: myClientsOnly
+                          ? "#e6f7ff"
+                          : "transparent",
                         padding: "1px 6px",
                         borderRadius: "4px",
-                        transition: "all 0.3s"
+                        transition: "all 0.3s",
                       }}
                     >
-                      <Text style={{ fontSize: 13 }}>
-                        My Clients
-                      </Text>
+                      <Text style={{ fontSize: 13 }}>My Clients</Text>
                     </Checkbox>
                   )}
                   <Tooltip title="Refresh Projects">
@@ -1641,7 +1674,7 @@ const ProjectManagement = () => {
                   </Tooltip>
                 </Space>
               </div>
-              
+
               <div
                 style={{
                   display: "flex",
@@ -1652,366 +1685,324 @@ const ProjectManagement = () => {
                 }}
               >
                 {projectsLoading && (
-                  <div style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    backgroundColor: "rgba(255, 255, 255, 0.7)",
-                    zIndex: 10,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    borderRadius: "4px"
-                  }}>
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      backgroundColor: "rgba(255, 255, 255, 0.7)",
+                      zIndex: 10,
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      borderRadius: "4px",
+                    }}
+                  >
                     <Space direction="vertical" align="center" size={4}>
-                      <ReloadOutlined spin style={{ fontSize: 20, color: "#1890ff" }} />
-                      <Text type="secondary" style={{ fontSize: 12 }}>Loading...</Text>
+                      <ReloadOutlined
+                        spin
+                        style={{ fontSize: 20, color: "#1890ff" }}
+                      />
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Loading...
+                      </Text>
                     </Space>
                   </div>
                 )}
-                  <Space
-                    size={2}
+                <Space
+                  size={2}
+                  style={{
+                    ...getFilterButtonStyle(statusFilter === "DRAFT"),
+                    opacity:
+                      stats.draft === 0 && statusFilter !== "DRAFT" ? 0.5 : 1,
+                  }}
+                  onClick={() => setStatusFilter("DRAFT")}
+                >
+                  <EditOutlined
                     style={{
-                      ...getFilterButtonStyle(statusFilter === "DRAFT"),
-                      opacity: stats.draft === 0 && statusFilter !== "DRAFT" ? 0.5 : 1,
+                      fontSize: 14,
+                      color: statusFilter === "DRAFT" ? "#fff" : "#faad14",
                     }}
-                    onClick={() => setStatusFilter("DRAFT")}
-                  >
-                    <EditOutlined
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "DRAFT" ? "#fff" : "#faad14",
-                      }}
-                    />
-                    <Text
-                      style={{
-                        fontSize: 14,
-                        fontWeight: 600,
-                        color: statusFilter === "DRAFT" ? "#fff" : "#000",
-                      }}
-                    >
-                      Draft:
-                    </Text>
-                    <Tag
-                      color={statusFilter === "DRAFT" ? "blue" : "orange"}
-                      style={{ margin: 0, fontSize: 12, padding: "1px 6px" }}
-                    >
-                      {stats.draft}
-                    </Tag>
-                  </Space>
-                  <Space
-                    size={2}
+                  />
+                  <Text
                     style={{
-                      ...getFilterButtonStyle(statusFilter === "all"),
+                      fontSize: 14,
+                      fontWeight: 600,
+                      color: statusFilter === "DRAFT" ? "#fff" : "#000",
                     }}
-                    onClick={() => setStatusFilter("all")}
                   >
-                    <ProjectOutlined
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "all" ? "#fff" : "#1890ff",
-                      }}
-                    />
-                    <Text
-                      strong
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "all" ? "#fff" : "#000",
-                      }}
-                    >
-                      Total:
-                    </Text>
-                    <Tag
-                      color={statusFilter === "all" ? "blue" : "blue"}
-                      style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
-                    >
-                      {stats.total}
-                    </Tag>
-                  </Space>
-                  <Space
-                    size={2}
+                    Draft:
+                  </Text>
+                  <Tag
+                    color={statusFilter === "DRAFT" ? "blue" : "orange"}
+                    style={{ margin: 0, fontSize: 12, padding: "1px 6px" }}
+                  >
+                    {stats.draft}
+                  </Tag>
+                </Space>
+
+                <Space
+                  size={2}
+                  style={{
+                    ...getFilterButtonStyle(statusFilter === "ACTIVE"),
+                  }}
+                  onClick={() => setStatusFilter("ACTIVE")}
+                >
+                  <PlayCircleOutlined
                     style={{
-                      ...getFilterButtonStyle(statusFilter === "ACTIVE"),
+                      fontSize: 14,
+                      color: statusFilter === "ACTIVE" ? "#fff" : "#52c41a",
                     }}
-                    onClick={() => setStatusFilter("ACTIVE")}
-                  >
-                    <PlayCircleOutlined
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "ACTIVE" ? "#fff" : "#52c41a",
-                      }}
-                    />
-                    <Text
-                      strong
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "ACTIVE" ? "#fff" : "#000",
-                      }}
-                    >
-                      Active:
-                    </Text>
-                    <Tag
-                      color={statusFilter === "ACTIVE" ? "blue" : "green"}
-                      style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
-                    >
-                      {stats.active}
-                    </Tag>
-                  </Space>
-                  <Space
-                    size={2}
+                  />
+                  <Text
+                    strong
                     style={{
-                      ...getFilterButtonStyle(statusFilter === "IN_PROGRESS"),
+                      fontSize: 14,
+                      color: statusFilter === "ACTIVE" ? "#fff" : "#000",
                     }}
-                    onClick={() => setStatusFilter("IN_PROGRESS")}
                   >
-                    <ClockCircleOutlined
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "IN_PROGRESS" ? "#fff" : "#1890ff",
-                      }}
-                    />
-                    <Text
-                      strong
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "IN_PROGRESS" ? "#fff" : "#000",
-                      }}
-                    >
-                      In Progress:
-                    </Text>
-                    <Tag
-                      color={statusFilter === "IN_PROGRESS" ? "blue" : "blue"}
-                      style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
-                    >
-                      {stats.inProgress}
-                    </Tag>
-                  </Space>
-                  <Space
-                    size={2}
+                    Active:
+                  </Text>
+                  <Tag
+                    color={statusFilter === "ACTIVE" ? "blue" : "green"}
+                    style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
+                  >
+                    {stats.active}
+                  </Tag>
+                </Space>
+                <Space
+                  size={2}
+                  style={{
+                    ...getFilterButtonStyle(statusFilter === "IN_PROGRESS"),
+                  }}
+                  onClick={() => setStatusFilter("IN_PROGRESS")}
+                >
+                  <ClockCircleOutlined
                     style={{
-                      ...getFilterButtonStyle(statusFilter === "REOPEN"),
+                      fontSize: 14,
+                      color:
+                        statusFilter === "IN_PROGRESS" ? "#fff" : "#1890ff",
                     }}
-                    onClick={() => setStatusFilter("REOPEN")}
-                  >
-                    <ReloadOutlined
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "REOPEN" ? "#fff" : "#eb2f96",
-                      }}
-                    />
-                    <Text
-                      strong
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "REOPEN" ? "#fff" : "#000",
-                      }}
-                    >
-                      Reopen:
-                    </Text>
-                    <Tag
-                      color={statusFilter === "REOPEN" ? "blue" : "magenta"}
-                      style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
-                    >
-                      {stats.reopen}
-                    </Tag>
-                  </Space>
-                  <Space
-                    size={2}
+                  />
+                  <Text
+                    strong
                     style={{
-                      ...getFilterButtonStyle(statusFilter === "NO_INVOICE"),
+                      fontSize: 14,
+                      color: statusFilter === "IN_PROGRESS" ? "#fff" : "#000",
                     }}
-                    onClick={() => setStatusFilter("NO_INVOICE")}
                   >
-                    <ExclamationCircleOutlined
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "NO_INVOICE" ? "#fff" : "#fa8c16",
-                      }}
-                    />
-                    <Text
-                      strong
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "NO_INVOICE" ? "#fff" : "#000",
-                      }}
-                    >
-                      Completed (No Invoice):
-                    </Text>
-                    <Tag
-                      color={statusFilter === "NO_INVOICE" ? "blue" : "orange"}
-                      style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
-                    >
-                      {stats.noInvoice}
-                    </Tag>
-                  </Space>
-                  <Space
-                    size={2}
+                    In Progress:
+                  </Text>
+                  <Tag
+                    color={statusFilter === "IN_PROGRESS" ? "blue" : "blue"}
+                    style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
+                  >
+                    {stats.inProgress}
+                  </Tag>
+                </Space>
+
+                <Space
+                  size={2}
+                  style={{
+                    ...getFilterButtonStyle(statusFilter === "NO_INVOICE"),
+                  }}
+                  onClick={() => setStatusFilter("NO_INVOICE")}
+                >
+                  <ExclamationCircleOutlined
                     style={{
-                      ...getFilterButtonStyle(statusFilter === "COMPLETED"),
+                      fontSize: 14,
+                      color: statusFilter === "NO_INVOICE" ? "#fff" : "#fa8c16",
                     }}
-                    onClick={() => setStatusFilter("COMPLETED")}
-                  >
-                    <CheckCircleOutlined
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "COMPLETED" ? "#fff" : "#1890ff",
-                      }}
-                    />
-                    <Text
-                      strong
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "COMPLETED" ? "#fff" : "#000",
-                      }}
-                    >
-                      Not Delivered:
-                    </Text>
-                    <Tag
-                      color={statusFilter === "COMPLETED" ? "blue" : "cyan"}
-                      style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
-                    >
-                      {stats.notDelivered}
-                    </Tag>
-                  </Space>
-                  <Space
-                    size={2}
+                  />
+                  <Text
+                    strong
                     style={{
-                      ...getFilterButtonStyle(statusFilter === "DELIVERED"),
+                      fontSize: 14,
+                      color: statusFilter === "NO_INVOICE" ? "#fff" : "#000",
                     }}
-                    onClick={() => setStatusFilter("DELIVERED")}
                   >
-                    <CheckCircleOutlined
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "DELIVERED" ? "#fff" : "#722ed1",
-                      }}
-                    />
-                    <Text
-                      strong
-                      style={{
-                        fontSize: 14,
-                        color: statusFilter === "DELIVERED" ? "#fff" : "#000",
-                      }}
-                    >
-                      Delivered:
-                    </Text>
-                    <Tag
-                      color={statusFilter === "DELIVERED" ? "blue" : "magenta"}
-                      style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
-                    >
-                      {stats.delivered}
-                    </Tag>
-                  </Space>
-                  <Space
-                    size={2}
+                    Completed:
+                  </Text>
+                  <Tag
+                    color={statusFilter === "NO_INVOICE" ? "blue" : "orange"}
+                    style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
+                  >
+                    {stats.noInvoice}
+                  </Tag>
+                </Space>
+                <Space
+                  size={2}
+                  style={{
+                    ...getFilterButtonStyle(
+                      statusFilter === "DELIVERED_NO_INVOICE"
+                    ),
+                  }}
+                  onClick={() => setStatusFilter("DELIVERED_NO_INVOICE")}
+                >
+                  <CheckCircleOutlined
                     style={{
-                      ...getFilterButtonStyle(
+                      fontSize: 14,
+                      color:
                         statusFilter === "DELIVERED_NO_INVOICE"
-                      ),
+                          ? "#fff"
+                          : "#b37feb",
                     }}
-                    onClick={() => setStatusFilter("DELIVERED_NO_INVOICE")}
-                  >
-                    <CheckCircleOutlined
-                      style={{
-                        fontSize: 14,
-                        color:
-                          statusFilter === "DELIVERED_NO_INVOICE"
-                            ? "#fff"
-                            : "#b37feb",
-                      }}
-                    />
-                    <Text
-                      strong
-                      style={{
-                        fontSize: 14,
-                        color:
-                          statusFilter === "DELIVERED_NO_INVOICE"
-                            ? "#fff"
-                            : "#000",
-                      }}
-                    >
-                      Delivered (No Invoice):
-                    </Text>
-                    <Tag
-                      color={
+                  />
+                  <Text
+                    strong
+                    style={{
+                      fontSize: 14,
+                      color:
                         statusFilter === "DELIVERED_NO_INVOICE"
-                          ? "blue"
-                          : "purple"
-                      }
-                      style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
-                    >
-                      {stats.deliveredNoInvoice}
-                    </Tag>
-                  </Space>
-                  <Space
-                    size={2}
-                    style={{
-                      ...getFilterButtonStyle(statusFilter === "TOTAL_INVOICE"),
+                          ? "#fff"
+                          : "#000",
                     }}
-                    onClick={() => setStatusFilter("TOTAL_INVOICE")}
                   >
-                    <ExclamationCircleOutlined
-                      style={{
-                        fontSize: 14,
-                        color:
-                          statusFilter === "TOTAL_INVOICE" ? "#fff" : "#eac42b",
-                      }}
-                    />
-                    <Text
-                      strong
-                      style={{
-                        fontSize: 14,
-                        color:
-                          statusFilter === "TOTAL_INVOICE" ? "#fff" : "#000",
-                      }}
-                    >
-                      Invoice Generated (All):
-                    </Text>
-                    <Tag
-                      color={statusFilter === "TOTAL_INVOICE" ? "blue" : "gold"}
-                      style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
-                    >
-                      {stats.totalInvoice}
-                    </Tag>
-                  </Space>
-                  <Space
-                    size={2}
+                    Delivered (No Invoice):
+                  </Text>
+                  <Tag
+                    color={
+                      statusFilter === "DELIVERED_NO_INVOICE"
+                        ? "blue"
+                        : "purple"
+                    }
+                    style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
+                  >
+                    {stats.deliveredNoInvoice}
+                  </Tag>
+                </Space>
+                <Space
+                  size={2}
+                  style={{
+                    ...getFilterButtonStyle(statusFilter === "TOTAL_INVOICE"),
+                  }}
+                  onClick={() => setStatusFilter("TOTAL_INVOICE")}
+                >
+                  <ExclamationCircleOutlined
                     style={{
-                      ...getFilterButtonStyle(statusFilter === "REQUESTED"),
+                      fontSize: 14,
+                      color:
+                        statusFilter === "TOTAL_INVOICE" ? "#fff" : "#eac42b",
                     }}
-                    onClick={() => setStatusFilter("REQUESTED")}
+                  />
+                  <Text
+                    strong
+                    style={{
+                      fontSize: 14,
+                      color: statusFilter === "TOTAL_INVOICE" ? "#fff" : "#000",
+                    }}
                   >
-                    <CheckCircleOutlined
-                      style={{
-                        fontSize: 14,
-                        color:
-                          statusFilter === "REQUESTED" ? "#fff" : "#722ed1",
-                      }}
-                    />
-                    <Text
-                      strong
-                      style={{
-                        fontSize: 14,
-                        color:
-                          statusFilter === "REQUESTED" ? "#fff" : "#000",
-                      }}
-                    >
-                      Fly-on-Credit:
-                    </Text>
-                    <Tag
-                      color={statusFilter === "REQUESTED" ? "blue" : "purple"}
-                      style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
-                    >
-                      {stats.flyOnCredit}
-                    </Tag>
-                  </Space>
+                    Invoice Generated (All):
+                  </Text>
+                  <Tag
+                    color={statusFilter === "TOTAL_INVOICE" ? "blue" : "gold"}
+                    style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
+                  >
+                    {stats.totalInvoice}
+                  </Tag>
+                </Space>
+                <Space
+                  size={2}
+                  style={{
+                    ...getFilterButtonStyle(statusFilter === "REQUESTED"),
+                  }}
+                  onClick={() => setStatusFilter("REQUESTED")}
+                >
+                  <CheckCircleOutlined
+                    style={{
+                      fontSize: 14,
+                      color: statusFilter === "REQUESTED" ? "#fff" : "#722ed1",
+                    }}
+                  />
+                  <Text
+                    strong
+                    style={{
+                      fontSize: 14,
+                      color: statusFilter === "REQUESTED" ? "#fff" : "#000",
+                    }}
+                  >
+                    Fly-on-Credit:
+                  </Text>
+                  <Tag
+                    color={statusFilter === "REQUESTED" ? "blue" : "purple"}
+                    style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
+                  >
+                    {stats.flyOnCredit}
+                  </Tag>
+                </Space>
+                <Space
+                  size={2}
+                  style={{
+                    ...getFilterButtonStyle(statusFilter === "REOPEN"),
+                  }}
+                  onClick={() => setStatusFilter("REOPEN")}
+                >
+                  <ReloadOutlined
+                    style={{
+                      fontSize: 14,
+                      color: statusFilter === "REOPEN" ? "#fff" : "#eb2f96",
+                    }}
+                  />
+                  <Text
+                    strong
+                    style={{
+                      fontSize: 14,
+                      color: statusFilter === "REOPEN" ? "#fff" : "#000",
+                    }}
+                  >
+                    Reopen:
+                  </Text>
+                  <Tag
+                    color={statusFilter === "REOPEN" ? "blue" : "magenta"}
+                    style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
+                  >
+                    {stats.reopen}
+                  </Tag>
+                </Space>
+                <Space
+                  size={2}
+                  style={{
+                    ...getFilterButtonStyle(statusFilter === "all"),
+                  }}
+                  onClick={() => setStatusFilter("all")}
+                >
+                  <ProjectOutlined
+                    style={{
+                      fontSize: 14,
+                      color: statusFilter === "all" ? "#fff" : "#1890ff",
+                    }}
+                  />
+                  <Text
+                    strong
+                    style={{
+                      fontSize: 14,
+                      color: statusFilter === "all" ? "#fff" : "#000",
+                    }}
+                  >
+                    Total:
+                  </Text>
+                  <Tag
+                    color={statusFilter === "all" ? "blue" : "blue"}
+                    style={{ margin: 0, fontSize: 14, padding: "1px 6px" }}
+                  >
+                    {stats.total}
+                  </Tag>
+                </Space>
               </div>
             </Col>
           </Row>
           {!shouldHidePrices && (
-            <Row gutter={16} align="middle" style={{ marginTop: 16, paddingTop: 16, borderTop: "1px solid #f0f0f0" }}>
+            <Row
+              gutter={16}
+              align="middle"
+              style={{
+                marginTop: 16,
+                paddingTop: 16,
+                borderTop: "1px solid #f0f0f0",
+              }}
+            >
               <Col flex="auto">
                 <Space size={16}>
                   <Space size={2}>
@@ -2473,10 +2464,10 @@ const ProjectManagement = () => {
                           {" × "}
                           <Text>
                             ₹
-                            {(
-                              (pg.customRate !== undefined && pg.customRate !== null)
-                                ? pg.customRate
-                                : (pg.grading?.defaultRate ?? 0)
+                            {(pg.customRate !== undefined &&
+                            pg.customRate !== null
+                              ? pg.customRate
+                              : pg.grading?.defaultRate ?? 0
                             ).toLocaleString()}
                           </Text>
                           {" = "}

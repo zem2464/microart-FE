@@ -1946,6 +1946,25 @@ const TaskTable = () => {
                     </Checkbox>
                   </Space>
                 )}
+                <Space size={4} align="right">
+                  <Space>
+                    <Tooltip title="Reset Filters">
+                      <Button
+                        icon={<CloseCircleOutlined />}
+                        onClick={handleResetFilters}
+                      />
+                    </Tooltip>
+                    <Tooltip title="Refresh">
+                      <Button
+                        icon={<ReloadOutlined />}
+                        onClick={() => {
+                          refetchTasks();
+                          refetchWorkTypes();
+                        }}
+                      />
+                    </Tooltip>
+                  </Space>
+                </Space>
               </Space>
             </Col>
           </Row>
@@ -2083,25 +2102,6 @@ const TaskTable = () => {
                 allowClear
               />
             </Col>
-            <Col span={2} style={{ textAlign: "right" }}>
-              <Space>
-                <Tooltip title="Reset Filters">
-                  <Button
-                    icon={<CloseCircleOutlined />}
-                    onClick={handleResetFilters}
-                  />
-                </Tooltip>
-                <Tooltip title="Refresh">
-                  <Button
-                    icon={<ReloadOutlined />}
-                    onClick={() => {
-                      refetchTasks();
-                      refetchWorkTypes();
-                    }}
-                  />
-                </Tooltip>
-              </Space>
-            </Col>
           </Row>
         </Card>
 
@@ -2111,6 +2111,9 @@ const TaskTable = () => {
             activeKey={selectedWorkTypeId}
             onChange={setSelectedWorkTypeId}
             type="card"
+            tabBarStyle={{
+              accentColor: "GrayText",
+            }}
             items={Object.entries(allWorkTypeTabs).map(
               ([workTypeId, workTypeData]) => {
                 // Get the actual task data for the selected worktype from tableDataByWorkType
@@ -2128,19 +2131,17 @@ const TaskTable = () => {
                 return {
                   key: workTypeId,
                   label: (
-                    <span>
-                      {workTypeData.workTypeName}
-                      {selectedWorkTypeId === workTypeId && (
-                        <>
-                          <Tag color="blue" style={{ marginLeft: 8 }}>
-                            {rowCount} Projects
-                          </Tag>
-                          <Tag color="green" style={{ marginLeft: 4 }}>
-                            {totalImages} Images
-                          </Tag>
-                        </>
-                      )}
-                    </span>
+                    <div className="flex flex-col gap-2 justify-start align-top">
+                      <div>{workTypeData.workTypeName}</div>
+                      <div>
+                        {selectedWorkTypeId === workTypeId && (
+                          <>
+                            <Tag>{rowCount} Projects</Tag>
+                            <Tag>{totalImages} Images</Tag>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   ),
                   children: (
                     <div>
