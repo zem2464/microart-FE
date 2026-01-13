@@ -426,6 +426,9 @@ const ProjectManagement = () => {
           );
         }
 
+        // Refresh the table
+        refetchProjects();
+
         // If we were generating invoice from the completion flow (modal open), close modal and clear selection
         try {
           if (selectedProject) {
@@ -439,10 +442,10 @@ const ProjectManagement = () => {
 
         try {
           refetchClients && refetchClients();
-        } catch (e) {}
+        } catch (e) { }
         try {
           refetchStats && refetchStats();
-        } catch (e) {}
+        } catch (e) { }
       } else {
         message.error(
           data?.generateProjectInvoice?.message || "Failed to generate invoice"
@@ -756,7 +759,9 @@ const ProjectManagement = () => {
   const handleViewProject = (project) => {
     // Open redesigned Project Detail Drawer by projectId for full context
     try {
-      showProjectDetailDrawerV2(project.id);
+      showProjectDetailDrawerV2(project.id, null, () => {
+        refetchProjects();
+      });
       return;
     } catch (e) {
       // Fallback to legacy project detail drawer
@@ -774,14 +779,14 @@ const ProjectManagement = () => {
       return;
     }
 
-    // Check if project is delivered - cannot edit (except changing to reopen)
-    const isDelivered = (project.status || "").toLowerCase() === "delivered";
-    if (isDelivered) {
-      message.error(
-        "Cannot edit a delivered project. Change status to REOPEN first if you need to make changes."
-      );
-      return;
-    }
+    // Check if project is delivered - cannot edit (except changing to reopen) - RELAXED: now allowed if no invoice
+    // const isDelivered = (project.status || "").toLowerCase() === "delivered";
+    // if (isDelivered) {
+    //   message.error(
+    //     "Cannot edit a delivered project. Change status to REOPEN first if you need to make changes."
+    //   );
+    //   return;
+    // }
 
     showProjectFormDrawer(project, "edit", () => {
       refetchProjects();
@@ -967,33 +972,33 @@ const ProjectManagement = () => {
       project.projectCode || project.projectNumber || project.id || "PROJECT";
     const items = (project.projectGradings || []).length
       ? project.projectGradings.map((pg, idx) => {
-          const quantity = Number(pg.imageQuantity || 0);
-          const rate = Number(
-            pg.customRate !== undefined && pg.customRate !== null
-              ? pg.customRate
-              : pg.grading?.defaultRate ?? 0
-          );
-          const amount = quantity * rate;
-          return {
-            line: idx + 1,
-            description: pg.grading?.name || "Service",
-            quantity,
-            rate,
-            amount,
-          };
-        })
+        const quantity = Number(pg.imageQuantity || 0);
+        const rate = Number(
+          pg.customRate !== undefined && pg.customRate !== null
+            ? pg.customRate
+            : pg.grading?.defaultRate ?? 0
+        );
+        const amount = quantity * rate;
+        return {
+          line: idx + 1,
+          description: pg.grading?.name || "Service",
+          quantity,
+          rate,
+          amount,
+        };
+      })
       : [
-          {
-            line: 1,
-            description: project.grading?.name || "Service",
-            quantity:
-              project.imageQuantity ||
-              project.totalImageQuantity ||
-              project.imageQuantityInvoiced ||
-              0,
-            rate: Number(project.grading?.defaultRate || 0),
-          },
-        ].map((item) => ({ ...item, amount: item.quantity * item.rate }));
+        {
+          line: 1,
+          description: project.grading?.name || "Service",
+          quantity:
+            project.imageQuantity ||
+            project.totalImageQuantity ||
+            project.imageQuantityInvoiced ||
+            0,
+          rate: Number(project.grading?.defaultRate || 0),
+        },
+      ].map((item) => ({ ...item, amount: item.quantity * item.rate }));
 
     const subtotal = items.reduce(
       (sum, item) => sum + Number(item.amount || 0),
@@ -1383,10 +1388,9 @@ const ProjectManagement = () => {
                   >
                     {pg.grading?.name || pg.grading?.shortCode || "N/A"}
                     {!shouldHidePrices &&
-                      ` - ₹${
-                        pg.customRate !== undefined && pg.customRate !== null
-                          ? pg.customRate
-                          : pg.grading?.defaultRate ?? 0
+                      ` - ₹${pg.customRate !== undefined && pg.customRate !== null
+                        ? pg.customRate
+                        : pg.grading?.defaultRate ?? 0
                       }`}
                   </Tag>
                 ))
@@ -1454,10 +1458,8 @@ const ProjectManagement = () => {
             />
           </Tooltip>
           {canEditProjects &&
-            (record.status || "").toString().toUpperCase() !== "COMPLETED" &&
             !record.invoice &&
-            !record.invoiceId &&
-            (record.status || "").toLowerCase() !== "delivered" && (
+            !record.invoiceId && (
               <Tooltip title="Edit">
                 <Button
                   type="text"
@@ -1467,19 +1469,8 @@ const ProjectManagement = () => {
               </Tooltip>
             )}
           {canEditProjects &&
-            ((record.status || "").toString().toUpperCase() === "COMPLETED" ||
-              record.invoice ||
-              record.invoiceId ||
-              (record.status || "").toLowerCase() === "delivered") && (
-              <Tooltip
-                title={
-                  record.invoice || record.invoiceId
-                    ? "Cannot edit: Invoice generated"
-                    : (record.status || "").toLowerCase() === "delivered"
-                    ? "Cannot edit: Project delivered"
-                    : "Cannot edit: Project completed"
-                }
-              >
+            (record.invoice || record.invoiceId) && (
+              <Tooltip title="Cannot edit: Invoice generated">
                 <Button
                   type="text"
                   icon={<EditOutlined />}
@@ -1508,7 +1499,7 @@ const ProjectManagement = () => {
                 />
               </Tooltip>
             )}
-          {["ACTIVE", "IN_PROGRESS"].includes(
+          {["ACTIVE", "IN_PROGRESS", "COMPLETED", "DELIVERED"].includes(
             (record.status || "").toString().toUpperCase()
           ) &&
             !(
@@ -2438,8 +2429,8 @@ const ProjectManagement = () => {
                     projectToInvoice.status === "completed"
                       ? "green"
                       : projectToInvoice.status === "active"
-                      ? "blue"
-                      : "default"
+                        ? "blue"
+                        : "default"
                   }
                 >
                   {projectToInvoice.status?.toUpperCase()}
@@ -2448,7 +2439,7 @@ const ProjectManagement = () => {
 
               {/* Show grading details */}
               {projectToInvoice.projectGradings &&
-              projectToInvoice.projectGradings.length > 0 ? (
+                projectToInvoice.projectGradings.length > 0 ? (
                 <>
                   <Descriptions.Item label="Gradings">
                     <Space
@@ -2465,7 +2456,7 @@ const ProjectManagement = () => {
                           <Text>
                             ₹
                             {(pg.customRate !== undefined &&
-                            pg.customRate !== null
+                              pg.customRate !== null
                               ? pg.customRate
                               : pg.grading?.defaultRate ?? 0
                             ).toLocaleString()}

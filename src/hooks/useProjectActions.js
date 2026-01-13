@@ -9,7 +9,7 @@ import { GENERATE_PROJECT_INVOICE } from '../gql/clientLedger';
  * Custom hook for project-related mutations
  * Encapsulates all project actions with their callbacks
  */
-export const useProjectActions = ({ refetch, closeDrawer }) => {
+export const useProjectActions = ({ refetch, closeDrawer, onAction }) => {
   // Update project mutation
   const [updateProjectMutation] = useMutation(UPDATE_PROJECT, {
     onCompleted: () => {
@@ -49,10 +49,11 @@ export const useProjectActions = ({ refetch, closeDrawer }) => {
             data.generateProjectInvoice.message || 'Invoice generated'
           );
           refetch?.project?.();
+          onAction?.();
         } else {
           message.error(
             data?.generateProjectInvoice?.message ||
-              'Failed to generate invoice'
+            'Failed to generate invoice'
           );
         }
       },

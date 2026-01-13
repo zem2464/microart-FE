@@ -54,20 +54,20 @@ export const AppDrawerProvider = ({ children }) => {
 	const [projectCreditExceeded, setProjectCreditExceeded] = useState(false);
 	const [projectFooterData, setProjectFooterData] = useState({ totalImageQuantity: 0, totalCalculatedBudget: 0 });
 	const [projectDetailDrawer, setProjectDetailDrawer] = useState({ open: false, project: null });
-	
+
 	// New Project Detail Drawer (accepts projectId only)
-	const [projectDetailDrawerV2, setProjectDetailDrawerV2] = useState({ open: false, projectId: null, title: 'Project Details', onClose: null });
-	
+	const [projectDetailDrawerV2, setProjectDetailDrawerV2] = useState({ open: false, projectId: null, title: 'Project Details', onClose: null, onAction: null });
+
 	// Task Detail Drawer (accepts taskId only)
 	const [taskDetailDrawerV2, setTaskDetailDrawerV2] = useState({ open: false, taskId: null });
-	
+
 	// Invoice Detail Drawer (for showing invoice details)
 	const [invoiceDetailDrawer, setInvoiceDetailDrawer] = useState({ open: false, invoice: null, invoiceId: null });
 	const [invoiceDrawerExtra, setInvoiceDrawerExtra] = useState(null);
-	
+
 	// Quotation Drawer
 	const [quoteDrawer, setQuoteDrawer] = useState({ open: false, quoteData: null });
-	
+
 	const showProjectFormDrawer = (project = null, mode = 'create', onSuccess = null) => {
 		setProjectFormDrawer({ open: true, project, mode, onSuccess });
 		setProjectCreditExceeded(false); // Reset on open
@@ -79,20 +79,20 @@ export const AppDrawerProvider = ({ children }) => {
 	};
 	const showProjectDetailDrawer = (project) => setProjectDetailDrawer({ open: true, project });
 	const closeProjectDetailDrawer = () => setProjectDetailDrawer({ open: false, project: null });
-	
+
 	// New V2 functions for redesigned drawer
-	const showProjectDetailDrawerV2 = useCallback((projectId, onClose = null) => setProjectDetailDrawerV2({ open: true, projectId, title: 'Project Details', onClose }), []);
+	const showProjectDetailDrawerV2 = useCallback((projectId, onClose = null, onAction = null) => setProjectDetailDrawerV2({ open: true, projectId, title: 'Project Details', onClose, onAction }), []);
 	const closeProjectDetailDrawerV2 = useCallback(() => {
 		setProjectDetailDrawerV2(prev => {
 			// Call onClose callback if it exists
 			if (prev.onClose && typeof prev.onClose === 'function') {
 				prev.onClose();
 			}
-			return { open: false, projectId: null, title: 'Project Details', onClose: null };
+			return { open: false, projectId: null, title: 'Project Details', onClose: null, onAction: null };
 		});
 	}, []);
 	const updateProjectDetailDrawerTitle = useCallback((title) => setProjectDetailDrawerV2(prev => ({ ...prev, title })), []);
-	
+
 	// Task Detail Drawer V2 functions
 	const showTaskDetailDrawerV2 = useCallback((taskId) => setTaskDetailDrawerV2({ open: true, taskId }), []);
 	const closeTaskDetailDrawerV2 = useCallback(() => setTaskDetailDrawerV2({ open: false, taskId: null }), []);
@@ -354,7 +354,7 @@ export const AppDrawerProvider = ({ children }) => {
 					footer={
 						<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
 							<Space size="large">
-								<ProjectFormFooter 
+								<ProjectFormFooter
 									totalImageQuantity={projectFooterData.totalImageQuantity}
 									totalCalculatedBudget={projectFooterData.totalCalculatedBudget}
 									shouldHidePrices={projectFooterData.shouldHidePrices}
@@ -363,9 +363,9 @@ export const AppDrawerProvider = ({ children }) => {
 							<Space>
 								<Button onClick={closeProjectFormDrawer} size="middle">Cancel</Button>
 								{projectCreditExceeded ? (
-									<Button 
-										type="primary" 
-										size="middle" 
+									<Button
+										type="primary"
+										size="middle"
 										danger
 										onClick={() => {
 											// Trigger the credit request submission
@@ -387,14 +387,14 @@ export const AppDrawerProvider = ({ children }) => {
 						</div>
 					}
 				>
-				<ProjectForm
-					project={projectFormDrawer.project}
-					mode={projectFormDrawer.mode}
-					onClose={closeProjectFormDrawer}
-					onSuccess={projectFormDrawer.onSuccess}
-					onCreditExceeded={(exceeded) => setProjectCreditExceeded(exceeded)}
-					onFooterDataChange={(data) => setProjectFooterData(data)}
-				/>
+					<ProjectForm
+						project={projectFormDrawer.project}
+						mode={projectFormDrawer.mode}
+						onClose={closeProjectFormDrawer}
+						onSuccess={projectFormDrawer.onSuccess}
+						onCreditExceeded={(exceeded) => setProjectCreditExceeded(exceeded)}
+						onFooterDataChange={(data) => setProjectFooterData(data)}
+					/>
 				</ModuleDrawer>
 			)}
 			{/* Project Detail Drawer */}
@@ -456,9 +456,9 @@ export const AppDrawerProvider = ({ children }) => {
 					destroyOnClose
 					maskClosable
 				>
-					<UserDetail 
-						user={userDetailDrawer.user} 
-						onClose={closeUserDetailDrawer} 
+					<UserDetail
+						user={userDetailDrawer.user}
+						onClose={closeUserDetailDrawer}
 					/>
 				</ModuleDrawer>
 			)}
@@ -505,13 +505,13 @@ export const AppDrawerProvider = ({ children }) => {
 					destroyOnClose
 					maskClosable
 				>
-					<WorkTypeDetail 
+					<WorkTypeDetail
 						workType={workTypeDetailDrawer.workType}
 						onEdit={() => {
 							closeWorkTypeDetailDrawer();
 							showWorkTypeFormDrawer(workTypeDetailDrawer.workType, 'edit');
 						}}
-						onClose={closeWorkTypeDetailDrawer} 
+						onClose={closeWorkTypeDetailDrawer}
 					/>
 				</ModuleDrawer>
 			)}
@@ -550,13 +550,13 @@ export const AppDrawerProvider = ({ children }) => {
 					destroyOnClose
 					maskClosable
 				>
-					<GradingDetail 
+					<GradingDetail
 						grading={gradingDetailDrawer.grading}
 						onEdit={() => {
 							closeGradingDetailDrawer();
 							showGradingFormDrawer(gradingDetailDrawer.grading, 'edit');
 						}}
-						onClose={closeGradingDetailDrawer} 
+						onClose={closeGradingDetailDrawer}
 					/>
 				</ModuleDrawer>
 			)}
@@ -599,13 +599,13 @@ export const AppDrawerProvider = ({ children }) => {
 					destroyOnClose
 					maskClosable
 				>
-					<ClientDetail 
+					<ClientDetail
 						client={clientDetailDrawer.client}
 						onEdit={(client) => {
 							closeClientDetailDrawer();
 							showClientFormDrawer(client, 'edit');
 						}}
-						onClose={closeClientDetailDrawer} 
+						onClose={closeClientDetailDrawer}
 					/>
 				</ModuleDrawer>
 			)}
@@ -621,7 +621,10 @@ export const AppDrawerProvider = ({ children }) => {
 					destroyOnClose
 					maskClosable
 				>
-					<ProjectDetailDrawer projectId={projectDetailDrawerV2.projectId} />
+					<ProjectDetailDrawer
+						projectId={projectDetailDrawerV2.projectId}
+						onAction={projectDetailDrawerV2.onAction}
+					/>
 				</ModuleDrawer>
 			)}
 
@@ -652,7 +655,7 @@ export const AppDrawerProvider = ({ children }) => {
 					maskClosable
 					extra={invoiceDrawerExtra}
 				>
-					<InvoiceDetailDrawer 
+					<InvoiceDetailDrawer
 						invoice={invoiceDetailDrawer.invoice}
 						invoiceId={invoiceDetailDrawer.invoiceId}
 						onClose={closeInvoiceDetailDrawer}

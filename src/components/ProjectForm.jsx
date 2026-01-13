@@ -125,7 +125,8 @@ const ProjectForm = ({
     mode === "edit" &&
     (project.status === "active" ||
       project.status === "in_progress" ||
-      project.status === "completed");
+      project.status === "completed" ||
+      project.status === "delivered");
 
   const isDraftProject =
     project && mode === "edit" && project.status === "draft";
@@ -160,7 +161,7 @@ const ProjectForm = ({
 
       // Check if cost increased but is within available credit
       const costIncreased = newTotalCost > originalApprovedAmount;
-      const hasAvailableCredit = projectCreditValidation && 
+      const hasAvailableCredit = projectCreditValidation &&
         projectCreditValidation.canCreateProject === true;
       const increasedButWithinCredit = costIncreased && hasAvailableCredit;
       setCostIncreasedButWithinCredit(increasedButWithinCredit);
@@ -681,7 +682,7 @@ const ProjectForm = ({
                   defaultValues[field.fieldKey] =
                     field.fieldType === "checkbox"
                       ? field.defaultValue === "true" ||
-                        field.defaultValue === true
+                      field.defaultValue === true
                       : field.defaultValue;
                 } catch (error) {
                   defaultValues[field.fieldKey] = field.defaultValue;
@@ -727,7 +728,7 @@ const ProjectForm = ({
     )?.defaultRate;
     const initialRate =
       clientCustomRate !== undefined &&
-      clientCustomRate !== null
+        clientCustomRate !== null
         ? clientCustomRate
         : gradingDefault || null;
     setPerImageRate(initialRate);
@@ -836,26 +837,26 @@ const ProjectForm = ({
       const attemptedRemoveOriginal = removedIds.filter((id) =>
         originalGradingIds.includes(id)
       );
-      
+
       if (attemptedRemoveOriginal.length > 0) {
         message.warning(
           "You cannot remove existing gradings from a started project. You can only add new gradings and adjust quantities or prices."
         );
-        
+
         // Restore original gradings that user tried to remove
         const restoredIds = selectedGradingIds.concat(attemptedRemoveOriginal);
-        
+
         // Update the select to show the restored state
         // We need to filter out the removed ones first, then add back the originals
         const validRemovedIds = removedIds.filter(
           (id) => !originalGradingIds.includes(id)
         );
-        
+
         let newSelectedGradings = [...selectedGradings];
         newSelectedGradings = newSelectedGradings.filter(
           (sg) => !validRemovedIds.includes(sg.gradingId)
         );
-        
+
         setSelectedGradings(newSelectedGradings);
         return; // Exit early to prevent further processing
       }
@@ -878,8 +879,8 @@ const ProjectForm = ({
         );
         const clientCustomRate =
           clientPref &&
-          clientPref.customRate !== undefined &&
-          clientPref.customRate !== null
+            clientPref.customRate !== undefined &&
+            clientPref.customRate !== null
             ? clientPref.customRate
             : null;
 
@@ -913,7 +914,7 @@ const ProjectForm = ({
       const gradingDefault = singleGrading.grading?.defaultRate;
       const initialRate =
         clientCustomRate !== undefined &&
-        clientCustomRate !== null
+          clientCustomRate !== null
           ? clientCustomRate
           : gradingDefault || null;
       setPerImageRate(initialRate);
@@ -1268,10 +1269,10 @@ const ProjectForm = ({
           overrideRate !== undefined && overrideRate !== null
             ? overrideRate
             : perImageRate !== null && perImageRate !== undefined
-            ? perImageRate
-            : clientCustom !== undefined && clientCustom !== null
-            ? clientCustom
-            : grading.defaultRate || 0;
+              ? perImageRate
+              : clientCustom !== undefined && clientCustom !== null
+                ? clientCustom
+                : grading.defaultRate || 0;
 
         const budget = rateToUse * quantity;
         setCalculatedBudget(budget);
@@ -1338,13 +1339,13 @@ const ProjectForm = ({
         // Use same priority logic as display: customRate > clientPref.customRate > grading.defaultRate
         const effectiveRate =
           sg.customRate !== undefined &&
-          sg.customRate !== null
+            sg.customRate !== null
             ? sg.customRate
             : clientPref &&
               clientPref.customRate !== undefined &&
               clientPref.customRate !== null
-            ? clientPref.customRate
-            : grading?.defaultRate || 0;
+              ? clientPref.customRate
+              : grading?.defaultRate || 0;
 
         return {
           gradingId: sg.gradingId,
@@ -1548,11 +1549,11 @@ const ProjectForm = ({
         const workTypeIds =
           project.projectWorkTypes && project.projectWorkTypes.length > 0
             ? [...project.projectWorkTypes]
-                .sort((a, b) => a.sequence - b.sequence) // Sort by sequence (operate on a copy)
-                .map((pwt) => pwt.workTypeId)
+              .sort((a, b) => a.sequence - b.sequence) // Sort by sequence (operate on a copy)
+              .map((pwt) => pwt.workTypeId)
             : project.workTypes && project.workTypes.length > 0
-            ? project.workTypes.map((wt) => wt.id)
-            : [];
+              ? project.workTypes.map((wt) => wt.id)
+              : [];
 
         form.setFieldsValue({
           clientId: project.clientId || project.client?.id,
@@ -1597,7 +1598,7 @@ const ProjectForm = ({
             sequence: pg.sequence,
           }));
           setSelectedGradings(mappedGradings);
-          
+
           // Track original grading IDs for limited edit permission
           const originalIds = mappedGradings.map((g) => g.gradingId);
           setOriginalGradingIds(originalIds);
@@ -1612,10 +1613,10 @@ const ProjectForm = ({
           };
           setSelectedGradings([singleGrading]);
           setSelectedGrading(gradingId);
-          
+
           // Track original grading ID for limited edit permission
           setOriginalGradingIds([gradingId]);
-          
+
           await loadGradingData(gradingId);
         }
 
@@ -1760,9 +1761,9 @@ const ProjectForm = ({
         projectWorkTypes:
           values.workTypeIds && values.workTypeIds.length > 0
             ? values.workTypeIds.map((wtId, index) => ({
-                workTypeId: wtId,
-                sequence: index + 1,
-              }))
+              workTypeId: wtId,
+              sequence: index + 1,
+            }))
             : [],
         name: values.name,
         description: values.description || "",
@@ -1771,9 +1772,8 @@ const ProjectForm = ({
           : null,
         status: "requested", // Important: Set status to requested
         intendedStatus: values.status || "active", // Store the intended status after approval
-        requestNotes: `Project cost exceeds credit limit. Total cost: ₹${totalEstCost.toLocaleString()}, Available credit: ₹${
-          projectCreditValidation?.availableCredit?.toLocaleString() || 0
-        }`,
+        requestNotes: `Project cost exceeds credit limit. Total cost: ₹${totalEstCost.toLocaleString()}, Available credit: ₹${projectCreditValidation?.availableCredit?.toLocaleString() || 0
+          }`,
         priority: values.priority || "B",
         notes: values.notes || "",
         clientNotes: values.clientNotes || "",
@@ -1891,14 +1891,14 @@ const ProjectForm = ({
           if (newTotalCost > originalApprovedAmount) {
             // Cost increased: check if client has sufficient available credit
             // If projectCreditValidation shows the new cost is within available credit, allow it
-            const hasAvailableCredit = projectCreditValidation && 
+            const hasAvailableCredit = projectCreditValidation &&
               projectCreditValidation.canCreateProject === true;
 
             if (!hasAvailableCredit) {
               message.error(
                 `Cannot update project: The approved amount was ₹${originalApprovedAmount.toLocaleString()}. ` +
-                  `New amount is ₹${newTotalCost.toLocaleString()}. ` +
-                  `Insufficient credit available. ${projectCreditValidation?.message || 'Please increase client credit limit.'}`
+                `New amount is ₹${newTotalCost.toLocaleString()}. ` +
+                `Insufficient credit available. ${projectCreditValidation?.message || 'Please increase client credit limit.'}`
               );
               setLoading(false);
               return;
@@ -1955,21 +1955,21 @@ const ProjectForm = ({
         projectWorkTypes:
           values.workTypeIds && values.workTypeIds.length > 0
             ? values.workTypeIds.map((wtId, index) => ({
-                workTypeId: wtId,
-                sequence: index + 1,
-              }))
+              workTypeId: wtId,
+              sequence: index + 1,
+            }))
             : [],
         // Send multiple gradings or fallback to single grading for backward compatibility
         projectGradings:
           selectedGradings.length > 0
             ? selectedGradings.map((sg, index) => ({
-                gradingId: sg.gradingId,
-                imageQuantity: sg.imageQuantity || 0,
-                customRate: sg.customRate,
-                sequence: index + 1,
-              }))
+              gradingId: sg.gradingId,
+              imageQuantity: sg.imageQuantity || 0,
+              customRate: sg.customRate,
+              sequence: index + 1,
+            }))
             : values.gradingId
-            ? [
+              ? [
                 {
                   gradingId: values.gradingId,
                   imageQuantity: values.imageQuantity || 0,
@@ -1977,7 +1977,7 @@ const ProjectForm = ({
                   sequence: 1,
                 },
               ]
-            : [],
+              : [],
         // Backward compatibility fields - no longer send workTypeId/gradingId directly
         imageQuantity: totalImageQuantity || values.imageQuantity,
         estimatedCost: totalCalculatedBudget || calculatedBudget, // Use total budget
@@ -1992,29 +1992,29 @@ const ProjectForm = ({
         // If customFieldValues has 'key', 'value', 'children' properties, it's a tree node object - skip it
         customFields:
           customFieldValues &&
-          typeof customFieldValues === "object" &&
-          !customFieldValues.key &&
-          !customFieldValues.value &&
-          !customFieldValues.children
+            typeof customFieldValues === "object" &&
+            !customFieldValues.key &&
+            !customFieldValues.value &&
+            !customFieldValues.children
             ? Object.keys(customFieldValues).reduce((acc, key) => {
-                const value = customFieldValues[key];
-                // Only include if value is a primitive type or array of primitives
-                if (value !== null && value !== undefined) {
-                  if (typeof value !== "object") {
-                    acc[key] = value;
-                  } else if (Array.isArray(value)) {
-                    // For arrays, ensure all elements are primitives
-                    const primitiveValues = value.filter(
-                      (v) =>
-                        v !== null && v !== undefined && typeof v !== "object"
-                    );
-                    if (primitiveValues.length > 0) {
-                      acc[key] = primitiveValues;
-                    }
+              const value = customFieldValues[key];
+              // Only include if value is a primitive type or array of primitives
+              if (value !== null && value !== undefined) {
+                if (typeof value !== "object") {
+                  acc[key] = value;
+                } else if (Array.isArray(value)) {
+                  // For arrays, ensure all elements are primitives
+                  const primitiveValues = value.filter(
+                    (v) =>
+                      v !== null && v !== undefined && typeof v !== "object"
+                  );
+                  if (primitiveValues.length > 0) {
+                    acc[key] = primitiveValues;
                   }
                 }
-                return acc;
-              }, {})
+              }
+              return acc;
+            }, {})
             : {},
         // In edit mode, use form field value; in create mode, use footer button value
         status: desiredStatus,
@@ -2148,7 +2148,7 @@ const ProjectForm = ({
                 </strong>
               </p>
               <p style={{ marginBottom: 0 }}>
-                The cost has increased beyond available credit. 
+                The cost has increased beyond available credit.
                 {projectCreditValidation?.message && (
                   <>
                     <br />
@@ -2189,7 +2189,7 @@ const ProjectForm = ({
                 </strong>
               </p>
               <p style={{ marginBottom: 0 }}>
-                ✓ The cost has increased, but the client has sufficient available credit to cover the new amount. 
+                ✓ The cost has increased, but the client has sufficient available credit to cover the new amount.
                 You can proceed with the update.
               </p>
             </div>
@@ -2389,11 +2389,11 @@ const ProjectForm = ({
               {/* Draft Option - Only show if project is currently draft or in create mode */}
               {(mode === "create" ||
                 (mode === "edit" && project?.status === "draft")) && (
-                <Option value="draft">
-                  <FileTextOutlined style={{ marginRight: 6 }} />
-                  Draft
-                </Option>
-              )}
+                  <Option value="draft">
+                    <FileTextOutlined style={{ marginRight: 6 }} />
+                    Draft
+                  </Option>
+                )}
 
               {/* Active Option */}
               <Option value="active">
@@ -2660,8 +2660,8 @@ const ProjectForm = ({
                     );
                     const displayRate =
                       clientPref &&
-                      clientPref.customRate !== undefined &&
-                      clientPref.customRate !== null
+                        clientPref.customRate !== undefined &&
+                        clientPref.customRate !== null
                         ? clientPref.customRate
                         : grading.defaultRate;
                     const shortCodeDisplay = grading.shortCode
@@ -2718,8 +2718,8 @@ const ProjectForm = ({
                       );
                       const displayRate =
                         clientPref &&
-                        clientPref.customRate !== undefined &&
-                        clientPref.customRate !== null
+                          clientPref.customRate !== undefined &&
+                          clientPref.customRate !== null
                           ? clientPref.customRate
                           : grading.defaultRate;
                       const shortCodeDisplay = grading.shortCode
@@ -2795,19 +2795,19 @@ const ProjectForm = ({
               // Priority: customRate > clientPref.customRate > grading.defaultRate
               const effectiveRate =
                 selectedGrading.customRate !== undefined &&
-                selectedGrading.customRate !== null
+                  selectedGrading.customRate !== null
                   ? selectedGrading.customRate
                   : clientPref &&
                     clientPref.customRate !== undefined &&
                     clientPref.customRate !== null
-                  ? clientPref.customRate
-                  : grading?.defaultRate || 0;
+                    ? clientPref.customRate
+                    : grading?.defaultRate || 0;
 
               const defaultRate = grading?.defaultRate || 0;
               const clientCustomRate =
                 clientPref &&
-                clientPref.customRate !== undefined &&
-                clientPref.customRate !== null
+                  clientPref.customRate !== undefined &&
+                  clientPref.customRate !== null
                   ? clientPref.customRate
                   : null;
               const hasCustomRate =
@@ -2938,8 +2938,8 @@ const ProjectForm = ({
                               backgroundColor: hasCustomRate
                                 ? "#e6f7ff"
                                 : isUsingClientRate
-                                ? "#f6ffed"
-                                : undefined,
+                                  ? "#f6ffed"
+                                  : undefined,
                             }}
                             size="small"
                           />
@@ -3045,8 +3045,8 @@ const ProjectForm = ({
                   Additional Fields for{" "}
                   {selectedWorkTypes && selectedWorkTypes.length > 0
                     ? workTypesData?.workTypes?.find(
-                        (wt) => wt.id === selectedWorkTypes[0]
-                      )?.name
+                      (wt) => wt.id === selectedWorkTypes[0]
+                    )?.name
                     : "Work Type"}
                 </Text>
               }
@@ -3116,8 +3116,8 @@ const ProjectForm = ({
                   workType={
                     selectedWorkTypes && selectedWorkTypes.length > 0
                       ? workTypesData?.workTypes?.find(
-                          (wt) => wt.id === selectedWorkTypes[0]
-                        )
+                        (wt) => wt.id === selectedWorkTypes[0]
+                      )
                       : null
                   }
                   grading={workTypeGradings?.find(
@@ -3128,16 +3128,16 @@ const ProjectForm = ({
                   customFields={
                     customFieldValues
                       ? Object.entries(customFieldValues).map(
-                          ([key, value]) => {
-                            const field = customFields.find(
-                              (f) => f.fieldKey === key
-                            );
-                            return {
-                              label: field ? field.fieldName : key,
-                              value: value,
-                            };
-                          }
-                        )
+                        ([key, value]) => {
+                          const field = customFields.find(
+                            (f) => f.fieldKey === key
+                          );
+                          return {
+                            label: field ? field.fieldName : key,
+                            value: value,
+                          };
+                        }
+                      )
                       : []
                   }
                   readOnly={loading}
@@ -3145,11 +3145,11 @@ const ProjectForm = ({
                   clientCode={
                     selectedClientId
                       ? clientsData?.clients?.find(
-                          (c) => c.id === selectedClientId
-                        )?.clientCode ||
-                        clientsData?.clients?.find(
-                          (c) => c.id === selectedClientId
-                        )?.code
+                        (c) => c.id === selectedClientId
+                      )?.clientCode ||
+                      clientsData?.clients?.find(
+                        (c) => c.id === selectedClientId
+                      )?.code
                       : null
                   }
                   projectDescription={form.getFieldValue("description")}

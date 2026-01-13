@@ -80,7 +80,7 @@ const STATUS_MAP = {
  * Refactored to use custom hooks and memoized child components
  * to prevent unnecessary re-renders and improve performance
  */
-const ProjectDetailDrawer = ({ projectId }) => {
+const ProjectDetailDrawer = ({ projectId, onAction }) => {
   const currentUser = useReactiveVar(userCacheVar);
   const { updateProjectDetailDrawerTitle, closeProjectDetailDrawerV2 } = useAppDrawer();
   const drawerCtx = React.useContext(AppDrawerContext);
@@ -118,6 +118,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
     invoicing,
   } = useProjectActions({
     refetch,
+    onAction,
     closeDrawer: closeProjectDetailDrawerV2,
   });
 
@@ -138,7 +139,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
     generatePermission(MODULES.PROJECTS, ACTIONS.LIMITEDIT)
   );
   const canShowQuote =
-    ["ACTIVE", "IN_PROGRESS"].includes(
+    ["ACTIVE", "IN_PROGRESS", "COMPLETED", "DELIVERED"].includes(
       (project?.status || "").toString().toUpperCase()
     ) &&
     !(project?.invoiceId || project?.invoice?.id) &&
@@ -176,33 +177,33 @@ const ProjectDetailDrawer = ({ projectId }) => {
       proj.projectCode || proj.projectNumber || proj.id || "PROJECT";
     const items = (proj.projectGradings || []).length
       ? proj.projectGradings.map((pg, idx) => {
-          const quantity = Number(pg.imageQuantity || 0);
-          const rate = Number(
-            pg.customRate !== undefined && pg.customRate !== null
-              ? pg.customRate
-              : pg.grading?.defaultRate || 0
-          );
-          const amount = quantity * rate;
-          return {
-            line: idx + 1,
-            description: pg.grading?.name || "Service",
-            quantity,
-            rate,
-            amount,
-          };
-        })
+        const quantity = Number(pg.imageQuantity || 0);
+        const rate = Number(
+          pg.customRate !== undefined && pg.customRate !== null
+            ? pg.customRate
+            : pg.grading?.defaultRate || 0
+        );
+        const amount = quantity * rate;
+        return {
+          line: idx + 1,
+          description: pg.grading?.name || "Service",
+          quantity,
+          rate,
+          amount,
+        };
+      })
       : [
-          {
-            line: 1,
-            description: proj.grading?.name || "Service",
-            quantity:
-              proj.imageQuantity ||
-              proj.totalImageQuantity ||
-              proj.imageQuantityInvoiced ||
-              0,
-            rate: Number(proj.grading?.defaultRate || 0),
-          },
-        ].map((item) => ({ ...item, amount: item.quantity * item.rate }));
+        {
+          line: 1,
+          description: proj.grading?.name || "Service",
+          quantity:
+            proj.imageQuantity ||
+            proj.totalImageQuantity ||
+            proj.imageQuantityInvoiced ||
+            0,
+          rate: Number(proj.grading?.defaultRate || 0),
+        },
+      ].map((item) => ({ ...item, amount: item.quantity * item.rate }));
 
     const subtotal = items.reduce(
       (sum, item) => sum + Number(item.amount || 0),
@@ -252,7 +253,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
   const handleSaveStatus = useCallback(async (nextValue) => {
     const valueToSave = (nextValue ?? statusValue) || "";
     if (!valueToSave) return;
-    
+
     // Validate DELIVERED status change
     if (valueToSave.toLowerCase() === "delivered") {
       if (!project) {
@@ -336,7 +337,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
   // Memoize the title element to prevent unnecessary re-renders
   const titleElement = useMemo(() => {
     if (!project) return "Project Details";
-    
+
     const statusConfig = STATUS_MAP[project.status?.toUpperCase()] || {};
     const clientType = project?.client?.clientType;
     const isPaid = !!(
@@ -365,9 +366,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
         </Space>
         <Space>
           {canEditProjects &&
-            (project.status || "").toString().toUpperCase() !== "COMPLETED" && 
-            !project.invoice && !project.invoiceId &&
-            (project.status || "").toLowerCase() !== "delivered" && (
+            !project.invoice && !project.invoiceId && (
               <Button
                 type="primary"
                 icon={<EditOutlined />}
@@ -378,16 +377,8 @@ const ProjectDetailDrawer = ({ projectId }) => {
               </Button>
             )}
           {canEditProjects &&
-            ((project.status || "").toString().toUpperCase() === "COMPLETED" ||
-             project.invoice || project.invoiceId ||
-             (project.status || "").toLowerCase() === "delivered") && (
-              <Tooltip title={
-                project.invoice || project.invoiceId
-                  ? "Cannot edit: Invoice generated"
-                  : (project.status || "").toLowerCase() === "delivered"
-                  ? "Cannot edit: Project delivered"
-                  : "Cannot edit: Project completed"
-              }>
+            (project.invoice || project.invoiceId) && (
+              <Tooltip title="Cannot edit: Invoice generated">
                 <Button
                   type="primary"
                   icon={<EditOutlined />}
@@ -429,7 +420,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
                   (project?.status || "").toLowerCase() === "completed";
                 const isDelivered =
                   (project?.status || "").toLowerCase() === "delivered";
-                
+
                 // If project has invoice OR is delivered (without invoice), only show REOPEN option
                 let filtered;
                 if (hasInvoice || isDelivered) {
@@ -448,7 +439,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
                 return filtered.map((option) => {
                   let disabled = false;
                   let title = "";
-                  
+
                   if (option.value === "delivered") {
                     // Only restrict if project has invoice AND is walk-in client AND invoice not paid
                     if (hasInvoice && clientType === "walkIn") {
@@ -470,7 +461,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
                       title = "Cannot reopen when invoice is fully paid";
                     }
                   }
-                  
+
                   return {
                     ...option,
                     disabled,
@@ -639,7 +630,7 @@ const ProjectDetailDrawer = ({ projectId }) => {
   useEffect(() => {
     // Create a key from values that should trigger title update
     const titleKey = `${project?.id}-${project?.projectCode}-${project?.name}-${project?.status}-${statusValue}`;
-    
+
     // Only update if the key has actually changed
     if (titleKey !== prevTitleKey.current) {
       prevTitleKey.current = titleKey;
@@ -1325,8 +1316,8 @@ const ProjectDetailDrawer = ({ projectId }) => {
         workTypeTabs.map((workType, index) => {
           const totalTaskCount = Array.isArray(workType?.gradings)
             ? workType.gradings.reduce((sum, g) => {
-                return sum + Object.keys(g?.tasksByType || {}).length;
-              }, 0)
+              return sum + Object.keys(g?.tasksByType || {}).length;
+            }, 0)
             : 0;
 
           return (
