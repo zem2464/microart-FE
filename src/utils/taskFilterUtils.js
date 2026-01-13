@@ -18,13 +18,11 @@ export const getTaskFiltersFromCookie = () => {
     if (!filtersCookie) {
       return getDefaultFilters();
     }
-    
+
     const filters = JSON.parse(filtersCookie);
     return {
       searchText: filters.searchText || "",
       clientSearch: filters.clientSearch || "",
-      projectSearch: filters.projectSearch || "",
-      statusFilter: filters.statusFilter || "all",
       userFilter: filters.userFilter || "all",
       priorityFilter: filters.priorityFilter || "all",
       selectedWorkTypeId: filters.selectedWorkTypeId || "all",
@@ -48,8 +46,6 @@ export const saveTaskFiltersToCookie = (filters) => {
     const filterData = {
       searchText: filters.searchText || "",
       clientSearch: filters.clientSearch || "",
-      projectSearch: filters.projectSearch || "",
-      statusFilter: filters.statusFilter || "all",
       userFilter: filters.userFilter || "all",
       priorityFilter: filters.priorityFilter || "all",
       selectedWorkTypeId: filters.selectedWorkTypeId || "all",
@@ -58,13 +54,13 @@ export const saveTaskFiltersToCookie = (filters) => {
       sortOrder: filters.sortOrder || "DESC",
       myClientsOnly: filters.myClientsOnly || false,
     };
-    
+
     setCookie(
       TASK_FILTER_COOKIE_NAME,
       JSON.stringify(filterData),
       TASK_FILTER_COOKIE_EXPIRY
     );
-    
+
     console.log('[TaskFilterUtils] Filters saved to cookie:', filterData);
   } catch (error) {
     console.error('Error saving task filters to cookie:', error);
@@ -91,8 +87,6 @@ export const getDefaultFilters = () => {
   return {
     searchText: "",
     clientSearch: "",
-    projectSearch: "",
-    statusFilter: "all",
     userFilter: "all",
     priorityFilter: "all",
     selectedWorkTypeId: "all",

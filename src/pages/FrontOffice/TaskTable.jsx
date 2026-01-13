@@ -29,11 +29,8 @@ import {
   ExclamationCircleOutlined,
   SaveOutlined,
   CloseCircleOutlined,
-  PictureOutlined,
-  SplitCellsOutlined,
   EditOutlined,
 } from "@ant-design/icons";
-import TaskCard from "../../components/TaskCard";
 import { useQuery, useMutation, useReactiveVar } from "@apollo/client";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -72,7 +69,6 @@ const TASK_FETCH_LIMIT = 10000;
 
 const { Option } = Select;
 const { Text } = Typography;
-const { TabPane } = Tabs;
 
 // Status configuration - matches backend TaskStatus enum
 const TASK_STATUS = {
@@ -140,7 +136,7 @@ function getTaskTotalQuantity(task) {
 
 const TaskTable = () => {
   // Drawer context
-  const { showProjectDetailDrawerV2, showTaskDetailDrawerV2 } = useAppDrawer();
+  const { showProjectDetailDrawerV2 } = useAppDrawer();
 
   const currentUser = useReactiveVar(userCacheVar);
 
@@ -148,10 +144,6 @@ const TaskTable = () => {
   const savedFilters = getTaskFiltersFromCookie();
   const [searchText, setSearchText] = useState(savedFilters.searchText);
   const [clientSearch, setClientSearch] = useState(savedFilters.clientSearch);
-  const [projectSearch, setProjectSearch] = useState(
-    savedFilters.projectSearch
-  );
-  const [statusFilter, setStatusFilter] = useState(savedFilters.statusFilter); // Show all tasks including completed
   const [userFilter, setUserFilter] = useState(savedFilters.userFilter);
   const [priorityFilter, setPriorityFilter] = useState(
     savedFilters.priorityFilter
@@ -169,18 +161,13 @@ const TaskTable = () => {
   );
   const [dueDateRange, setDueDateRange] = useState([null, null]);
 
-  // Reminder notes state - cache notes by projectId
-  const [projectReminderNotesCache, setProjectReminderNotesCache] = useState(
-    {}
-  );
+
 
   // Reset filters to default values
   const handleResetFilters = useCallback(() => {
     const defaults = getDefaultFilters();
     setSearchText(defaults.searchText);
     setClientSearch(defaults.clientSearch);
-    setProjectSearch(defaults.projectSearch);
-    setStatusFilter(defaults.statusFilter);
     setUserFilter(defaults.userFilter);
     setPriorityFilter(defaults.priorityFilter);
     setSelectedWorkTypeId(defaults.selectedWorkTypeId);
@@ -591,11 +578,9 @@ const TaskTable = () => {
     searchText,
   ]);
 
-  // Refetch tasks when filters change
   useEffect(() => {
     refetchTasks();
   }, [
-    statusFilter,
     userFilter,
     priorityFilter,
     selectedWorkTypeId,
@@ -625,8 +610,6 @@ const TaskTable = () => {
     saveTaskFiltersToCookie({
       searchText,
       clientSearch,
-      projectSearch,
-      statusFilter,
       userFilter,
       priorityFilter,
       selectedWorkTypeId,
@@ -638,8 +621,6 @@ const TaskTable = () => {
   }, [
     searchText,
     clientSearch,
-    projectSearch,
-    statusFilter,
     userFilter,
     priorityFilter,
     selectedWorkTypeId,
@@ -693,7 +674,6 @@ const TaskTable = () => {
     return { assignedUsers, unassignedUsers };
   }, [users, selectedWorkTypeId]);
 
-  // Refetch tasks when filters / search / sorting changes
   useEffect(() => {
     refetchTasks({
       filters: buildFilters(),
@@ -705,14 +685,12 @@ const TaskTable = () => {
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    statusFilter,
     userFilter,
     priorityFilter,
     selectedWorkTypeId, // Re-enabled - backend now properly filters via ProjectWorkType
     gradingFilter,
     searchText,
     clientSearch,
-    projectSearch,
     sortBy,
     sortOrder,
   ]);
@@ -722,9 +700,8 @@ const TaskTable = () => {
   const groupedByWorkType = useMemo(() => {
     const grouped = {};
 
-    // Apply client and project search filters
+    // Apply client search filters
     const clientSearchTerm = clientSearch.trim().toLowerCase();
-    const projectSearchTerm = projectSearch.trim().toLowerCase();
 
     const filteredTasks = tasks.filter((task) => {
       // Note: My Clients Only filter is now handled server-side via serviceProviderId in buildFilters()
@@ -739,16 +716,6 @@ const TaskTable = () => {
         ].some((value) => value?.toLowerCase().includes(clientSearchTerm));
 
         if (!clientMatches) return false;
-      }
-
-      // Project search filter
-      if (projectSearchTerm) {
-        const project = task?.project;
-        const projectMatches = [project?.name, project?.projectCode].some(
-          (value) => value?.toLowerCase().includes(projectSearchTerm)
-        );
-
-        if (!projectMatches) return false;
       }
 
       return true;
@@ -804,7 +771,6 @@ const TaskTable = () => {
     tasks,
     selectedWorkTypeId,
     clientSearch,
-    projectSearch,
     myClientsOnly,
     currentUser?.id,
   ]);
@@ -2008,25 +1974,7 @@ const TaskTable = () => {
                 ))}
               </Select>
             </Col>
-            <Col span={3}>
-              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
-                Status
-              </div>
-              <Select
-                placeholder="Active"
-                value={statusFilter}
-                onChange={setStatusFilter}
-                style={{ width: "100%" }}
-              >
-                <Option value="active">Active</Option>
-                <Option value="all">All Status</Option>
-                {Object.keys(TASK_STATUS).map((status) => (
-                  <Option key={status} value={status}>
-                    {TASK_STATUS[status]?.label || status}
-                  </Option>
-                ))}
-              </Select>
-            </Col>
+
             <Col span={3}>
               <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
                 User
@@ -2085,19 +2033,8 @@ const TaskTable = () => {
                 <Option value="C">Low</Option>
               </Select>
             </Col>
-            <Col span={3}>
-              <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
-                Project Search
-              </div>
-              <Input
-                placeholder="Project name or code..."
-                prefix={<SearchOutlined />}
-                value={projectSearch}
-                onChange={(e) => setProjectSearch(e.target.value)}
-                allowClear
-              />
-            </Col>
-            <Col span={6}>
+
+            <Col span={9}>
               <div style={{ marginBottom: 4, fontSize: 12, fontWeight: 500 }}>
                 Due Date Range
               </div>
