@@ -206,3 +206,16 @@ export const DELETE_USER = gql`
     deleteUser(id: $id)
   }
 `;
+export const GET_SERVICE_PROVIDERS = gql`
+  query GetServiceProviders {
+    serviceProviders {
+      id
+      firstName
+      lastName
+      name
+      email
+      isActive
+      isServiceProvider
+    }
+  }
+`;

@@ -39,6 +39,7 @@ import {
   DELETE_CLIENT,
   UPDATE_CLIENT,
 } from "../../gql/clients";
+import { GET_SERVICE_PROVIDERS, GET_USERS } from "../../gql/users";
 import CommonTable from "../../components/common/CommonTable";
 import { useAppDrawer } from "../../contexts/DrawerContext";
 import { userCacheVar } from "../../cache/userCacheVar";
@@ -60,6 +61,8 @@ const ClientList = () => {
     clientType: undefined,
     priority: undefined,
     isActive: undefined,
+    serviceProviderIds: [],
+    leaderIds: [],
   });
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
@@ -76,6 +79,11 @@ const ClientList = () => {
     record: null,
   });
   const { showClientFormDrawer, showClientDetailDrawer } = useAppDrawer();
+
+  const { data: serviceProvidersData } = useQuery(GET_SERVICE_PROVIDERS);
+  const serviceProviders = serviceProvidersData?.serviceProviders || [];
+  const { data: allUsersData } = useQuery(GET_USERS);
+  const allUsers = allUsersData?.users || [];
 
   const { data, loading, error, refetch, fetchMore } = useQuery(GET_CLIENTS, {
     variables: {
@@ -279,11 +287,10 @@ const ClientList = () => {
     (client) => {
       Modal.confirm({
         title: "Delete Client",
-        content: `Are you sure you want to delete ${
-          client.companyName ||
+        content: `Are you sure you want to delete ${client.companyName ||
           client.displayName ||
           `${client.firstName} ${client.lastName}`
-        }?`,
+          }?`,
         icon: <ExclamationCircleOutlined />,
         okText: "Yes, Delete",
         okType: "danger",
@@ -496,8 +503,8 @@ const ClientList = () => {
             {type === "permanent"
               ? "PERMANENT"
               : type === "walkIn"
-              ? "WALK-IN"
-              : type?.toUpperCase()}
+                ? "WALK-IN"
+                : type?.toUpperCase()}
           </Tag>
         ),
         filters: [
@@ -637,9 +644,8 @@ const ClientList = () => {
               <div className="text-xs text-gray-500">Limit</div>
               {limit > 0 && (
                 <div
-                  className={`text-xs ${
-                    available >= 0 ? "text-green-600" : "text-red-600"
-                  }`}
+                  className={`text-xs ${available >= 0 ? "text-green-600" : "text-red-600"
+                    }`}
                 >
                   ₹
                   {Math.abs(available).toLocaleString("en-IN", {
@@ -1176,34 +1182,42 @@ const ClientList = () => {
             </Col>
             <Col span={4}>
               <Select
-                placeholder="Priority"
-                value={filters.priority}
+                mode="multiple"
+                placeholder="Service Provider"
+                value={filters.serviceProviderIds}
                 onChange={(value) => {
-                  setFilters((prev) => ({ ...prev, priority: value }));
+                  setFilters((prev) => ({ ...prev, serviceProviderIds: value }));
                   setPage(1);
                 }}
                 style={{ width: "100%" }}
                 allowClear
+                maxTagCount="responsive"
               >
-                <Option value="low">Low</Option>
-                <Option value="medium">Medium</Option>
-                <Option value="high">High</Option>
-                <Option value="urgent">Urgent</Option>
+                {serviceProviders.map((user) => (
+                  <Option key={user.id} value={user.id}>
+                    {user.firstName} {user.lastName}
+                  </Option>
+                ))}
               </Select>
             </Col>
             <Col span={4}>
               <Select
-                placeholder="Status"
-                value={filters.isActive}
+                mode="multiple"
+                placeholder="Financial Leader"
+                value={filters.leaderIds}
                 onChange={(value) => {
-                  setFilters((prev) => ({ ...prev, isActive: value }));
+                  setFilters((prev) => ({ ...prev, leaderIds: value }));
                   setPage(1);
                 }}
                 style={{ width: "100%" }}
                 allowClear
+                maxTagCount="responsive"
               >
-                <Option value={true}>Active</Option>
-                <Option value={false}>Inactive</Option>
+                {allUsers.map((user) => (
+                  <Option key={user.id} value={user.id}>
+                    {user.firstName} {user.lastName}
+                  </Option>
+                ))}
               </Select>
             </Col>
             <Col span={4} style={{ textAlign: "right" }}>

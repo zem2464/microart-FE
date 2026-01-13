@@ -49,6 +49,7 @@ import {
 } from 'recharts';
 import { GET_CLIENTS, GET_TRANSACTIONS_SUMMARY, GET_CLIENT_STATS } from '../../gql/clients';
 import { GET_PENDING_PAYMENTS, GET_OVERDUE_PAYMENTS } from '../../gql/clientTransactions';
+import { GET_SERVICE_PROVIDERS, GET_USERS } from '../../gql/users';
 import { useAppDrawer } from '../../contexts/DrawerContext';
 import { useReactiveVar } from '@apollo/client';
 import { userCacheVar } from '../../cache/userCacheVar';
@@ -69,6 +70,10 @@ const ClientDashboard = () => {
   const [myClientsOnly, setMyClientsOnly] = useState(
     getMyClientsFilterFromCookie(currentUser?.isServiceProvider === true)
   );
+  const [filters, setFilters] = useState({
+    serviceProviderIds: [],
+    leaderIds: []
+  });
 
   // Save myClientsOnly filter to cookie whenever it changes
   useEffect(() => {
@@ -78,7 +83,11 @@ const ClientDashboard = () => {
   // Queries
   const { data: clientsData, loading: clientsLoading, refetch } = useQuery(GET_CLIENTS, {
     variables: {
-      filters: { isActive: true },
+      filters: {
+        isActive: true,
+        ...filters,
+        ...(myClientsOnly && currentUser?.id ? { serviceProviderId: currentUser.id } : {})
+      },
       page: 1,
       limit: 100,
       sortBy: 'clientCode',
@@ -87,10 +96,18 @@ const ClientDashboard = () => {
     fetchPolicy: 'cache-and-network'
   });
 
+  const { data: serviceProvidersData } = useQuery(GET_SERVICE_PROVIDERS);
+  const serviceProviders = serviceProvidersData?.serviceProviders || [];
+  const { data: allUsersData } = useQuery(GET_USERS);
+  const allUsers = allUsersData?.users || [];
+
   // New stats query for accurate counts
   const { data: statsData, loading: statsLoading } = useQuery(GET_CLIENT_STATS, {
     variables: {
-      filters: {}
+      filters: {
+        ...filters,
+        ...(myClientsOnly && currentUser?.id ? { serviceProviderId: currentUser.id } : {})
+      }
     },
     fetchPolicy: 'cache-and-network'
   });
@@ -120,13 +137,8 @@ const ClientDashboard = () => {
   }, [currentUser]);
 
   const clients = useMemo(() => {
-    const list = clientsData?.clients || [];
-    if (!myClientsOnly) return list;
-    return list.filter(c => {
-      const sps = c?.serviceProviders || [];
-      return sps.some(sp => sp?.isActive && sp?.serviceProvider?.id === currentUser?.id);
-    });
-  }, [clientsData, myClientsOnly, currentUser?.id]);
+    return clientsData?.clients || [];
+  }, [clientsData]);
   const pendingPayments = pendingData?.pendingPayments || [];
   const overduePayments = overdueData?.overduePayments || [];
 
@@ -256,7 +268,7 @@ const ClientDashboard = () => {
         const today = new Date();
         const dueDate = new Date(record.dueDate);
         const daysOverdue = Math.floor((today - dueDate) / (1000 * 60 * 60 * 24));
-        
+
         if (daysOverdue > 0) {
           return <Tag color="red">{daysOverdue} days</Tag>;
         }
@@ -283,6 +295,36 @@ const ClientDashboard = () => {
               My Clients Only
             </Checkbox>
             <Select
+              mode="multiple"
+              placeholder="Service Provider"
+              value={filters.serviceProviderIds}
+              onChange={(value) => setFilters(prev => ({ ...prev, serviceProviderIds: value }))}
+              style={{ width: 200 }}
+              allowClear
+              maxTagCount="responsive"
+            >
+              {serviceProviders.map((user) => (
+                <Option key={user.id} value={user.id}>
+                  {user.firstName} {user.lastName}
+                </Option>
+              ))}
+            </Select>
+            <Select
+              mode="multiple"
+              placeholder="Financial Leader"
+              value={filters.leaderIds}
+              onChange={(value) => setFilters(prev => ({ ...prev, leaderIds: value }))}
+              style={{ width: 200 }}
+              allowClear
+              maxTagCount="responsive"
+            >
+              {allUsers.map((user) => (
+                <Option key={user.id} value={user.id}>
+                  {user.firstName} {user.lastName}
+                </Option>
+              ))}
+            </Select>
+            <Select
               placeholder="Select client"
               style={{ width: 200 }}
               allowClear
@@ -297,8 +339,8 @@ const ClientDashboard = () => {
               ))}
             </Select>
             <RangePicker onChange={setDateRange} />
-            <Button 
-              type="primary" 
+            <Button
+              type="primary"
               icon={<PlusOutlined />}
               onClick={handleAddClient}
             >
@@ -362,7 +404,7 @@ const ClientDashboard = () => {
               </Card>
             </Col>
           </Row>
-          
+
           {/* Additional Statistics Row */}
           <Row gutter={16} className="mb-6">
             <Col xs={24} sm={12} lg={8}>
@@ -392,8 +434,8 @@ const ClientDashboard = () => {
                   value={dashboardStats.totalOutstandingAmount}
                   precision={2}
                   prefix="₹"
-                  valueStyle={{ 
-                    color: dashboardStats.totalOutstandingAmount > 0 ? '#f5222d' : '#52c41a' 
+                  valueStyle={{
+                    color: dashboardStats.totalOutstandingAmount > 0 ? '#f5222d' : '#52c41a'
                   }}
                 />
               </Card>
@@ -461,7 +503,7 @@ const ClientDashboard = () => {
                         outerRadius={120}
                         paddingAngle={5}
                         dataKey="value"
-                        label={({ name, value, percent }) => 
+                        label={({ name, value, percent }) =>
                           `${name}: ${value} (${(percent * 100).toFixed(0)}%)`
                         }
                       >
@@ -495,8 +537,8 @@ const ClientDashboard = () => {
           {/* Data Tables Row */}
           <Row gutter={16} className="mb-6">
             <Col xs={24}>
-              <Card 
-                title="Recent Clients" 
+              <Card
+                title="Recent Clients"
                 extra={<Button type="link">View All</Button>}
               >
                 <div className="space-y-3">
