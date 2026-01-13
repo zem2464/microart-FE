@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useContext } from 'react';
-import { 
-  Table, 
-  Card, 
-  Space, 
-  Tag, 
-  Button, 
-  DatePicker, 
-  Select, 
+import {
+  Table,
+  Card,
+  Space,
+  Tag,
+  Button,
+  DatePicker,
+  Select,
   Input,
   Row,
   Col,
@@ -19,9 +19,9 @@ import {
   Empty,
   message
 } from 'antd';
-import { 
-  SearchOutlined, 
-  FilterOutlined, 
+import {
+  SearchOutlined,
+  FilterOutlined,
   FileTextOutlined,
   DollarOutlined,
   EyeOutlined,
@@ -34,6 +34,7 @@ import dayjs from 'dayjs';
 import { GET_CLIENTS } from '../../gql/clients';
 import { GET_CLIENT_LEDGER_RANGE } from '../../gql/clientLedger';
 import { generateInvoicePDF } from '../../utils/invoicePDF';
+import { formatCurrency } from '../../utils/currencyUtils';
 import { AppDrawerContext } from '../../contexts/DrawerContext';
 
 const { RangePicker } = DatePicker;
@@ -83,7 +84,7 @@ const Transactions = () => {
     if (isNumericSearch) {
       // Search only in clientCode number part (e.g., "CL-123" -> "123")
       const clientCodeNumber = client.clientCode?.split("-")[1] || "";
-      return clientCodeNumber == trimmedInput;
+      return clientCodeNumber === trimmedInput;
     } else {
       // Search in all text fields
       const searchText = getClientSearchText(client);
@@ -109,11 +110,11 @@ const Transactions = () => {
 
   // Filter transactions based on type and search
   const filteredTransactions = transactions.filter(txn => {
-    const matchesType = transactionType === 'all' || 
+    const matchesType = transactionType === 'all' ||
       (transactionType === 'invoice' && txn.transactionType === 'work_done') ||
       (transactionType === 'payment' && txn.transactionType === 'payment_received');
-    
-    const matchesSearch = !searchText || 
+
+    const matchesSearch = !searchText ||
       txn.referenceNumber?.toLowerCase().includes(searchText.toLowerCase()) ||
       txn.description?.toLowerCase().includes(searchText.toLowerCase());
 
@@ -179,11 +180,11 @@ const Transactions = () => {
           <Text strong>{ref}</Text>
           {record.invoice?.status && (
             <div>
-              <Tag 
+              <Tag
                 color={
                   record.invoice.status === 'FULLY_PAID' ? 'green' :
-                  record.invoice.status === 'PARTIAL_PAID' ? 'orange' : 
-                  record.invoice.status === 'OVERDUE' ? 'red' : 'blue'
+                    record.invoice.status === 'PARTIAL_PAID' ? 'orange' :
+                      record.invoice.status === 'OVERDUE' ? 'red' : 'blue'
                 }
                 style={{ fontSize: '10px', marginTop: '2px' }}
               >
@@ -201,7 +202,7 @@ const Transactions = () => {
       width: 200,
       render: (client, record) => {
         if (!client) return 'N/A';
-        
+
         // When "All Clients" is selected, show clientCode and displayName together
         if (selectedClient === 'all') {
           return (
@@ -222,7 +223,7 @@ const Transactions = () => {
             </div>
           );
         }
-        
+
         // For specific client view, show display name and company name
         return (
           <div>
@@ -287,7 +288,7 @@ const Transactions = () => {
         return (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
             <Text strong style={{ fontSize: '14px' }}>
-              ₹{parseFloat(record.invoice.totalAmount).toLocaleString()}
+              {formatCurrency(record.invoice.totalAmount, true, 0)}
             </Text>
             <Text type="secondary" style={{ fontSize: '11px' }}>
               Total
@@ -307,7 +308,7 @@ const Transactions = () => {
         return (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
             <Text style={{ fontSize: '13px', color: '#52c41a' }}>
-              ₹{paidAmount.toLocaleString()}
+              {formatCurrency(paidAmount, true, 0)}
             </Text>
             {record.payment && (
               <Tag color="green" style={{ fontSize: '10px' }}>
@@ -330,7 +331,7 @@ const Transactions = () => {
             return (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
                 <Text strong style={{ fontSize: '14px', color: '#52c41a' }}>
-                  ₹{parseFloat(record.payment.amount).toLocaleString()}
+                  {formatCurrency(record.payment.amount, true, 0)}
                 </Text>
                 <Text type="secondary" style={{ fontSize: '11px' }}>
                   Received
@@ -344,7 +345,7 @@ const Transactions = () => {
         return (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px' }}>
             <Text strong style={{ fontSize: '14px', color: dueAmount > 0 ? '#f5222d' : '#52c41a' }}>
-              ₹{dueAmount.toLocaleString()}
+              {formatCurrency(dueAmount, true, 0)}
             </Text>
             {dueAmount > 0 && record.invoice.dueDate && (
               <Text type="secondary" style={{ fontSize: '10px' }}>
@@ -362,8 +363,8 @@ const Transactions = () => {
       fixed: 'right',
       render: (_, record) => (
         <Space>
-          <Button 
-            type="link" 
+          <Button
+            type="link"
             icon={<EyeOutlined />}
             onClick={() => {
               // For invoices, use centralized drawer
@@ -379,8 +380,8 @@ const Transactions = () => {
             View
           </Button>
           {record.transactionType === 'work_done' && record.invoice && (
-            <Button 
-              type="link" 
+            <Button
+              type="link"
               icon={<FilePdfOutlined />}
               onClick={() => handleDownloadInvoice(record)}
             >
@@ -393,8 +394,8 @@ const Transactions = () => {
   ];
 
   // Filter columns based on selected client - hide Client column if a specific client is selected
-  const columns = selectedClient === 'all' 
-    ? allColumns 
+  const columns = selectedClient === 'all'
+    ? allColumns
     : allColumns.filter(col => col.key !== 'client');
 
   const handleRefresh = () => {
@@ -499,8 +500,8 @@ const Transactions = () => {
             />
           </Col>
           <Col xs={24} sm={12} lg={2}>
-            <Button 
-              icon={<ReloadOutlined />} 
+            <Button
+              icon={<ReloadOutlined />}
               onClick={handleRefresh}
               loading={loading}
               block
@@ -529,7 +530,7 @@ const Transactions = () => {
                   <Statistic
                     title="Opening Balance"
                     value={Math.abs(openingBalance)}
-                    prefix="₹"
+                    formatter={(value) => formatCurrency(openingBalance < 0 ? -value : value, true, 0)}
                     suffix={openingBalance < 0 ? 'DR' : 'CR'}
                     valueStyle={{ color: openingBalance < 0 ? '#f5222d' : '#52c41a' }}
                   />
@@ -541,7 +542,7 @@ const Transactions = () => {
                 <Statistic
                   title="Total Invoiced"
                   value={totalInvoiced}
-                  prefix="₹"
+                  formatter={(value) => formatCurrency(value, true, 0)}
                   suffix={`(${totalInvoices})`}
                   valueStyle={{ color: '#ff4d4f' }}
                 />
@@ -552,7 +553,7 @@ const Transactions = () => {
                 <Statistic
                   title="Total Paid"
                   value={totalPaid}
-                  prefix="₹"
+                  formatter={(value) => formatCurrency(value, true, 0)}
                   suffix={`(${totalPayments})`}
                   valueStyle={{ color: '#52c41a' }}
                 />
@@ -564,7 +565,7 @@ const Transactions = () => {
                   <Statistic
                     title="Closing Balance"
                     value={Math.abs(closingBalance)}
-                    prefix="₹"
+                    formatter={(value) => formatCurrency(closingBalance < 0 ? -value : value, true, 0)}
                     suffix={closingBalance < 0 ? 'DR' : 'CR'}
                     valueStyle={{ color: closingBalance < 0 ? '#f5222d' : '#52c41a' }}
                   />
@@ -577,7 +578,7 @@ const Transactions = () => {
                   <Statistic
                     title="Net Balance"
                     value={totalPaid - totalInvoiced}
-                    prefix="₹"
+                    formatter={(value) => formatCurrency(value, true, 0)}
                     valueStyle={{ color: (totalPaid - totalInvoiced) < 0 ? '#f5222d' : '#52c41a' }}
                   />
                 </Card>
@@ -602,15 +603,15 @@ const Transactions = () => {
                 const totalInvoiceAmount = filteredTransactions
                   .filter(t => t.transactionType === 'work_done' && t.invoice)
                   .reduce((sum, t) => sum + parseFloat(t.invoice.totalAmount || 0), 0);
-                
+
                 const totalPaidAmount = filteredTransactions
                   .filter(t => t.transactionType === 'work_done' && t.invoice)
                   .reduce((sum, t) => sum + parseFloat(t.invoice.paidAmount || 0), 0);
-                
+
                 const totalDueAmount = filteredTransactions
                   .filter(t => t.transactionType === 'work_done' && t.invoice)
                   .reduce((sum, t) => sum + parseFloat(t.invoice.balanceAmount || 0), 0);
-                
+
                 const totalPaymentsReceived = filteredTransactions
                   .filter(t => t.transactionType === 'payment_received' && t.payment)
                   .reduce((sum, t) => sum + parseFloat(t.payment.amount || 0), 0);
@@ -623,19 +624,19 @@ const Transactions = () => {
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={5} align="right">
                         <Text strong style={{ fontSize: '14px' }}>
-                          ₹{totalInvoiceAmount.toLocaleString()}
+                          {formatCurrency(totalInvoiceAmount, true, 0)}
                         </Text>
                         <div><Text type="secondary" style={{ fontSize: '11px' }}>Invoiced</Text></div>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={6} align="right">
                         <Text strong style={{ fontSize: '14px', color: '#52c41a' }}>
-                          ₹{(totalPaidAmount + totalPaymentsReceived).toLocaleString()}
+                          {formatCurrency(totalPaidAmount + totalPaymentsReceived, true, 0)}
                         </Text>
                         <div><Text type="secondary" style={{ fontSize: '11px' }}>Paid</Text></div>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={7} align="right">
                         <Text strong style={{ fontSize: '14px', color: totalDueAmount > 0 ? '#f5222d' : '#52c41a' }}>
-                          ₹{totalDueAmount.toLocaleString()}
+                          {formatCurrency(totalDueAmount, true, 0)}
                         </Text>
                         <div><Text type="secondary" style={{ fontSize: '11px' }}>Due</Text></div>
                       </Table.Summary.Cell>
@@ -669,8 +670,8 @@ const Transactions = () => {
         open={drawerVisible}
         extra={
           selectedTransaction?.transactionType === 'work_done' && selectedTransaction?.invoice && (
-            <Button 
-              type="primary" 
+            <Button
+              type="primary"
               icon={<FilePdfOutlined />}
               onClick={() => handleDownloadInvoice(selectedTransaction)}
             >
@@ -695,11 +696,11 @@ const Transactions = () => {
                 <Col span={24}>
                   <Text type="secondary">Amount</Text>
                   <div>
-                    <Text strong style={{ 
+                    <Text strong style={{
                       fontSize: '24px',
                       color: selectedTransaction.transactionType === 'work_done' ? '#f5222d' : '#52c41a'
                     }}>
-                      ₹{parseFloat(selectedTransaction.amount).toLocaleString()}
+                      {formatCurrency(selectedTransaction.amount, true, 0)}
                     </Text>
                   </div>
                 </Col>
@@ -709,7 +710,7 @@ const Transactions = () => {
             {/* Invoice Details */}
             {selectedTransaction.invoice && (
               <>
-                <Card 
+                <Card
                   title={<Text strong>Invoice Information</Text>}
                   size="small"
                   style={{ borderColor: '#fa8c16' }}
@@ -719,11 +720,11 @@ const Transactions = () => {
                       <Text strong>{selectedTransaction.invoice.invoiceNumber}</Text>
                     </Descriptions.Item>
                     <Descriptions.Item label="Status" span={1}>
-                      <Tag 
+                      <Tag
                         color={
                           selectedTransaction.invoice.status === 'FULLY_PAID' ? 'green' :
-                          selectedTransaction.invoice.status === 'PARTIAL_PAID' ? 'orange' : 
-                          selectedTransaction.invoice.status === 'OVERDUE' ? 'red' : 'blue'
+                            selectedTransaction.invoice.status === 'PARTIAL_PAID' ? 'orange' :
+                              selectedTransaction.invoice.status === 'OVERDUE' ? 'red' : 'blue'
                         }
                       >
                         {selectedTransaction.invoice.status.replace('_', ' ')}
@@ -789,7 +790,7 @@ const Transactions = () => {
                             key: 'rate',
                             width: '20%',
                             align: 'right',
-                            render: (rate) => <Text>₹{parseFloat(rate).toFixed(2)}</Text>,
+                            render: (rate) => <Text>{formatCurrency(rate, true, 0)}</Text>,
                           },
                           {
                             title: 'Amount',
@@ -798,7 +799,7 @@ const Transactions = () => {
                             align: 'right',
                             render: (_, record) => (
                               <Text strong>
-                                ₹{(parseFloat(record.imageQuantity) * parseFloat(record.customRate)).toFixed(2)}
+                                {formatCurrency(parseFloat(record.imageQuantity) * parseFloat(record.customRate), true, 0)}
                               </Text>
                             ),
                           },
@@ -815,7 +816,7 @@ const Transactions = () => {
                               </Table.Summary.Cell>
                               <Table.Summary.Cell align="right">
                                 <Text strong style={{ fontSize: '16px' }}>
-                                  ₹{totalAmount.toFixed(2)}
+                                  {formatCurrency(totalAmount, true, 0)}
                                 </Text>
                               </Table.Summary.Cell>
                             </Table.Summary.Row>
@@ -832,7 +833,7 @@ const Transactions = () => {
                         <Text type="secondary">Subtotal:</Text>
                       </Col>
                       <Col span={12} style={{ textAlign: 'right' }}>
-                        <Text strong>₹{parseFloat(selectedTransaction.invoice.subtotalAmount || 0).toLocaleString()}</Text>
+                        <Text strong>{formatCurrency(selectedTransaction.invoice.subtotalAmount || 0, true, 0)}</Text>
                       </Col>
                       {selectedTransaction.invoice.taxAmount > 0 && (
                         <>
@@ -840,7 +841,7 @@ const Transactions = () => {
                             <Text type="secondary">Tax (GST):</Text>
                           </Col>
                           <Col span={12} style={{ textAlign: 'right' }}>
-                            <Text>₹{parseFloat(selectedTransaction.invoice.taxAmount).toLocaleString()}</Text>
+                            <Text>{formatCurrency(selectedTransaction.invoice.taxAmount, true, 0)}</Text>
                           </Col>
                         </>
                       )}
@@ -850,7 +851,7 @@ const Transactions = () => {
                             <Text type="secondary">Discount:</Text>
                           </Col>
                           <Col span={12} style={{ textAlign: 'right' }}>
-                            <Text type="danger">-₹{parseFloat(selectedTransaction.invoice.discountAmount).toLocaleString()}</Text>
+                            <Text type="danger">-{formatCurrency(selectedTransaction.invoice.discountAmount, true, 0)}</Text>
                           </Col>
                         </>
                       )}
@@ -860,7 +861,7 @@ const Transactions = () => {
                       </Col>
                       <Col span={12} style={{ textAlign: 'right' }}>
                         <Text strong style={{ fontSize: '18px' }}>
-                          ₹{parseFloat(selectedTransaction.invoice.totalAmount).toLocaleString()}
+                          {formatCurrency(selectedTransaction.invoice.totalAmount, true, 0)}
                         </Text>
                       </Col>
                       <Col span={12}>
@@ -868,7 +869,7 @@ const Transactions = () => {
                       </Col>
                       <Col span={12} style={{ textAlign: 'right' }}>
                         <Text style={{ color: '#52c41a', fontSize: '16px' }}>
-                          ₹{parseFloat(selectedTransaction.invoice.paidAmount || 0).toLocaleString()}
+                          {formatCurrency(selectedTransaction.invoice.paidAmount || 0, true, 0)}
                         </Text>
                       </Col>
                       <Col span={12}>
@@ -876,7 +877,7 @@ const Transactions = () => {
                       </Col>
                       <Col span={12} style={{ textAlign: 'right' }}>
                         <Text strong style={{ fontSize: '18px', color: selectedTransaction.invoice.balanceAmount > 0 ? '#f5222d' : '#52c41a' }}>
-                          ₹{parseFloat(selectedTransaction.invoice.balanceAmount || 0).toLocaleString()}
+                          {formatCurrency(selectedTransaction.invoice.balanceAmount || 0, true, 0)}
                         </Text>
                       </Col>
                     </Row>
@@ -924,7 +925,7 @@ const Transactions = () => {
                             align: 'right',
                             render: (amount) => (
                               <Text strong style={{ color: '#52c41a' }}>
-                                ₹{parseFloat(amount).toLocaleString()}
+                                {formatCurrency(amount, true, 0)}
                               </Text>
                             ),
                           },
@@ -953,7 +954,7 @@ const Transactions = () => {
                               </Table.Summary.Cell>
                               <Table.Summary.Cell align="right">
                                 <Text strong style={{ fontSize: '14px', color: '#52c41a' }}>
-                                  ₹{totalAllocated.toLocaleString()}
+                                  {formatCurrency(totalAllocated, true, 0)}
                                 </Text>
                               </Table.Summary.Cell>
                               <Table.Summary.Cell />
@@ -970,7 +971,7 @@ const Transactions = () => {
             {/* Payment Details */}
             {selectedTransaction.payment && (
               <>
-                <Card 
+                <Card
                   title={<Text strong>Payment Receipt</Text>}
                   size="small"
                   style={{ borderColor: '#52c41a' }}
@@ -978,10 +979,10 @@ const Transactions = () => {
                   <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                     {/* Payment Status Badge */}
                     <div style={{ textAlign: 'center', padding: '12px', backgroundColor: '#f6ffed', borderRadius: '8px' }}>
-                      <Tag 
+                      <Tag
                         color={
                           selectedTransaction.payment.status === 'ALLOCATED' ? 'success' :
-                          selectedTransaction.payment.status === 'PARTIAL' ? 'warning' : 'error'
+                            selectedTransaction.payment.status === 'PARTIAL' ? 'warning' : 'error'
                         }
                         style={{ fontSize: '14px', padding: '4px 12px' }}
                       >
@@ -1029,21 +1030,21 @@ const Transactions = () => {
                         </Col>
                         <Col span={12} style={{ textAlign: 'right' }}>
                           <Text strong style={{ fontSize: '18px', color: '#52c41a' }}>
-                            ₹{parseFloat(selectedTransaction.payment.amount).toLocaleString()}
+                            {formatCurrency(selectedTransaction.payment.amount, true, 0)}
                           </Text>
                         </Col>
                         <Col span={12}>
                           <Text type="secondary">Allocated:</Text>
                         </Col>
                         <Col span={12} style={{ textAlign: 'right' }}>
-                          <Text>₹{parseFloat(selectedTransaction.payment.totalAllocated || 0).toLocaleString()}</Text>
+                          <Text>{formatCurrency(selectedTransaction.payment.totalAllocated || 0, true, 0)}</Text>
                         </Col>
                         <Col span={12}>
                           <Text type="secondary">Unallocated:</Text>
                         </Col>
                         <Col span={12} style={{ textAlign: 'right' }}>
                           <Text strong style={{ color: '#fa8c16' }}>
-                            ₹{parseFloat(selectedTransaction.payment.unallocatedAmount || 0).toLocaleString()}
+                            {formatCurrency(selectedTransaction.payment.unallocatedAmount || 0, true, 0)}
                           </Text>
                         </Col>
                       </Row>

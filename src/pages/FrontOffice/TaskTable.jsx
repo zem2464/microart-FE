@@ -939,8 +939,8 @@ const TaskTable = () => {
                 gradingProgress === 100
                   ? "COMPLETED"
                   : gradingTotalTasks > 0
-                  ? "IN_PROGRESS"
-                  : "TODO",
+                    ? "IN_PROGRESS"
+                    : "TODO",
               progress: gradingProgress,
               totalTasks: gradingTotalTasks,
               completedTasks: gradingCompletedTasks,
@@ -971,8 +971,8 @@ const TaskTable = () => {
               progress === 100
                 ? "COMPLETED"
                 : totalTasks > 0
-                ? "IN_PROGRESS"
-                : "TODO",
+                  ? "IN_PROGRESS"
+                  : "TODO",
             progress,
             totalTasks,
             completedTasks,
@@ -1046,10 +1046,10 @@ const TaskTable = () => {
           reason: !isUserLoaded
             ? "User not loaded yet"
             : !hasAssignedWorkTypes
-            ? "No work types assigned (show all)"
-            : userWorkTypeIds.includes(workTypeId)
-            ? "Assigned to user"
-            : "Not assigned to user",
+              ? "No work types assigned (show all)"
+              : userWorkTypeIds.includes(workTypeId)
+                ? "Assigned to user"
+                : "Not assigned to user",
         });
 
         if (shouldShow) {
@@ -1242,8 +1242,8 @@ const TaskTable = () => {
               otherAssignmentsCompleted;
             message.error(
               `Cannot add ${incrementToAdd} images. ` +
-                `You've completed ${currentUserCompleted}, others completed ${otherAssignmentsCompleted}. ` +
-                `You can add up to ${maxCanAdd} more images.`
+              `You've completed ${currentUserCompleted}, others completed ${otherAssignmentsCompleted}. ` +
+              `You can add up to ${maxCanAdd} more images.`
             );
             cancelEditCell();
             return;
@@ -1414,6 +1414,14 @@ const TaskTable = () => {
                 backgroundColor: `${taskType.color || "#d9d9d9"}20`,
               },
             }),
+            filters: Object.keys(TASK_STATUS).map((status) => ({
+              text: TASK_STATUS[status].label,
+              value: status,
+            })),
+            onFilter: (value, record) => {
+              const task = record.tasksByType?.[String(taskType.id)];
+              return task?.status?.toUpperCase() === String(value).toUpperCase();
+            },
             render: (_, record) => {
               const task = record.tasksByType[taskType.id];
 

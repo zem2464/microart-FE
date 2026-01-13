@@ -131,7 +131,7 @@ const TasksTable = memo(
     users = [],
     currentUser = null,
     loading = false,
-    refetchTasks = () => {},
+    refetchTasks = () => { },
     refetchQueries = [],
     onRowClick = null,
     tableLayout = "fixed",
@@ -547,8 +547,8 @@ const TasksTable = memo(
                 otherAssignmentsCompleted;
               message.error(
                 `Cannot add ${incrementToAdd} images. ` +
-                  `You've completed ${currentUserCompleted}, others completed ${otherAssignmentsCompleted}. ` +
-                  `You can add up to ${maxCanAdd} more images.`
+                `You've completed ${currentUserCompleted}, others completed ${otherAssignmentsCompleted}. ` +
+                `You can add up to ${maxCanAdd} more images.`
               );
               cancelEditCell();
               setIsInlineUpdating(false);
@@ -619,6 +619,14 @@ const TasksTable = memo(
               onCell: () => ({
                 style: { backgroundColor: `${taskType.color || "#d9d9d9"}20` },
               }),
+              filters: Object.keys(TASK_STATUS).map((status) => ({
+                text: TASK_STATUS[status].label,
+                value: status,
+              })),
+              onFilter: (value, record) => {
+                const task = record.tasksByType?.[String(taskType.id)];
+                return task?.status?.toUpperCase() === String(value).toUpperCase();
+              },
               render: (_, record) => {
                 const task = record.tasksByType?.[taskType.id];
                 if (!task) return <Text type="secondary">-</Text>;
