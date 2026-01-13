@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect, useCallback } from "react";
+import React, { useState, useContext, useEffect, useCallback, useMemo } from "react";
 import {
   Card,
   Table,
@@ -101,6 +101,17 @@ const getClientDisplayName = (client) => {
     client.clientCode || "Unknown Client" + "" + (client.displayName || "")
   );
 };
+
+// Helper function to get filter button styles - shows selected state consistently
+const getFilterButtonStyle = (isSelected) => ({
+  cursor: "pointer",
+  padding: "6px 12px",
+  borderRadius: "4px",
+  transition: "all 0.3s ease",
+  backgroundColor: isSelected ? "#1890ff" : "transparent",
+  border: isSelected ? "2px solid #0050b3" : "1px solid #d9d9d9",
+  opacity: isSelected ? 1 : 0.8,
+});
 
 const ProjectManagement = () => {
   const {
@@ -214,7 +225,14 @@ const ProjectManagement = () => {
         // Combine status + noInvoice to derive delivered-without-invoice server-side
         filters.status = "DELIVERED";
         filters.noInvoice = true;
-      } else if (statusFilter !== "REQUESTED") {
+      } else if (statusFilter === "REQUESTED") {
+        // Fly-on-Credit: Pass status as REQUESTED to backend
+        filters.status = "REQUESTED";
+      } else if (statusFilter === "COMPLETED") {
+        // Not Delivered: Completed projects WITH invoices
+        filters.status = "COMPLETED";
+        filters.hasInvoice = true;
+      } else {
         filters.status = statusFilter;
       }
     }
@@ -241,15 +259,30 @@ const ProjectManagement = () => {
       };
     }
 
+    // Add search filter (handled server-side)
+    if (searchText && searchText.trim()) {
+      filters.search = searchText.trim();
+    }
+
     return filters;
   }, [
     statusFilter,
     clientFilter,
     workTypeFilter,
     myClientsOnly,
+    searchText,
     user?.id,
     deadlineDateRange,
   ]);
+
+  // Memoized query variables - updates when buildFilters changes
+  const projectQueryVariables = useMemo(() => ({
+    filters: buildFilters(),
+    page: 1,
+    limit: 20,
+    sortBy: "createdAt",
+    sortOrder: "DESC",
+  }), [buildFilters]);
 
   // GraphQL Queries
   const {
@@ -259,13 +292,7 @@ const ProjectManagement = () => {
     refetch: refetchProjects,
     fetchMore,
   } = useQuery(GET_PROJECTS, {
-    variables: {
-      filters: buildFilters(),
-      page: 1,
-      limit: 20,
-      sortBy: "createdAt",
-      sortOrder: "DESC",
-    },
+    variables: projectQueryVariables,
     fetchPolicy: "cache-and-network",
     notifyOnNetworkStatusChange: true,
   });
@@ -447,26 +474,6 @@ const ProjectManagement = () => {
   const allProjects =
     projectsData?.projects?.projects || projectsData?.projects?.data || [];
 
-  // Refetch projects when filters change
-  useEffect(() => {
-    refetchProjects({
-      filters: buildFilters(),
-      page: 1,
-      limit: 20,
-      sortBy: "createdAt",
-      sortOrder: "DESC",
-    });
-    setPage(1); // Reset page on filter change
-  }, [
-    statusFilter,
-    clientFilter,
-    workTypeFilter,
-    myClientsOnly,
-    user?.id,
-    deadlineDateRange,
-    refetchProjects,
-  ]);
-
   // Default "My Clients" filter for service providers
   useEffect(() => {
     const roleType = user?.role?.roleType?.toString()?.toUpperCase();
@@ -543,6 +550,11 @@ const ProjectManagement = () => {
     return () => window.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, clientFilter, workTypeFilter, myClientsOnly, searchText, deadlineDateRange, user?.id]);
+
   // Populate invoicedProjectIds from server-provided project.invoiceId / project.invoice
   useEffect(() => {
     const ids = new Set();
@@ -558,31 +570,8 @@ const ProjectManagement = () => {
     }
   }, [allProjects]);
 
-  // Filter projects based on search (status and client filtering now handled server-side)
-  const filteredProjects =
-    allProjects.filter((project) => {
-      const code = (
-        project.projectCode ||
-        project.projectNumber ||
-        project.name ||
-        ""
-      ).toString();
-      const desc = (project.description || "").toString();
-      const searchLower = searchText.toString().toLowerCase();
-
-      const matchesSearch =
-        code.toLowerCase().includes(searchLower) ||
-        desc.toLowerCase().includes(searchLower);
-
-      // Additional client-side filtering for REQUESTED (fly-on-credit)
-      // since this uses a relationship that's harder to filter server-side
-      if (statusFilter === "REQUESTED") {
-        return matchesSearch && project.creditRequest?.status === "approved";
-      }
-
-      // For other filters (NO_INVOICE, status, client), server handles it
-      return matchesSearch;
-    }) || [];
+  // All filtering (search, status, client, etc.) is now handled server-side
+  const filteredProjects = allProjects || [];
 
   // Helper function to generate folder name for copying
   const generateFolderName = (project) => {
@@ -731,7 +720,7 @@ const ProjectManagement = () => {
     noInvoice: projectStatsResponse.noInvoiceCount || 0, // Completed projects without invoices
     totalInvoice: projectStatsResponse.totalInvoiceCount || 0, // All projects WITH invoices (any status)
     notDelivered: projectStatsResponse.notDeliveredCount || 0, // Completed projects with invoice but not delivered
-    delivered: projectStatsResponse.deliveredCount || 0, // All delivered projects
+    delivered: statsMap.delivered?.count || 0, // All delivered projects from stats array
     deliveredNoInvoice: projectStatsResponse.deliveredNoInvoiceCount || 0, // Delivered projects without invoices
     totalEstimatedCost: projectStats.reduce(
       (sum, s) => sum + (s.totalEstimatedCost || 0),
@@ -1634,20 +1623,27 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
+                      ...getFilterButtonStyle(statusFilter === "DRAFT"),
                     }}
-                    className="hover:bg-gray-100"
                     onClick={() => setStatusFilter("DRAFT")}
                   >
-                    <EditOutlined style={{ fontSize: 16, color: "#faad14" }} />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <EditOutlined
+                      style={{
+                        fontSize: 16,
+                        color: statusFilter === "DRAFT" ? "#fff" : "#faad14",
+                      }}
+                    />
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color: statusFilter === "DRAFT" ? "#fff" : "#000",
+                      }}
+                    >
                       Draft:
                     </Text>
                     <Tag
-                      color="orange"
+                      color={statusFilter === "DRAFT" ? "blue" : "orange"}
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.draft}
@@ -1656,22 +1652,27 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
+                      ...getFilterButtonStyle(statusFilter === "all"),
                     }}
-                    className="hover:bg-gray-100"
                     onClick={() => setStatusFilter("all")}
                   >
                     <ProjectOutlined
-                      style={{ fontSize: 16, color: "#1890ff" }}
+                      style={{
+                        fontSize: 16,
+                        color: statusFilter === "all" ? "#fff" : "#1890ff",
+                      }}
                     />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color: statusFilter === "all" ? "#fff" : "#000",
+                      }}
+                    >
                       Total:
                     </Text>
                     <Tag
-                      color="blue"
+                      color={statusFilter === "all" ? "blue" : "blue"}
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.total}
@@ -1680,22 +1681,27 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
+                      ...getFilterButtonStyle(statusFilter === "ACTIVE"),
                     }}
-                    className="hover:bg-gray-100"
                     onClick={() => setStatusFilter("ACTIVE")}
                   >
                     <PlayCircleOutlined
-                      style={{ fontSize: 16, color: "#52c41a" }}
+                      style={{
+                        fontSize: 16,
+                        color: statusFilter === "ACTIVE" ? "#fff" : "#52c41a",
+                      }}
                     />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color: statusFilter === "ACTIVE" ? "#fff" : "#000",
+                      }}
+                    >
                       Active:
                     </Text>
                     <Tag
-                      color="green"
+                      color={statusFilter === "ACTIVE" ? "blue" : "green"}
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.active}
@@ -1704,22 +1710,27 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
+                      ...getFilterButtonStyle(statusFilter === "IN_PROGRESS"),
                     }}
-                    className="hover:bg-gray-100"
                     onClick={() => setStatusFilter("IN_PROGRESS")}
                   >
                     <ClockCircleOutlined
-                      style={{ fontSize: 16, color: "#1890ff" }}
+                      style={{
+                        fontSize: 16,
+                        color: statusFilter === "IN_PROGRESS" ? "#fff" : "#1890ff",
+                      }}
                     />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color: statusFilter === "IN_PROGRESS" ? "#fff" : "#000",
+                      }}
+                    >
                       In Progress:
                     </Text>
                     <Tag
-                      color="blue"
+                      color={statusFilter === "IN_PROGRESS" ? "blue" : "blue"}
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.inProgress}
@@ -1728,22 +1739,27 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
+                      ...getFilterButtonStyle(statusFilter === "REOPEN"),
                     }}
-                    className="hover:bg-gray-100"
                     onClick={() => setStatusFilter("REOPEN")}
                   >
                     <ReloadOutlined
-                      style={{ fontSize: 16, color: "#eb2f96" }}
+                      style={{
+                        fontSize: 16,
+                        color: statusFilter === "REOPEN" ? "#fff" : "#eb2f96",
+                      }}
                     />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color: statusFilter === "REOPEN" ? "#fff" : "#000",
+                      }}
+                    >
                       Reopen:
                     </Text>
                     <Tag
-                      color="magenta"
+                      color={statusFilter === "REOPEN" ? "blue" : "magenta"}
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.reopen}
@@ -1752,26 +1768,27 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
-                      backgroundColor:
-                        stats.noInvoice > 0 ? "#fff7e6" : "transparent",
-                      border:
-                        stats.noInvoice > 0 ? "1px solid #ffa940" : "none",
+                      ...getFilterButtonStyle(statusFilter === "NO_INVOICE"),
                     }}
-                    className="hover:bg-orange-100"
                     onClick={() => setStatusFilter("NO_INVOICE")}
                   >
                     <ExclamationCircleOutlined
-                      style={{ fontSize: 16, color: "#fa8c16" }}
+                      style={{
+                        fontSize: 16,
+                        color: statusFilter === "NO_INVOICE" ? "#fff" : "#fa8c16",
+                      }}
                     />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color: statusFilter === "NO_INVOICE" ? "#fff" : "#000",
+                      }}
+                    >
                       Completed (No Invoice):
                     </Text>
                     <Tag
-                      color="orange"
+                      color={statusFilter === "NO_INVOICE" ? "blue" : "orange"}
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.noInvoice}
@@ -1780,26 +1797,27 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
-                      backgroundColor:
-                        stats.totalNoInvoice > 0 ? "#f6e7ff" : "transparent",
-                      border:
-                        stats.totalNoInvoice > 0 ? "1px solid #b37feb" : "none",
+                      ...getFilterButtonStyle(statusFilter === "COMPLETED"),
                     }}
-                    className="hover:bg-blue-100"
                     onClick={() => setStatusFilter("COMPLETED")}
                   >
                     <CheckCircleOutlined
-                      style={{ fontSize: 16, color: "#1890ff" }}
+                      style={{
+                        fontSize: 16,
+                        color: statusFilter === "COMPLETED" ? "#fff" : "#1890ff",
+                      }}
                     />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color: statusFilter === "COMPLETED" ? "#fff" : "#000",
+                      }}
+                    >
                       Not Delivered:
                     </Text>
                     <Tag
-                      color="cyan"
+                      color={statusFilter === "COMPLETED" ? "blue" : "cyan"}
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.notDelivered}
@@ -1808,26 +1826,27 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
-                      backgroundColor:
-                        stats.delivered > 0 ? "#f0f5ff" : "transparent",
-                      border:
-                        stats.delivered > 0 ? "1px solid #722ed1" : "none",
+                      ...getFilterButtonStyle(statusFilter === "DELIVERED"),
                     }}
-                    className="hover:bg-purple-100"
                     onClick={() => setStatusFilter("DELIVERED")}
                   >
                     <CheckCircleOutlined
-                      style={{ fontSize: 16, color: "#722ed1" }}
+                      style={{
+                        fontSize: 16,
+                        color: statusFilter === "DELIVERED" ? "#fff" : "#722ed1",
+                      }}
                     />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color: statusFilter === "DELIVERED" ? "#fff" : "#000",
+                      }}
+                    >
                       Delivered:
                     </Text>
                     <Tag
-                      color="magenta"
+                      color={statusFilter === "DELIVERED" ? "blue" : "magenta"}
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.delivered}
@@ -1836,30 +1855,39 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
-                      backgroundColor:
-                        stats.deliveredNoInvoice > 0
-                          ? "#f6e7ff"
-                          : "transparent",
-                      border:
-                        stats.deliveredNoInvoice > 0
-                          ? "1px solid #b37feb"
-                          : "none",
+                      ...getFilterButtonStyle(
+                        statusFilter === "DELIVERED_NO_INVOICE"
+                      ),
                     }}
-                    className="hover:bg-purple-100"
                     onClick={() => setStatusFilter("DELIVERED_NO_INVOICE")}
                   >
                     <CheckCircleOutlined
-                      style={{ fontSize: 16, color: "#b37feb" }}
+                      style={{
+                        fontSize: 16,
+                        color:
+                          statusFilter === "DELIVERED_NO_INVOICE"
+                            ? "#fff"
+                            : "#b37feb",
+                      }}
                     />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color:
+                          statusFilter === "DELIVERED_NO_INVOICE"
+                            ? "#fff"
+                            : "#000",
+                      }}
+                    >
                       Delivered (No Invoice):
                     </Text>
                     <Tag
-                      color="purple"
+                      color={
+                        statusFilter === "DELIVERED_NO_INVOICE"
+                          ? "blue"
+                          : "purple"
+                      }
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.deliveredNoInvoice}
@@ -1868,26 +1896,29 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
-                      backgroundColor:
-                        stats.totalInvoice > 0 ? "#fef9e7" : "transparent",
-                      border:
-                        stats.totalInvoice > 0 ? "1px solid #eac42b" : "none",
+                      ...getFilterButtonStyle(statusFilter === "TOTAL_INVOICE"),
                     }}
-                    className="hover:bg-yellow-100"
                     onClick={() => setStatusFilter("TOTAL_INVOICE")}
                   >
                     <ExclamationCircleOutlined
-                      style={{ fontSize: 16, color: "#eac42b" }}
+                      style={{
+                        fontSize: 16,
+                        color:
+                          statusFilter === "TOTAL_INVOICE" ? "#fff" : "#eac42b",
+                      }}
                     />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color:
+                          statusFilter === "TOTAL_INVOICE" ? "#fff" : "#000",
+                      }}
+                    >
                       Invoice Generated (All):
                     </Text>
                     <Tag
-                      color="gold"
+                      color={statusFilter === "TOTAL_INVOICE" ? "blue" : "gold"}
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.totalInvoice}
@@ -1896,22 +1927,29 @@ const ProjectManagement = () => {
                   <Space
                     size={4}
                     style={{
-                      cursor: "pointer",
-                      padding: "4px 8px",
-                      borderRadius: "4px",
-                      transition: "background-color 0.3s",
+                      ...getFilterButtonStyle(statusFilter === "REQUESTED"),
                     }}
-                    className="hover:bg-gray-100"
                     onClick={() => setStatusFilter("REQUESTED")}
                   >
                     <CheckCircleOutlined
-                      style={{ fontSize: 16, color: "#722ed1" }}
+                      style={{
+                        fontSize: 16,
+                        color:
+                          statusFilter === "REQUESTED" ? "#fff" : "#722ed1",
+                      }}
                     />
-                    <Text strong style={{ fontSize: 14 }}>
+                    <Text
+                      strong
+                      style={{
+                        fontSize: 14,
+                        color:
+                          statusFilter === "REQUESTED" ? "#fff" : "#000",
+                      }}
+                    >
                       Fly-on-Credit:
                     </Text>
                     <Tag
-                      color="purple"
+                      color={statusFilter === "REQUESTED" ? "blue" : "purple"}
                       style={{ margin: 0, fontSize: 14, padding: "2px 8px" }}
                     >
                       {stats.flyOnCredit}
