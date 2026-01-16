@@ -264,7 +264,10 @@ const ClientForm = ({
   const handleCustomRateToggle = (checked) => {
     setHasCustomRates(checked);
     if (!checked) {
+      // Clear both the form field and the state when custom rates are turned off
+      // This ensures default rates are shown when the toggle is disabled
       form.setFieldsValue({ customRates: {} });
+      setGradingCustomRates({});
     }
   };
   const [form] = Form.useForm();
