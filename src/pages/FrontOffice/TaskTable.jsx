@@ -1152,11 +1152,18 @@ const TaskTable = () => {
         const usersToRemove = currentAssignments.filter(
           (a) => !selectedUserIds.includes(a.userId)
         );
+        
+        // Check if user is being reassigned (already exists in assignments)
+        const usersToUpdate = selectedUserIds.filter(
+          (id) => currentUserIds.includes(id)
+        );
 
+        // Remove unselected users
         for (const assignment of usersToRemove) {
           await deleteAssignment({ variables: { id: assignment.id } });
         }
 
+        // Add new users
         if (usersToAdd.length > 0) {
           const taskImageQty = getTaskTotalQuantity(task);
           const qtyPerUser = taskImageQty; // single selected user gets full by default
@@ -1169,6 +1176,24 @@ const TaskTable = () => {
           await bulkCreateAssignments({
             variables: { inputs: assignmentInputs },
           });
+        }
+        
+        // Update existing assignments to sync quantity (fixes stale quantity bug)
+        if (usersToUpdate.length > 0) {
+          const taskImageQty = getTaskTotalQuantity(task);
+          for (const userId of usersToUpdate) {
+            const existingAssignment = currentAssignments.find(a => a.userId === userId);
+            if (existingAssignment) {
+              await updateTaskAssignment({
+                variables: {
+                  id: existingAssignment.id,
+                  input: {
+                    imageQuantity: taskImageQty,
+                  },
+                },
+              });
+            }
+          }
         }
 
         message.success("Task assignments updated successfully");
