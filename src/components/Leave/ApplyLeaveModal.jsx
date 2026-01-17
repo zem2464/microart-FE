@@ -128,11 +128,20 @@ const ApplyLeaveModal = ({ visible, onClose, onSuccess }) => {
       } else {
         // For long leave
         if (durationType === 'HALF_DAY') {
-          // For half day, use single date and set hours to 0.5
-          const date = dayjs(values.dateRange);
-          startDate = date.startOf('day').format('YYYY-MM-DD HH:mm:ss');
-          endDate = date.endOf('day').format('YYYY-MM-DD HH:mm:ss');
-          hours = 0.5; // Set hours for half-day leave
+          // Normalize value in case user previously picked a range
+          const dateValue = Array.isArray(values.dateRange)
+            ? values.dateRange[0]
+            : values.dateRange;
+          const date = dayjs(dateValue);
+
+          if (!date.isValid()) {
+            message.error('Please select a valid date');
+            return;
+          }
+
+          startDate = date.hour(9).minute(0).second(0).format('YYYY-MM-DD HH:mm:ss');
+          endDate = date.hour(13).minute(0).second(0).format('YYYY-MM-DD HH:mm:ss');
+          hours = 0.5; // Represent half-day as four working hours
         } else {
           // For full day, use date range
           const [start, end] = Array.isArray(values.dateRange) 
