@@ -72,8 +72,7 @@ const DeletedProjectsReport = () => {
       sortBy: "deletedAt",
       sortOrder: "DESC",
     },
-    fetchPolicy: "cache-and-network",
-    notifyOnNetworkStatusChange: true,
+    fetchPolicy: "cache-first",
   });
 
   // Extract projects from response and filter for deleted projects only

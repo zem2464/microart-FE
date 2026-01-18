@@ -230,10 +230,7 @@ const Dashboard = () => {
 
   // Calculate stats from project statistics (accurate DB data)
   const projectStats = useMemo(() => {
-    console.log("Project stats data:", projectStatsData);
-
     if (!projectStatsData?.projectStats) {
-      console.log("No project stats data available");
       return {
         total: 0,
         active: 0,
@@ -265,7 +262,6 @@ const Dashboard = () => {
     // Total = sum of all status counts
     response.total = stats.reduce((sum, s) => sum + (s.count || 0), 0);
 
-    console.log("Calculated stats from DB:", response);
     return response;
   }, [projectStatsData]);
 

@@ -93,8 +93,7 @@ const ClientList = () => {
       sortBy: sorter.field,
       sortOrder: sorter.order,
     },
-    fetchPolicy: "cache-and-network",
-    notifyOnNetworkStatusChange: true,
+    fetchPolicy: "cache-first",
   });
 
   // Fetch server-side stats for accurate counts

@@ -1340,47 +1340,7 @@ const ProjectDetailDrawer = ({ projectId, onAction }) => {
                 taskTypes={workType.taskTypes || []}
                 users={users}
                 projectId={projectId}
-                refetchTasks={refetch.tasks}
-                refetchQueries={[
-                  {
-                    query: GET_TASKS,
-                    variables: {
-                      filters: {
-                        projectId: projectId,
-                        statuses: [
-                          "TODO",
-                          "IN_PROGRESS",
-                          "REVIEW",
-                          "REVISION",
-                          "COMPLETED",
-                          "ON_HOLD",
-                        ],
-                        includeInactive: true,
-                      },
-                      page: 1,
-                      limit: 1000,
-                      sortBy: "createdAt",
-                      sortOrder: "DESC",
-                    },
-                  },
-                  {
-                    query: GET_PROJECT_DETAIL,
-                    variables: { id: projectId },
-                  },
-                  {
-                    query: GET_PROJECT_AUDIT_HISTORY,
-                    variables: { projectId },
-                  },
-                  {
-                    query: GET_GRADINGS_BY_WORK_TYPES,
-                    variables: {
-                      workTypeIds:
-                        project?.projectWorkTypes?.map(
-                          (pwt) => pwt.workTypeId
-                        ) || [],
-                    },
-                  },
-                ]}
+                refetchTasks={refetch.all}
               />
             </Card>
           );

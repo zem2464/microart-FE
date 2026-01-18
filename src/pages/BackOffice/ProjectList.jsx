@@ -45,6 +45,8 @@ import { useAppDrawer } from "../../contexts/DrawerContext";
 import dayjs from "dayjs";
 import { userCacheVar } from "../../cache/userCacheVar";
 import ReminderNotesModal from "../../components/ReminderNotesModal";
+import usePageRefresh from "../../hooks/usePageRefresh";
+import { useCacheInvalidation } from "../../apolloClient/cacheInvalidationStrategy";
 import {
   getMyClientsFilterFromCookie,
   saveMyClientsFilterToCookie,
@@ -77,6 +79,7 @@ const PRIORITY_MAP = {
 const ProjectList = () => {
   // Drawer context
   const { showProjectDetailDrawerV2 } = useAppDrawer();
+  const { publishEvent, EVENTS } = useCacheInvalidation();
   const currentUser = useReactiveVar(userCacheVar);
   
   // State management
@@ -122,6 +125,12 @@ const ProjectList = () => {
   const { data: workTypesData } = useQuery(GET_WORK_TYPES);
   const { data: gradingsData } = useQuery(GET_GRADINGS);
 
+  // Setup page-level cache invalidation subscriptions
+  // This ensures projects page refreshes when projects are created/updated/deleted
+  usePageRefresh({
+    refetchProjects,
+  });
+
   // GraphQL Mutations
   const [createProject, { loading: createLoading }] = useMutation(
     CREATE_PROJECT,
@@ -132,7 +141,8 @@ const ProjectList = () => {
         );
         setModalVisible(false);
         form.resetFields();
-        refetchProjects();
+        // Broadcast so all pages refresh (ProjectForm already does this; keep parity)
+        publishEvent(EVENTS.PROJECT_CREATED, { action: "create" });
       },
       onError: (error) => {
         message.error(`Failed to create project: ${error.message}`);
@@ -149,7 +159,7 @@ const ProjectList = () => {
         );
         setModalVisible(false);
         form.resetFields();
-        refetchProjects();
+        publishEvent(EVENTS.PROJECT_UPDATED, { action: "update" });
       },
       onError: (error) => {
         message.error(`Failed to update project: ${error.message}`);
@@ -160,6 +170,7 @@ const ProjectList = () => {
   const [deleteProject] = useMutation(DELETE_PROJECT, {
     onCompleted: () => {
       message.success("Project deleted successfully");
+      publishEvent(EVENTS.PROJECT_DELETED, { action: "delete" });
       refetchProjects();
     },
     onError: (error) => {

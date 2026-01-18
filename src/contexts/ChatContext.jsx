@@ -147,22 +147,10 @@ export const ChatProvider = ({ children }) => {
     onData: ({ data: subData }) => {
       const notification = subData?.data?.notificationCreated;
 
-      console.log("[ChatContext] Notification received:", notification);
-
       if (notification && notification.type === "message") {
         const roomId = notification.metadata?.roomId;
         const sender = notification.fromUser;
         const messageContent = notification.message;
-
-        console.log("[ChatContext] Message notification - roomId:", roomId);
-        console.log("[ChatContext] Open chats:", openChats);
-        console.log("[ChatContext] Current location:", location.pathname);
-
-        // Early marker before any branching
-        console.log("[ChatContext] Pre-branch marker", {
-          roomId,
-          path: location.pathname,
-        });
 
         // Check if chat window is already open for this room
         const isChatWindowOpen = openChats.some(
@@ -175,48 +163,15 @@ export const ChatProvider = ({ children }) => {
         // Don't send notifications only if user is actively viewing this specific chat
         const shouldSendNotification = !isChatWindowOpen && !isViewingThisRoom;
 
-        console.log("[ChatContext] Is chat window open?", isChatWindowOpen);
-        console.log("[ChatContext] Is viewing this room?", isViewingThisRoom);
-        console.log("[ChatContext] Current path:", location.pathname);
-        console.log(
-          "[ChatContext] Should send notification?",
-          shouldSendNotification
-        );
-
-        // Additional instrumentation to confirm branch evaluation
-        console.log("[ChatContext] Notification gate", {
-          roomId,
-          isChatWindowOpen,
-          isViewingThisRoom,
-          shouldSendNotification,
-        });
-
         if (shouldSendNotification) {
-          console.log("[ChatContext] Playing sound and showing notifications");
-
           // Early visibility into env before any branching or errors
           const title = `New message from ${sender?.firstName || "Unknown"} ${
             sender?.lastName || ""
           }`;
           const electronBridge = window?.electron;
-          const isElectron = isElectronEnv();
-
-          console.log("[ChatContext] Notification env check (pre-play)", {
-            isElectron,
-            hasBridge: !!electronBridge,
-            hasShowNotification: !!electronBridge?.showNotification,
-            windowIsElectron: !!window.isElectron,
-          });
 
           // Play sound for new message
           notificationService.playSound();
-
-          console.log("[ChatContext] Notification env check (post-play)", {
-            isElectron,
-            hasBridge: !!electronBridge,
-            hasShowNotification: !!electronBridge?.showNotification,
-            windowIsElectron: !!window.isElectron,
-          });
 
           if (electronBridge?.showNotification) {
             // Native path (Electron): send to main process; skip AntD toast
@@ -229,7 +184,7 @@ export const ChatProvider = ({ children }) => {
                 roomId,
               },
             });
-          } else if (isElectron || window.isElectron) {
+          } else if (window.electron || window.isElectron) {
             console.warn(
               "[ChatContext] Electron detected but showNotification bridge missing; skipping web/SW notifications"
             );

@@ -4,6 +4,8 @@ import {
   useLazyQuery,
   useReactiveVar,
 } from "@apollo/client";
+import { useCacheInvalidation } from "../apolloClient/cacheInvalidationStrategy";
+import useAssignmentValidator from "../hooks/useAssignmentValidator";
 import { GET_CLIENTS } from "../graphql/clientQueries";
 import { userCacheVar } from "../cache/userCacheVar";
 import {
@@ -70,6 +72,9 @@ const ProjectForm = ({
   onCreditExceeded,
   onFooterDataChange,
 }) => {
+  // ✅ Call hook at component top level (React Rules of Hooks)
+  const assignmentValidator = useAssignmentValidator();
+  
   const [form] = Form.useForm();
   const user = useReactiveVar(userCacheVar);
 
@@ -166,16 +171,7 @@ const ProjectForm = ({
       const increasedButWithinCredit = costIncreased && hasAvailableCredit;
       setCostIncreasedButWithinCredit(increasedButWithinCredit);
 
-      if (hasChanged) {
-        console.log("⚠️ Cost changed for fly-on-credit project:", {
-          original: originalApprovedAmount,
-          new: newTotalCost,
-          difference: newTotalCost - originalApprovedAmount,
-          costIncreased,
-          hasAvailableCredit,
-          increasedButWithinCredit,
-        });
-      }
+      // Cost tracking silently
     }
   }, [isFlyOnCredit, mode, project, totalCalculatedBudget, calculatedBudget, projectCreditValidation]);
 
@@ -323,10 +319,15 @@ const ProjectForm = ({
     fetchPolicy: "cache-and-network",
   });
 
+  // Cache invalidation
+  const { publishEvent, EVENTS } = useCacheInvalidation();
+
   // GraphQL Mutations
   const [createProject] = useMutation(CREATE_PROJECT, {
     onCompleted: () => {
       message.success("Project created successfully!");
+      // Publish event so all pages refresh
+      publishEvent(EVENTS.PROJECT_CREATED, { action: 'create' });
       onSuccess?.();
       onClose();
     },
@@ -337,13 +338,10 @@ const ProjectForm = ({
   });
 
   const [updateProject] = useMutation(UPDATE_PROJECT, {
-    refetchQueries: [
-      "GetTasks", // Refetch tasks to update custom fields in task cards
-      "GetMyTasks", // Also refetch user's tasks if applicable
-    ],
-    awaitRefetchQueries: true,
     onCompleted: () => {
       message.success("Project updated successfully!");
+      // Publish event so all pages refresh
+      publishEvent(EVENTS.PROJECT_UPDATED, { action: 'update' });
       onSuccess?.();
       onClose();
     },
@@ -594,9 +592,7 @@ const ProjectForm = ({
   // Work type selection handler - updated to handle multiple work types
   const handleWorkTypeSelect = useCallback(
     async (workTypeIds, existingCustomFieldValues = null) => {
-      console.log("=== handleWorkTypeSelect called ===");
-      console.log("workTypeIds:", workTypeIds);
-      console.log("existingCustomFieldValues:", existingCustomFieldValues);
+      // Work type selection processing
 
       setSelectedWorkTypes(workTypeIds || []);
 
@@ -623,10 +619,10 @@ const ProjectForm = ({
 
       // Only clear custom field values if not in edit mode with existing values
       if (!hasExistingValues) {
-        console.log("Clearing custom field values (create mode)");
+        // Clearing custom field values
         setCustomFieldValues({});
       } else {
-        console.log("Preserving existing custom field values (edit mode)");
+        // Preserving custom field values
       }
       setWorkTypeGradings([]);
 
@@ -780,8 +776,18 @@ const ProjectForm = ({
               }
             }
 
+            // Get the current grading and worktype data
+            const currentGrading = workTypeGradings?.find(
+              (g) => g.id === gradingId
+            );
+            const currentWorkType = workTypesData?.workTypes?.find(
+              (wt) => wt.id === (selectedWorkTypes && selectedWorkTypes[0])
+            );
+
             return {
-              id: gradingTask.taskType.id,
+              // Use gradingTask.id as the stable unique identifier to avoid collisions across tasks
+              id: gradingTask.id,
+              taskKey: gradingTask.id,
               taskTypeId: gradingTask.taskType.id,
               gradingTaskId: gradingTask.id,
               name: gradingTask.taskType.name,
@@ -803,6 +809,13 @@ const ProjectForm = ({
               customFields: {},
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
+              // Add worktype and grading info for grouping
+              workType: currentWorkType,
+              workTypeId: currentWorkType?.id,
+              grading: currentGrading,
+              gradingId: currentGrading?.id,
+              gradingName: currentGrading?.name,
+              sequence: gradingTask.sequence || 0,
             };
           });
           setProjectTasks(initialTasks);
@@ -943,6 +956,11 @@ const ProjectForm = ({
               // Get project deadline from form
               const projectDeadline = form.getFieldValue("deadlineDate");
 
+              const currentGrading = singleGrading.grading;
+              const currentWorkType = workTypesData?.workTypes?.find(
+                (wt) => wt.id === (selectedWorkTypes && selectedWorkTypes[0])
+              );
+
               const initialTasks = activeGradingTasks.map((gradingTask) => {
                 let preferredUserId = null;
                 if (
@@ -962,7 +980,9 @@ const ProjectForm = ({
                 }
 
                 return {
-                  id: null,
+                  // Stable task identity for validation and updates
+                  id: gradingTask.id,
+                  taskKey: gradingTask.id,
                   gradingTaskId: gradingTask.id,
                   taskTypeId: gradingTask?.taskType?.id,
                   name:
@@ -992,6 +1012,12 @@ const ProjectForm = ({
                   customFields: {},
                   createdAt: new Date().toISOString(),
                   updatedAt: new Date().toISOString(),
+                  workType: currentWorkType,
+                  workTypeId: currentWorkType?.id,
+                  grading: currentGrading,
+                  gradingId: currentGrading?.id,
+                  gradingName: currentGrading?.name,
+                  sequence: gradingTask.sequence || 0,
                 };
               });
               setProjectTasks(initialTasks);
@@ -1049,8 +1075,18 @@ const ProjectForm = ({
               }
             }
 
+            // Find which grading this task belongs to and get worktype info
+            const taskGrading = newSelectedGradings.find(
+              (sg) => sg.grading?.gradingTasks?.some((gt) => gt.id === gradingTask.id)
+            )?.grading;
+            const taskWorkType = workTypesData?.workTypes?.find(
+              (wt) => wt.id === (selectedWorkTypes && selectedWorkTypes[0])
+            );
+
             return {
-              id: null,
+              // Ensure each task has a stable unique id/key (gradingTask.id)
+              id: gradingTask.id,
+              taskKey: gradingTask.id,
               gradingTaskId: gradingTask.id,
               taskTypeId: gradingTask?.taskType?.id,
               name:
@@ -1078,6 +1114,12 @@ const ProjectForm = ({
               customFields: {},
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
+              workType: taskWorkType,
+              workTypeId: taskWorkType?.id,
+              grading: taskGrading,
+              gradingId: taskGrading?.id,
+              gradingName: taskGrading?.name,
+              sequence: gradingTask.sequence || 0,
             };
           });
           setProjectTasks(initialTasks);
@@ -1432,13 +1474,7 @@ const ProjectForm = ({
         handleCreditRequestEvent
       );
     };
-  }, [
-    selectedGradings,
-    selectedClientId,
-    customFieldValues,
-    projectCreditValidation,
-    form,
-  ]);
+  }, []);
 
   // Prefetch gradings for edit mode when project data is available
   useEffect(() => {
@@ -1528,7 +1564,7 @@ const ProjectForm = ({
         onCreditExceeded(false, null);
       }
     }
-  }, [selectedGradings, clientPreferences, selectedClientId]);
+  }, [selectedGradings, selectedClientId]);
 
   // Handle task updates
   const handleTaskUpdate = (updatedTasks) => {
@@ -1839,6 +1875,29 @@ const ProjectForm = ({
   const handleSubmit = async (values) => {
     setLoading(true);
     try {
+      // ========== ASSIGNMENT VALIDATION (NEW) ==========
+      // Validate all task assignments before form submission
+      const { validateAllAssignments, formatValidationError } = assignmentValidator;
+      
+      const assignmentValidation = validateAllAssignments(projectTasks, availableUsers);
+      
+      if (!assignmentValidation.valid) {
+        const errorMsg = `Invalid assignments detected:\n${formatValidationError(assignmentValidation)}`;
+        console.error('[ProjectForm] Assignment validation failed:', assignmentValidation);
+        message.error('Cannot save project: ' + assignmentValidation.errors[0]);
+        setLoading(false);
+        return;
+      }
+
+      // Log assignment summary
+      console.log('[ProjectForm] Assignment validation passed:', {
+        totalTasks: assignmentValidation.totalTasks,
+        assigned: assignmentValidation.assignedTasks,
+        unassigned: assignmentValidation.unassignedTasks,
+        validAssignments: assignmentValidation.validAssignments
+      });
+      // ================================================
+
       // Validate grading selection only for active status
       const submittedStatus = values.status || currentStatus || "draft";
       if (
@@ -2343,7 +2402,9 @@ const ProjectForm = ({
                         }
 
                         return {
-                          id: null,
+                          // Ensure stable identity when regenerating tasks on status change
+                          id: gradingTask.id,
+                          taskKey: gradingTask.id,
                           gradingTaskId: gradingTask.id,
                           taskTypeId:
                             gradingTask.taskType?.id || gradingTask.taskTypeId,
@@ -3141,7 +3202,7 @@ const ProjectForm = ({
                       : []
                   }
                   readOnly={loading}
-                  layout="row"
+                  layout="table"
                   clientCode={
                     selectedClientId
                       ? clientsData?.clients?.find(

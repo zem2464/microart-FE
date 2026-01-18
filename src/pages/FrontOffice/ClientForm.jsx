@@ -1049,7 +1049,6 @@ const ClientForm = ({
 
   // Handle country change
   const handleCountryChange = (countryId) => {
-    console.log("Country changed:", countryId);
     setSelectedCountry(countryId);
     setSelectedState(null);
     form.setFieldsValue({ stateId: undefined, cityId: undefined });

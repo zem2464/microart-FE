@@ -126,10 +126,7 @@ function AppContent() {
       (typeof navigator !== 'undefined' && /Electron/i.test(navigator.userAgent));
     
     if (user && !electronEnv) {
-      console.log('[App] Registering web push subscription');
       notificationService.registerPushSubscription(client);
-    } else if (user && electronEnv) {
-      console.log('[App] Skipping web push registration - using Electron native notifications');
     }
   }, [user, client, isElectron]);
 

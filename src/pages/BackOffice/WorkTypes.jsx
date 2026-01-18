@@ -422,8 +422,6 @@ const WorkTypes = () => {
       const activeIndex = filteredData.findIndex((i) => i.id === active.id);
       const overIndex = filteredData.findIndex((i) => i.id === over.id);
 
-      console.log("📊 Reordering:", { activeIndex, overIndex });
-
       const items = Array.from(filteredData);
       const [reorderedItem] = items.splice(activeIndex, 1);
       items.splice(overIndex, 0, reorderedItem);

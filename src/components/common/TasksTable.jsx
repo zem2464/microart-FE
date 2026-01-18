@@ -25,10 +25,11 @@ import {
   CloseCircleOutlined,
   EditOutlined,
 } from "@ant-design/icons";
-import { useMutation, useApolloClient } from "@apollo/client";
+import { useMutation } from "@apollo/client";
 import dayjs from "dayjs";
 import { UPDATE_TASK } from "../../gql/tasks";
 import { generateActionColumns } from "./TasksTableColumns";
+import { useCacheInvalidation } from "../../apolloClient/cacheInvalidationStrategy";
 import {
   BULK_CREATE_TASK_ASSIGNMENTS,
   DELETE_TASK_ASSIGNMENT,
@@ -116,13 +117,11 @@ export function getTaskTotalQuantity(task) {
  * - users: Array of user objects for assignments
  * - currentUser: Current logged-in user object
  * - loading: Boolean for loading state
- * - refetchTasks: Function to refetch tasks after mutations
- * - refetchQueries: Array of GraphQL queries to refetch after mutations
+ * - refetchTasks: Function to refetch tasks after mutations (required)
  * - onRowClick: Optional callback when a row is clicked
  * - tableLayout: Optional table layout ("auto" | "fixed")
  * - rowClassName: Optional function to determine row className
- * - taskColumnRenderer: Function to render dynamic task columns
- * - showAllocationModal: Boolean to enable/disable allocation modal
+ * - taskTypes: Array of task types for dynamic columns
  */
 const TasksTable = memo(
   ({
@@ -132,13 +131,13 @@ const TasksTable = memo(
     currentUser = null,
     loading = false,
     refetchTasks = () => { },
-    refetchQueries = [],
     onRowClick = null,
     tableLayout = "fixed",
     rowClassName = null,
     taskTypes = [],
   }) => {
-    const client = useApolloClient();
+    // Cache invalidation
+    const { publishEvent, EVENTS } = useCacheInvalidation();
 
     // Editing states for inline editing
     const [editingCell, setEditingCell] = useState({
@@ -165,16 +164,16 @@ const TasksTable = memo(
 
     // Mutations with refetch support
     const [updateTask] = useMutation(UPDATE_TASK, {
-      refetchQueries,
-      awaitRefetchQueries: true,
       fetchPolicy: "no-cache",
-      onCompleted: () => {
-        // Evict cache to prevent stale data before refetch
-        client.cache.evict({ fieldName: "tasks" });
-        client.cache.evict({ fieldName: "project" });
-        client.cache.gc();
+      onCompleted: async () => {
         message.success("Task updated successfully");
         cancelEditCell();
+        // Publish event for global cache invalidation
+        publishEvent(EVENTS.TASK_UPDATED, { action: 'update' });
+        // Directly call refetch callback to ensure parent data is refreshed
+        if (refetchTasks) {
+          await refetchTasks();
+        }
         setIsInlineUpdating(false);
       },
       onError: (error) => {
@@ -184,15 +183,15 @@ const TasksTable = memo(
     });
 
     const [bulkCreateAssignments] = useMutation(BULK_CREATE_TASK_ASSIGNMENTS, {
-      refetchQueries,
-      awaitRefetchQueries: true,
       fetchPolicy: "no-cache",
-      onCompleted: () => {
-        // Evict cache to prevent stale data before refetch
-        client.cache.evict({ fieldName: "tasks" });
-        client.cache.evict({ fieldName: "project" });
-        client.cache.gc();
+      onCompleted: async () => {
         message.success("Assignments created successfully");
+        // Publish event for global cache invalidation
+        publishEvent(EVENTS.TASK_ASSIGNMENT_CHANGED, { action: 'assign' });
+        // Directly call refetch callback to ensure parent data is refreshed
+        if (refetchTasks) {
+          await refetchTasks();
+        }
         setIsInlineUpdating(false);
       },
       onError: (error) => {
@@ -202,14 +201,14 @@ const TasksTable = memo(
     });
 
     const [deleteAssignment] = useMutation(DELETE_TASK_ASSIGNMENT, {
-      refetchQueries,
-      awaitRefetchQueries: true,
       fetchPolicy: "no-cache",
-      onCompleted: () => {
-        // Evict cache to prevent stale data before refetch
-        client.cache.evict({ fieldName: "tasks" });
-        client.cache.evict({ fieldName: "project" });
-        client.cache.gc();
+      onCompleted: async () => {
+        // Publish event for global cache invalidation
+        publishEvent(EVENTS.TASK_ASSIGNMENT_CHANGED, { action: 'unassign' });
+        // Directly call refetch callback to ensure parent data is refreshed
+        if (refetchTasks) {
+          await refetchTasks();
+        }
         setIsInlineUpdating(false);
       },
       onError: (error) => {
@@ -219,16 +218,16 @@ const TasksTable = memo(
     });
 
     const [updateTaskAssignment] = useMutation(UPDATE_TASK_ASSIGNMENT, {
-      refetchQueries,
-      awaitRefetchQueries: true,
       fetchPolicy: "no-cache",
-      onCompleted: () => {
-        // Evict cache to prevent stale data before refetch
-        client.cache.evict({ fieldName: "tasks" });
-        client.cache.evict({ fieldName: "project" });
-        client.cache.gc();
+      onCompleted: async () => {
         message.success("Completed quantity updated successfully");
         cancelEditCell();
+        // Publish event for global cache invalidation
+        publishEvent(EVENTS.TASK_UPDATED, { action: 'updateQty' });
+        // Directly call refetch callback to ensure parent data is refreshed
+        if (refetchTasks) {
+          await refetchTasks();
+        }
         setIsInlineUpdating(false);
       },
       onError: (error) => {
@@ -414,7 +413,7 @@ const TasksTable = memo(
         }
 
         message.success("Task assignments updated successfully");
-        await refetchTasks();
+        // refetchTasks is already called in mutation onCompleted handlers
         closeAssignQtyModal();
         cancelEditCell();
       } catch (error) {
@@ -511,7 +510,7 @@ const TasksTable = memo(
           }
 
           message.success("Task assignments updated successfully");
-          await refetchTasks();
+          // refetchTasks is already called in mutation onCompleted handlers
           cancelEditCell();
           setIsInlineUpdating(false);
           return;
@@ -565,7 +564,7 @@ const TasksTable = memo(
             },
           });
 
-          await refetchTasks();
+          // refetchTasks is already called in mutation onCompleted handler
           setIsInlineUpdating(false);
           return;
         } else if (field === "dueDate") {
@@ -583,7 +582,7 @@ const TasksTable = memo(
           },
         });
 
-        await refetchTasks();
+        // refetchTasks is already called in mutation onCompleted handler
       } catch (error) {
         console.error("Error saving task:", error);
         message.error(`Failed to update task: ${error.message}`);

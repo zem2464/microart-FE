@@ -23,18 +23,15 @@ const UpdateNotification = () => {
     // Get current version
     window.electron.getVersion?.().then(version => {
       setCurrentVersion(version);
-      console.log('[UpdateNotification] Current version:', version);
     });
 
     // Listen for checking for update
     const handleUpdateChecking = () => {
-      console.log('[UpdateNotification] Checking for updates...');
       setIsChecking(true);
     };
 
     // Listen for update available
     const handleUpdateAvailable = (event, info) => {
-      console.log('[UpdateNotification] Update available:', info?.version);
       setUpdateAvailable(true);
       setIsChecking(false);
       setDownloadProgress(0);
@@ -84,7 +81,6 @@ const UpdateNotification = () => {
 
     // Listen for update not available
     const handleUpdateNotAvailable = () => {
-      console.log('[UpdateNotification] No updates available');
       setIsChecking(false);
       setUpdateAvailable(false);
     };
@@ -92,13 +88,11 @@ const UpdateNotification = () => {
     // Listen for download progress
     const handleDownloadProgress = (event, progressInfo) => {
       const percent = progressInfo?.percent || 0;
-      console.log('[UpdateNotification] Download progress:', percent + '%');
       setDownloadProgress(percent);
     };
 
     // Listen for update error
     const handleUpdateError = (event, errorInfo) => {
-      console.error('[UpdateNotification] Update error:', errorInfo?.message);
       const errorMsg = errorInfo?.message || 'Unknown error occurred';
       setUpdateError(errorMsg);
       setIsChecking(false);
@@ -141,7 +135,6 @@ const UpdateNotification = () => {
 
     // Listen for update downloaded
     const handleUpdateDownloaded = (event, info) => {
-      console.log('[UpdateNotification] Update downloaded:', info?.version);
       
       // Clear timeout if download completes
       if (downloadTimeoutRef.current) {
@@ -180,23 +173,13 @@ const UpdateNotification = () => {
         maskClosable: false,
         closable: false,
         onOk: () => {
-          console.log('========================================');
-          console.log('[UpdateNotification] USER CLICKED RESTART NOW (Modal)');
-          console.log('[UpdateNotification] Timestamp:', new Date().toISOString());
-          console.log('[UpdateNotification] window.electron available:', !!window.electron);
-          console.log('[UpdateNotification] window.electron.restartApp available:', typeof window.electron?.restartApp);
-          console.log('========================================');
           try {
             if (window.electron?.restartApp) {
-              console.log('[UpdateNotification] Calling window.electron.restartApp()');
               window.electron.restartApp();
-              console.log('[UpdateNotification] ✓ restartApp() called successfully');
             } else {
-              console.error('[UpdateNotification] ✗ window.electron.restartApp is not available!');
               message.error('Restart function not available. Please close and reopen the app manually.');
             }
           } catch (error) {
-            console.error('[UpdateNotification] ✗ Error calling restartApp():', error);
             message.error('Failed to restart app: ' + error.message);
           }
         },
@@ -221,7 +204,6 @@ const UpdateNotification = () => {
 
     // Listen for restart initiated event
     const handleRestartInitiated = () => {
-      console.log('[UpdateNotification] Restart initiated - app is restarting now...');
       message.loading({ content: 'Restarting application...', key: 'restart', duration: 0 });
     };
     
@@ -232,7 +214,6 @@ const UpdateNotification = () => {
 
     // Check for updates on mount (optional)
     window.electron.getUpdateStatus?.().then(status => {
-      console.log('[UpdateNotification] Update status:', status);
       if (status?.updateAvailable) {
         setUpdateAvailable(true);
       }
@@ -305,7 +286,6 @@ const UpdateNotification = () => {
       }
       // If update is available, event handlers will manage state
     } catch (error) {
-      console.error('[UpdateNotification] Check for updates error:', error);
       const errorMsg = error?.message || 'Failed to check for updates';
       setUpdateError(errorMsg);
       notification.error({
@@ -377,23 +357,13 @@ const UpdateNotification = () => {
               size="small"
               icon={<ReloadOutlined />}
               onClick={() => {
-                console.log('========================================');
-                console.log('[UpdateNotification] USER CLICKED RESTART NOW (Badge Button)');
-                console.log('[UpdateNotification] Timestamp:', new Date().toISOString());
-                console.log('[UpdateNotification] window.electron available:', !!window.electron);
-                console.log('[UpdateNotification] window.electron.restartApp available:', typeof window.electron?.restartApp);
-                console.log('========================================');
                 try {
                   if (window.electron?.restartApp) {
-                    console.log('[UpdateNotification] Calling window.electron.restartApp()');
                     window.electron.restartApp();
-                    console.log('[UpdateNotification] ✓ restartApp() called successfully');
                   } else {
-                    console.error('[UpdateNotification] ✗ window.electron.restartApp is not available!');
                     message.error('Restart function not available. Please close and reopen the app manually.');
                   }
                 } catch (error) {
-                  console.error('[UpdateNotification] ✗ Error calling restartApp():', error);
                   message.error('Failed to restart app: ' + error.message);
                 }
               }}

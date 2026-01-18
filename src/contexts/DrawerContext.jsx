@@ -392,8 +392,8 @@ export const AppDrawerProvider = ({ children }) => {
 						mode={projectFormDrawer.mode}
 						onClose={closeProjectFormDrawer}
 						onSuccess={projectFormDrawer.onSuccess}
-						onCreditExceeded={(exceeded) => setProjectCreditExceeded(exceeded)}
-						onFooterDataChange={(data) => setProjectFooterData(data)}
+						onCreditExceeded={setProjectCreditExceeded}
+						onFooterDataChange={setProjectFooterData}
 					/>
 				</ModuleDrawer>
 			)}

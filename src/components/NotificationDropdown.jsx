@@ -53,7 +53,6 @@ const NotificationDropdown = () => {
         
         // Skip message notifications - they're handled by ChatContext
         if (notification.type === 'message') {
-          console.log('[NotificationDropdown] Skipping message notification, handled by ChatContext');
           refetch();
           refetchCount();
           return;
@@ -88,8 +87,8 @@ const NotificationDropdown = () => {
   // Update Electron badge count when unread count changes
   useEffect(() => {
     if (window.electron?.isElectron && window.electron?.setBadgeCount) {
-      window.electron.setBadgeCount(unreadCount).catch(err => {
-        console.error('[NotificationDropdown] Failed to set badge count:', err);
+      window.electron.setBadgeCount(unreadCount).catch(() => {
+        // Silently fail if badge count cannot be set
       });
     }
   }, [unreadCount]);
@@ -116,7 +115,6 @@ const NotificationDropdown = () => {
       refetch();
       refetchCount();
     } catch (error) {
-      console.error('Failed to mark notification as read:', error);
       // Continue with navigation even if mark-as-read fails
     }
 

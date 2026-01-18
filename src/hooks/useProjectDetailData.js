@@ -77,7 +77,11 @@ export const useProjectDetailData = (projectId) => {
   );
 
   const project = projectData?.project || cachedProject;
-  const tasks = tasksData?.tasks?.tasks || cachedTasks;
+  
+  // Use fresh tasks data if available, otherwise use cached tasks
+  // This prevents the "No tasks found" issue during refetch after mutations
+  const freshTasks = tasksData?.tasks?.tasks;
+  const tasks = Array.isArray(freshTasks) ? freshTasks : cachedTasks;
 
   // Cache project data
   useEffect(() => {
@@ -86,10 +90,10 @@ export const useProjectDetailData = (projectId) => {
     }
   }, [projectData?.project]);
 
-  // Cache tasks data
+  // Cache tasks data - always update cache when we get valid data
   useEffect(() => {
     const newTasks = tasksData?.tasks?.tasks;
-    if (Array.isArray(newTasks) && newTasks.length > 0) {
+    if (Array.isArray(newTasks)) {
       setCachedTasks(newTasks);
     }
   }, [tasksData?.tasks?.tasks]);

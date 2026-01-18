@@ -84,15 +84,9 @@ const FrontOfficeLayout = () => {
   useSubscription(NOTIFICATION_CREATED_SUBSCRIPTION, {
     onData: ({ data: subData }) => {
       const notification = subData?.data?.notificationCreated;
-      console.log('[FrontOfficeLayout] Notification received:', {
-        type: notification?.type,
-        title: notification?.title,
-        willRefetch: notification?.type === 'reminder'
-      });
       
       // Refetch reminder count when reminder-related notifications arrive
       if (notification && notification.type === 'reminder') {
-        console.log('[FrontOfficeLayout] Refetching reminder count...');
         refetchReminderCount();
       }
     },
@@ -102,13 +96,12 @@ const FrontOfficeLayout = () => {
     skip: !user, // Skip if user is not logged in
   });
 
-  // Log for debugging
+  // Handle reminders errors
   useEffect(() => {
     if (remindersError) {
       console.error('Error fetching reminders count:', remindersError);
     }
-    console.log('Pending reminders count:', pendingRemindersCount);
-  }, [pendingRemindersCount, remindersError]);
+  }, [remindersError]);
 
   // Check permissions for menu items (using MANAGE to show/hide menu)
   const canManageTasks = hasPermission(

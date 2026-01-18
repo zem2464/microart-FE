@@ -70,6 +70,8 @@ import { GENERATE_PROJECT_INVOICE } from "../../gql/clientLedger";
 // tasks are loaded in ProjectDetail drawer when needed
 import { AppDrawerContext } from "../../contexts/DrawerContext";
 import ReminderNotesModal from "../../components/ReminderNotesModal";
+import usePageRefresh from "../../hooks/usePageRefresh";
+import { useCacheInvalidation } from "../../apolloClient/cacheInvalidationStrategy";
 import dayjs from "dayjs";
 import { useReactiveVar } from "@apollo/client";
 import { userCacheVar } from "../../cache/userCacheVar";
@@ -102,7 +104,6 @@ const STATUS_MAP = {
 
 // Helper function to get client display name
 const getClientDisplayName = (client) => {
-  console.log("Client data:", client);
   return (
     client.clientCode || "Unknown Client" + "" + (client.displayName || "")
   );
@@ -131,6 +132,7 @@ const ProjectManagement = () => {
     showQuoteDrawer,
   } = useContext(AppDrawerContext);
   const user = useReactiveVar(userCacheVar);
+  const { EVENTS } = useCacheInvalidation();
 
   // Check if user has limited permissions
   const hasLimitedRead = hasPermission(
@@ -187,6 +189,14 @@ const ProjectManagement = () => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [lastAppliedFilters, setLastAppliedFilters] = useState(null);
+  const [accumulatedProjects, setAccumulatedProjects] = useState([]);
+
+  const refreshPagination = useCallback(() => {
+    setPage(1);
+    setHasMore(true);
+    setAccumulatedProjects([]);
+  }, []);
 
   // Project completion modal state
   const [completeModalVisible, setCompleteModalVisible] = useState(false);
@@ -262,10 +272,14 @@ const ProjectManagement = () => {
 
     // Add deadline date range filter
     if (deadlineDateRange && deadlineDateRange[0] && deadlineDateRange[1]) {
-      filters.dateRange = {
-        start: deadlineDateRange[0].startOf("day").toISOString(),
-        end: deadlineDateRange[1].endOf("day").toISOString(),
-      };
+      const [start, end] = deadlineDateRange;
+
+      if (dayjs(start).isValid() && dayjs(end).isValid()) {
+        filters.dateRange = {
+          start: dayjs(start).format("YYYY-MM-DD"),
+          end: dayjs(end).format("YYYY-MM-DD"),
+        };
+      }
     }
 
     // Add search filter (handled server-side)
@@ -284,16 +298,38 @@ const ProjectManagement = () => {
     deadlineDateRange,
   ]);
 
-  // Memoized query variables - updates when buildFilters changes
+  // Detect filter changes and refetch page 1
+  useEffect(() => {
+    const currentFilters = buildFilters();
+    
+    // Check if filters actually changed (not just object reference)
+    const filtersChanged = 
+      !lastAppliedFilters || 
+      JSON.stringify(currentFilters) !== JSON.stringify(lastAppliedFilters);
+    
+    if (filtersChanged && lastAppliedFilters !== null) {
+      // Filters changed, reset to page 1
+      console.log("[ProjectManagement] Filters changed, resetting to page 1");
+      setPage(1);
+      setHasMore(true);
+      setAccumulatedProjects([]);
+      setLastAppliedFilters(currentFilters);
+    } else if (!lastAppliedFilters) {
+      // Initial load
+      setLastAppliedFilters(currentFilters);
+    }
+  }, [buildFilters, lastAppliedFilters]);
+
+  // Memoized query variables - only changes on page or when filters reset
   const projectQueryVariables = useMemo(
     () => ({
-      filters: buildFilters(),
-      page: 1,
+      filters: lastAppliedFilters || buildFilters(),
+      page,
       limit: 20,
       sortBy: "createdAt",
       sortOrder: "DESC",
     }),
-    [buildFilters]
+    [lastAppliedFilters, page]
   );
 
   // GraphQL Queries
@@ -305,8 +341,7 @@ const ProjectManagement = () => {
     fetchMore,
   } = useQuery(GET_PROJECTS, {
     variables: projectQueryVariables,
-    fetchPolicy: "cache-and-network",
-    notifyOnNetworkStatusChange: true,
+    fetchPolicy: "network-only",
   });
 
   const { data: clientsData, refetch: refetchClients } = useQuery(GET_CLIENTS, {
@@ -332,6 +367,79 @@ const ProjectManagement = () => {
   } = useQuery(GET_PROJECT_STATS, {
     fetchPolicy: "cache-and-network",
   });
+
+  // Page-level cache invalidation: refresh stats on project events (not projects list, to preserve pagination)
+  const handleProjectRefresh = useCallback(async () => {
+    console.log("[ProjectManagement] Cache event: invalidating stats");
+    // Only refetch stats - the projects list will show new items naturally when user scrolls
+    // Refetching projects breaks Apollo's pagination cache merge logic
+    try {
+      await refetchStats();
+    } catch (err) {
+      console.error("[ProjectManagement] refetchStats failed", err);
+    }
+  }, [refetchStats]);
+
+  // Manual refresh handler for refresh button
+  const handleManualRefresh = useCallback(async () => {
+    console.log("[ProjectManagement] Manual refresh triggered");
+    // Reset pagination page first - this will trigger the useEffect to replace accumulated projects
+    setPage(1);
+    setHasMore(true);
+    
+    try {
+      // Refetch page 1 with current filters - the useEffect will handle updating accumulatedProjects
+      await refetchProjects({
+        filters: lastAppliedFilters || buildFilters(),
+        page: 1,
+        limit: 20,
+        sortBy: "createdAt",
+        sortOrder: "DESC",
+      });
+      await refetchStats();
+    } catch (err) {
+      console.error("[ProjectManagement] Manual refresh failed", err);
+    }
+  }, [refetchProjects, refetchStats, lastAppliedFilters, buildFilters]);
+
+  const pageRefreshHandlers = useMemo(() => ({
+    refetchProjects: handleProjectRefresh,
+    refetchAll: handleProjectRefresh,
+  }), [handleProjectRefresh]);
+
+  usePageRefresh(pageRefreshHandlers);
+
+  // Fallback DOM event listeners in case of module instance duplication
+  useEffect(() => {
+    const events = [
+      EVENTS.PROJECT_CREATED,
+      EVENTS.PROJECT_UPDATED,
+      EVENTS.PROJECT_DELETED,
+    ];
+
+    const handler = () => {
+      console.log("[ProjectManagement] DOM event received -> refresh");
+      handleProjectRefresh();
+    };
+
+    events.forEach((evt) => {
+      try {
+        window.addEventListener(evt, handler);
+      } catch (err) {
+        // ignore
+      }
+    });
+
+    return () => {
+      events.forEach((evt) => {
+        try {
+          window.removeEventListener(evt, handler);
+        } catch (err) {
+          // ignore
+        }
+      });
+    };
+  }, [EVENTS.PROJECT_CREATED, EVENTS.PROJECT_UPDATED, EVENTS.PROJECT_DELETED, handleProjectRefresh]);
 
   // project tasks are loaded inside the ProjectDetail drawer when opened
   const tasksLoading = false;
@@ -485,9 +593,27 @@ const ProjectManagement = () => {
     },
   });
 
-  // Normalize projects array from GraphQL response (supports projects.projects or legacy projects.data)
-  const allProjects =
-    projectsData?.projects?.projects || projectsData?.projects?.data || [];
+  // Normalize projects array from GraphQL response and accumulate across pages
+  useEffect(() => {
+    const currentPageProjects =
+      projectsData?.projects?.projects || projectsData?.projects?.data || [];
+    
+    if (page === 1) {
+      // First page - replace accumulated projects
+      setAccumulatedProjects(currentPageProjects);
+    } else if (page > 1 && currentPageProjects.length > 0) {
+      // Additional pages - append to accumulated projects
+      setAccumulatedProjects(prev => {
+        // Deduplicate by ID to prevent duplicates
+        const existingIds = new Set(prev.map(p => p.id));
+        const newProjects = currentPageProjects.filter(p => !existingIds.has(p.id));
+        return [...prev, ...newProjects];
+      });
+    }
+  }, [projectsData, page]);
+
+  // Use accumulated projects for display
+  const allProjects = accumulatedProjects;
 
   // Default "My Clients" filter for service providers
   useEffect(() => {
@@ -510,43 +636,27 @@ const ProjectManagement = () => {
     if (isLoadingMore || !hasMore || projectsLoading) return;
 
     setIsLoadingMore(true);
+    const nextPage = page + 1;
+    console.log(`[ProjectManagement] Loading page ${nextPage}`);
+    
     try {
       await fetchMore({
         variables: {
-          filters: buildFilters(),
-          page: page + 1,
+          filters: lastAppliedFilters || buildFilters(),
+          page: nextPage,
           limit: 20,
           sortBy: "createdAt",
           sortOrder: "DESC",
         },
-        updateQuery: (prev, { fetchMoreResult }) => {
-          if (!fetchMoreResult) return prev;
-
-          const prevProjects =
-            prev?.projects?.projects || prev?.projects?.data || [];
-          const newProjects =
-            fetchMoreResult?.projects?.projects ||
-            fetchMoreResult?.projects?.data ||
-            [];
-
-          return {
-            ...fetchMoreResult,
-            projects: {
-              ...fetchMoreResult.projects,
-              projects: [...prevProjects, ...newProjects],
-              data: [...prevProjects, ...newProjects],
-            },
-          };
-        },
       });
-      setPage(page + 1);
+      setPage(nextPage);
     } catch (error) {
       console.error("Error loading more projects:", error);
       message.error("Failed to load more projects");
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMore, projectsLoading, fetchMore, page, buildFilters]);
+  }, [isLoadingMore, hasMore, projectsLoading, fetchMore, page, lastAppliedFilters, buildFilters]);
 
   // Handle scroll event for infinite scroll (window-level)
   const handleScroll = useCallback(() => {
@@ -707,9 +817,6 @@ const ProjectManagement = () => {
   const projectStatsResponse = statsData?.projectStats || {};
   const projectStats = projectStatsResponse.stats || [];
 
-  // Debug: Log the raw stats data
-  console.log("📊 Raw projectStats from backend:", projectStatsResponse);
-
   // Build stats object from backend stats
   const statsMap = projectStats.reduce((acc, stat) => {
     acc[stat.status.toLowerCase()] = {
@@ -719,16 +826,6 @@ const ProjectManagement = () => {
     };
     return acc;
   }, {});
-
-  console.log("📊 statsMap after processing:", statsMap);
-  console.log(
-    "📊 Fly-on-Credit count from response:",
-    projectStatsResponse.flyOnCreditCount
-  );
-  console.log(
-    "📊 No Invoice count from response:",
-    projectStatsResponse.noInvoiceCount
-  );
 
   const stats = {
     total: projectStats.reduce((sum, s) => sum + s.count, 0),
@@ -1583,7 +1680,6 @@ const ProjectManagement = () => {
                   icon={<FileTextOutlined />}
                   onClick={() => {
                     const invoiceId = record.invoice?.id || record.invoiceId;
-                    console.log("Opening invoice drawer with ID:", invoiceId);
                     showInvoiceDetailDrawer(invoiceId);
                   }}
                 />
@@ -1659,7 +1755,7 @@ const ProjectManagement = () => {
                     <Button
                       size="small"
                       icon={<ReloadOutlined />}
-                      onClick={() => refetchProjects()}
+                      onClick={handleManualRefresh}
                       loading={projectsLoading}
                     />
                   </Tooltip>
@@ -2133,29 +2229,37 @@ const ProjectManagement = () => {
 
         {/* Projects Table */}
         <Card>
-          <Table
-            columns={columns.filter(Boolean)}
-            dataSource={filteredProjects}
-            rowKey="id"
-            loading={(projectsLoading || statsLoading) && !isLoadingMore}
-            rowClassName={(record) =>
-              record.creditRequest && record.creditRequest.status === "approved"
-                ? "bg-yellow-50"
-                : ""
-            }
-            pagination={false}
-            scroll={{ x: 1200 }}
-            size="small"
-          />
-          {isLoadingMore && (
-            <div style={{ textAlign: "center", padding: "16px" }}>
-              <Text type="secondary">Loading more projects...</Text>
+          {projectsLoading && page === 1 && !isLoadingMore ? (
+            <div style={{ textAlign: "center", padding: "40px" }}>
+              <Text type="secondary">Loading projects...</Text>
             </div>
-          )}
-          {!hasMore && filteredProjects.length > 0 && (
-            <div style={{ textAlign: "center", padding: "16px" }}>
-              <Text type="secondary">No more projects to load</Text>
-            </div>
+          ) : (
+            <>
+              <Table
+                columns={columns.filter(Boolean)}
+                dataSource={filteredProjects}
+                rowKey="id"
+                loading={false}
+                rowClassName={(record) =>
+                  record.creditRequest && record.creditRequest.status === "approved"
+                    ? "bg-yellow-50"
+                    : ""
+                }
+                pagination={false}
+                scroll={{ x: 1200 }}
+                size="small"
+              />
+              {isLoadingMore && (
+                <div style={{ textAlign: "center", padding: "16px" }}>
+                  <Text type="secondary">Loading more projects...</Text>
+                </div>
+              )}
+              {!hasMore && filteredProjects.length > 0 && (
+                <div style={{ textAlign: "center", padding: "16px" }}>
+                  <Text type="secondary">No more projects to load</Text>
+                </div>
+              )}
+            </>
           )}
         </Card>
       </div>

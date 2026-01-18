@@ -48,6 +48,7 @@ import { GET_WORK_TYPES } from "../../graphql/workTypeQueries";
 import { GET_GRADINGS_BY_WORK_TYPE } from "../../graphql/gradingQueries";
 import { userCacheVar } from "../../cache/userCacheVar";
 import { useAppDrawer } from "../../contexts/DrawerContext";
+import usePageRefresh from "../../hooks/usePageRefresh";
 import {
   BULK_CREATE_TASK_ASSIGNMENTS,
   DELETE_TASK_ASSIGNMENT,
@@ -388,6 +389,12 @@ const TaskTable = () => {
     },
     fetchPolicy: "cache-and-network",
     notifyOnNetworkStatusChange: true,
+  });
+
+  // Setup page-level cache invalidation subscriptions
+  // This ensures tasks page refreshes when tasks are created/updated/changed
+  usePageRefresh({
+    refetchTasks,
   });
 
   // Fetch users
