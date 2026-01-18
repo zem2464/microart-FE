@@ -34,6 +34,9 @@ const MobileOnlyLayout = ({ children }) => {
   const { logout } = useAuth();
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
+  // Hide bottom nav on chat detail pages to give more space for messages/input
+  const isChatDetailPage = location.pathname.match(/\/mobile\/chat\/[^/]+$/) || location.pathname.match(/\/messages\/[^/]+$/);
+
   // Get user display name
   const userDisplayName = useMemo(() => {
     if (!user) return 'User';
@@ -198,63 +201,65 @@ const MobileOnlyLayout = ({ children }) => {
         />
       </Drawer>
 
-      {/* Modern Bottom Navigation Bar */}
-      <div className="mobile-bottom-nav">
-        <button
-          className={`mobile-nav-item ${location.pathname.includes('/chat') ? 'active' : ''}`}
-          onClick={() => navigate(MOBILE_ROUTES.CHAT)}
-        >
-          <div className="nav-icon-wrapper">
-            <MessageOutlined className="nav-icon" />
-            {location.pathname.includes('/chat') && <div className="nav-indicator"></div>}
-          </div>
-          <span className="nav-label">Chat</span>
-        </button>
-        
-        <button
-          className={`mobile-nav-item ${location.pathname.includes('/reminders') ? 'active' : ''}`}
-          onClick={() => navigate(MOBILE_ROUTES.REMINDERS)}
-        >
-          <div className="nav-icon-wrapper">
-            <BellOutlined className="nav-icon" />
-            {location.pathname.includes('/reminders') && <div className="nav-indicator"></div>}
-          </div>
-          <span className="nav-label">Reminders</span>
-        </button>
-        
-        <button
-          className={`mobile-nav-item ${location.pathname.includes('/projects') ? 'active' : ''}`}
-          onClick={() => navigate(MOBILE_ROUTES.PROJECTS)}
-        >
-          <div className="nav-icon-wrapper">
-            <ProjectOutlined className="nav-icon" />
-            {location.pathname.includes('/projects') && <div className="nav-indicator"></div>}
-          </div>
-          <span className="nav-label">Projects</span>
-        </button>
-        
-        <button
-          className={`mobile-nav-item ${location.pathname.includes('/clients') ? 'active' : ''}`}
-          onClick={() => navigate(MOBILE_ROUTES.CLIENTS)}
-        >
-          <div className="nav-icon-wrapper">
-            <TeamOutlined className="nav-icon" />
-            {location.pathname.includes('/clients') && <div className="nav-indicator"></div>}
-          </div>
-          <span className="nav-label">Clients</span>
-        </button>
-        
-        <button
-          className={`mobile-nav-item ${location.pathname.includes('/reports') ? 'active' : ''}`}
-          onClick={() => navigate(MOBILE_ROUTES.REPORTS)}
-        >
-          <div className="nav-icon-wrapper">
-            <FileTextOutlined className="nav-icon" />
-            {location.pathname.includes('/reports') && <div className="nav-indicator"></div>}
-          </div>
-          <span className="nav-label">Reports</span>
-        </button>
-      </div>
+      {/* Modern Bottom Navigation Bar - Hidden on chat detail pages */}
+      {!isChatDetailPage && (
+        <div className="mobile-bottom-nav">
+          <button
+            className={`mobile-nav-item ${location.pathname.includes('/chat') ? 'active' : ''}`}
+            onClick={() => navigate(MOBILE_ROUTES.CHAT)}
+          >
+            <div className="nav-icon-wrapper">
+              <MessageOutlined className="nav-icon" />
+              {location.pathname.includes('/chat') && <div className="nav-indicator"></div>}
+            </div>
+            <span className="nav-label">Chat</span>
+          </button>
+          
+          <button
+            className={`mobile-nav-item ${location.pathname.includes('/reminders') ? 'active' : ''}`}
+            onClick={() => navigate(MOBILE_ROUTES.REMINDERS)}
+          >
+            <div className="nav-icon-wrapper">
+              <BellOutlined className="nav-icon" />
+              {location.pathname.includes('/reminders') && <div className="nav-indicator"></div>}
+            </div>
+            <span className="nav-label">Reminders</span>
+          </button>
+          
+          <button
+            className={`mobile-nav-item ${location.pathname.includes('/projects') ? 'active' : ''}`}
+            onClick={() => navigate(MOBILE_ROUTES.PROJECTS)}
+          >
+            <div className="nav-icon-wrapper">
+              <ProjectOutlined className="nav-icon" />
+              {location.pathname.includes('/projects') && <div className="nav-indicator"></div>}
+            </div>
+            <span className="nav-label">Projects</span>
+          </button>
+          
+          <button
+            className={`mobile-nav-item ${location.pathname.includes('/clients') ? 'active' : ''}`}
+            onClick={() => navigate(MOBILE_ROUTES.CLIENTS)}
+          >
+            <div className="nav-icon-wrapper">
+              <TeamOutlined className="nav-icon" />
+              {location.pathname.includes('/clients') && <div className="nav-indicator"></div>}
+            </div>
+            <span className="nav-label">Clients</span>
+          </button>
+          
+          <button
+            className={`mobile-nav-item ${location.pathname.includes('/reports') ? 'active' : ''}`}
+            onClick={() => navigate(MOBILE_ROUTES.REPORTS)}
+          >
+            <div className="nav-icon-wrapper">
+              <FileTextOutlined className="nav-icon" />
+              {location.pathname.includes('/reports') && <div className="nav-indicator"></div>}
+            </div>
+            <span className="nav-label">Reports</span>
+          </button>
+        </div>
+      )}
     </Layout>
   );
 };

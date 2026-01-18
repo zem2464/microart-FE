@@ -23,6 +23,7 @@ import InvoiceDetailDrawer from '../components/InvoiceDetailDrawer';
 import QuoteDrawer from '../components/common/QuoteDrawer';
 import { generateQuotationPDF } from '../utils/quotationPDF';
 import dayjs from 'dayjs';
+import SingleChangeDrawer from '../components/Mobile/SingleChangeDrawer';
 
 const AppDrawerContext = createContext();
 
@@ -153,6 +154,11 @@ export const AppDrawerProvider = ({ children }) => {
 	const showClientDetailDrawer = (client) => setClientDetailDrawer({ open: true, client });
 	const closeClientDetailDrawer = () => setClientDetailDrawer({ open: false, client: null });
 
+	// Single Change Drawer (mobile/PWA)
+	const [singleChangeDrawer, setSingleChangeDrawer] = useState({ open: false, title: '', description: '', field: null, currentValue: undefined, onSubmit: null });
+	const showSingleChangeDrawer = (title, description, field, currentValue, onSubmit) => setSingleChangeDrawer({ open: true, title, description, field, currentValue, onSubmit });
+	const closeSingleChangeDrawer = () => setSingleChangeDrawer({ open: false, title: '', description: '', field: null, currentValue: undefined, onSubmit: null });
+
 	const value = {
 		// Role
 		showRoleFormDrawer,
@@ -202,6 +208,9 @@ export const AppDrawerProvider = ({ children }) => {
 		closeClientFormDrawer,
 		showClientDetailDrawer,
 		closeClientDetailDrawer,
+		// Single Change Drawer
+		showSingleChangeDrawer,
+		closeSingleChangeDrawer,
 	};
 
 	return (
@@ -662,6 +671,19 @@ export const AppDrawerProvider = ({ children }) => {
 						onExtraRender={setInvoiceDrawerExtra}
 					/>
 				</ModuleDrawer>
+			)}
+
+			{/* Single Change Drawer (Mobile/PWA) */}
+			{singleChangeDrawer.open && (
+				<SingleChangeDrawer
+					open={singleChangeDrawer.open}
+					title={singleChangeDrawer.title}
+					description={singleChangeDrawer.description}
+					field={singleChangeDrawer.field}
+					currentValue={singleChangeDrawer.currentValue}
+					onSubmit={singleChangeDrawer.onSubmit}
+					onClose={closeSingleChangeDrawer}
+				/>
 			)}
 		</AppDrawerContext.Provider>
 	);

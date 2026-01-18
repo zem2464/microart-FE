@@ -1,13 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Input, List, Avatar, Empty, Spin, Button, Drawer, Divider, Typography } from 'antd';
-import { SearchOutlined, UserOutlined, TeamOutlined, PlusOutlined, ArrowLeftOutlined } from '@ant-design/icons';
-import { useQuery } from '@apollo/client';
-import { GET_MY_CHAT_ROOMS } from '../../../graphql/chat';
+import { Input, List, Avatar, Empty, Spin, Button, Typography, Badge, Divider, Space } from 'antd';
+import { SearchOutlined, UserOutlined, TeamOutlined, PlusOutlined, ArrowLeftOutlined, InfoOutlined } from '@ant-design/icons';
+import { useQuery, useSubscription } from '@apollo/client';
+import { GET_MY_CHAT_ROOMS, CHAT_READ_UPDATED } from '../../../graphql/chat';
 import { getInitials, getAvatarColor } from '../../../utils/avatarUtils';
 import MessageList from '../../../components/Chat/MessageList';
 import MessageInput from '../../../components/Chat/MessageInput';
 import NewChatModal from '../../../components/Chat/NewChatModal';
+import GroupInfoModal from '../../../components/Chat/GroupInfoModal';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import './MobileChatPage.css';
@@ -19,6 +20,7 @@ const { Text } = Typography;
 /**
  * Mobile-optimized Chat page
  * Single-column layout suitable for mobile devices
+ * Feature parity with desktop Messages page
  */
 const MobileChatPage = () => {
   const { roomId } = useParams();
@@ -28,6 +30,7 @@ const MobileChatPage = () => {
   const [replyingTo, setReplyingTo] = useState(null);
   const [editingMessage, setEditingMessage] = useState(null);
   const [isNewChatModalOpen, setIsNewChatModalOpen] = useState(false);
+  const [isGroupInfoModalOpen, setIsGroupInfoModalOpen] = useState(false);
   const [showRoomsList, setShowRoomsList] = useState(!roomId);
 
   const { data, loading, refetch } = useQuery(GET_MY_CHAT_ROOMS, {
@@ -37,6 +40,24 @@ const MobileChatPage = () => {
 
   const chatRooms = data?.myChatRooms || [];
   const currentUser = data?.me;
+
+  // Subscribe to read receipt updates for live refresh (like desktop)
+  useSubscription(CHAT_READ_UPDATED, {
+    variables: { roomId: selectedRoom?.id },
+    skip: !selectedRoom?.id,
+    onData: ({ client }) => {
+      // Update cache to refresh UI without full refetch
+      client.cache.updateQuery({ query: GET_MY_CHAT_ROOMS }, (existingData) => {
+        if (!existingData) return existingData;
+        return { ...existingData };
+      });
+    },
+  });
+
+  // Hard refresh chat rooms when component mounts
+  useEffect(() => {
+    refetch();
+  }, [refetch]);
 
   // Set selected room based on URL param
   useEffect(() => {
@@ -80,43 +101,73 @@ const MobileChatPage = () => {
     navigate('/mobile/chat');
   };
 
+  const getOtherUser = (room) => {
+    if (room.type === 'direct' && room.members && currentUser) {
+      const otherMember = room.members.find(m => m.user?.id !== currentUser.id);
+      return otherMember?.user;
+    }
+    return null;
+  };
+
   const getRoomDisplayName = (room) => {
     if (room.name) return room.name;
-    if (room.type === 'direct' && room.members) {
-      const otherMembers = room.members.filter(m => m.user?.id !== currentUser?.id);
-      return otherMembers.map(m => `${m.user?.firstName || ''} ${m.user?.lastName || ''}`.trim()).join(', ');
+    
+    const otherUser = getOtherUser(room);
+    if (otherUser) {
+      return `${otherUser.firstName} ${otherUser.lastName}`;
     }
+    
     return 'Chat';
   };
 
   const getRoomAvatar = (room) => {
-    if (room.avatar) return room.avatar;
-    
     if (room.type === 'group') {
-      return <TeamOutlined />;
+      return <Avatar icon={<TeamOutlined />} style={{ backgroundColor: '#1890ff' }} />;
     }
     
-    if (room.type === 'direct' && room.members) {
-      const otherMember = room.members.find(m => m.user?.id !== currentUser?.id);
-      if (otherMember?.user) {
-        return getInitials(`${otherMember.user.firstName || ''} ${otherMember.user.lastName || ''}`.trim());
-      }
-    }
+    const otherUser = getOtherUser(room);
+    const isOnline = otherUser?.isOnline;
     
-    return <UserOutlined />;
+    const avatar = otherUser?.profilePicture 
+      ? <Avatar src={otherUser.profilePicture} />
+      : (
+          <Avatar 
+            style={{ backgroundColor: getAvatarColor(otherUser?.firstName, otherUser?.lastName) }}
+          >
+            {getInitials(otherUser?.firstName, otherUser?.lastName)}
+          </Avatar>
+        );
+    
+    // Add online status badge for direct chats
+    return (
+      <Badge 
+        dot 
+        status={isOnline ? 'success' : 'default'}
+        offset={[-5, 35]}
+        style={{ 
+          backgroundColor: isOnline ? '#52c41a' : '#d9d9d9',
+          width: 10,
+          height: 10
+        }}
+      >
+        {avatar}
+      </Badge>
+    );
   };
 
   const getLastMessagePreview = (room) => {
-    if (!room.lastMessage) return 'No messages yet';
-    
-    const message = room.lastMessage;
-    const isCurrentUser = message.sender?.id === currentUser?.id;
-    const prefix = isCurrentUser ? 'You: ' : '';
-    
-    if (message.type === 'text') {
-      return prefix + (message.content || '');
+    if (room.lastMessage) {
+      const text = room.lastMessage.content || 'File';
+      return text.length > 50 ? text.substring(0, 50) + '...' : text;
     }
-    return prefix + '[Attachment]';
+    return 'No messages yet';
+  };
+
+  const getLastMessageTime = (room) => {
+    if (room.lastMessage?.createdAt) {
+      return dayjs(room.lastMessage.createdAt).fromNow();
+    }
+    return '';
   };
 
   if (loading && !chatRooms.length) {
@@ -157,44 +208,65 @@ const MobileChatPage = () => {
         ) : (
           <List
             dataSource={filteredRooms}
-            renderItem={(room) => (
-              <List.Item
-                className="mobile-chat-item"
-                onClick={() => handleRoomSelect(room)}
-              >
-                <div className="mobile-chat-item-content">
-                  <Avatar
-                    size="large"
-                    style={{ backgroundColor: getAvatarColor(room.id) }}
-                    icon={getRoomAvatar(room)}
-                  >
-                    {typeof getRoomAvatar(room) === 'string' && getRoomAvatar(room)}
-                  </Avatar>
-                  <div className="mobile-chat-item-info">
-                    <div className="mobile-chat-room-name">
-                      {getRoomDisplayName(room)}
+            renderItem={(room) => {
+              const unreadCount = room.unreadCount || 0;
+              
+              return (
+                <List.Item
+                  className="mobile-chat-item"
+                  onClick={() => handleRoomSelect(room)}
+                >
+                  <div className="mobile-chat-item-content">
+                    {getRoomAvatar(room)}
+                    <div className="mobile-chat-item-info">
+                      <div className="mobile-chat-room-name">
+                        {getRoomDisplayName(room)}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px' }}>
+                        <Text
+                          type="secondary"
+                          ellipsis
+                          style={{
+                            fontSize: '12px',
+                            fontWeight: unreadCount > 0 ? 600 : 400,
+                            color: unreadCount > 0 ? '#000' : undefined,
+                            flex: 1
+                          }}
+                        >
+                          {getLastMessagePreview(room)}
+                        </Text>
+                        {unreadCount > 0 && (
+                          <Badge 
+                            count={unreadCount} 
+                            style={{ 
+                              backgroundColor: '#52c41a',
+                              flexShrink: 0
+                            }} 
+                          />
+                        )}
+                      </div>
                     </div>
-                    <div className="mobile-chat-last-message">
-                      {getLastMessagePreview(room)}
+                    <div className="mobile-chat-item-time">
+                      {room.lastMessage?.createdAt && (
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          {getLastMessageTime(room)}
+                        </Text>
+                      )}
                     </div>
                   </div>
-                  <div className="mobile-chat-item-time">
-                    {room.lastMessage?.createdAt && (
-                      <Text type="secondary" style={{ fontSize: '12px' }}>
-                        {dayjs(room.lastMessage.createdAt).fromNow()}
-                      </Text>
-                    )}
-                  </div>
-                </div>
-              </List.Item>
-            )}
+                </List.Item>
+              );
+            }}
           />
         )}
 
         {/* New Chat Modal */}
         <NewChatModal
           open={isNewChatModalOpen}
-          onClose={() => setIsNewChatModalOpen(false)}
+          onClose={() => {
+            setIsNewChatModalOpen(false);
+            refetch();
+          }}
           onChatCreated={(room) => {
             setIsNewChatModalOpen(false);
             refetch();
@@ -226,47 +298,88 @@ const MobileChatPage = () => {
           className="mobile-chat-back-btn"
         />
         <div className="mobile-chat-header-info">
-          <Avatar
-            size="small"
-            style={{ backgroundColor: getAvatarColor(selectedRoom.id) }}
-            icon={getRoomAvatar(selectedRoom)}
-          >
-            {typeof getRoomAvatar(selectedRoom) === 'string' && getRoomAvatar(selectedRoom)}
-          </Avatar>
-          <span className="mobile-chat-header-title">
-            {getRoomDisplayName(selectedRoom)}
-          </span>
+          {getRoomAvatar(selectedRoom)}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span className="mobile-chat-header-title">
+              {getRoomDisplayName(selectedRoom)}
+            </span>
+            {selectedRoom.type === 'direct' && (() => {
+              const otherUser = getOtherUser(selectedRoom);
+              const isOnline = otherUser?.isOnline;
+              const lastSeen = otherUser?.lastSeen;
+              
+              if (isOnline) {
+                return (
+                  <Text type="success" style={{ fontSize: '11px', display: 'block' }}>
+                    Online
+                  </Text>
+                );
+              } else if (lastSeen) {
+                return (
+                  <Text type="secondary" style={{ fontSize: '11px', display: 'block' }}>
+                    Last seen {dayjs(lastSeen).fromNow()}
+                  </Text>
+                );
+              } else {
+                return (
+                  <Text type="secondary" style={{ fontSize: '11px', display: 'block' }}>
+                    Offline
+                  </Text>
+                );
+              }
+            })()}
+          </div>
         </div>
+        {selectedRoom.type === 'group' && (
+          <Button
+            type="text"
+            icon={<InfoOutlined />}
+            onClick={() => setIsGroupInfoModalOpen(true)}
+            size="small"
+            title="Group Info"
+          />
+        )}
       </div>
 
       {/* Messages */}
       <div className="mobile-chat-messages">
         <MessageList
-          room={selectedRoom}
-          currentUser={currentUser}
-          replyingTo={replyingTo}
-          editingMessage={editingMessage}
-          onReply={setReplyingTo}
-          onEdit={setEditingMessage}
+          roomId={selectedRoom.id}
+          members={selectedRoom.members || []}
+          onReply={(message) => {
+            setReplyingTo(message);
+            setEditingMessage(null);
+          }}
+          onEdit={(message) => {
+            setEditingMessage(message);
+            setReplyingTo(null);
+          }}
         />
       </div>
 
       {/* Message input */}
       <div className="mobile-chat-input">
         <MessageInput
-          room={selectedRoom}
+          roomId={selectedRoom.id}
           replyingTo={replyingTo}
+          onCancelReply={() => setReplyingTo(null)}
           editingMessage={editingMessage}
-          onMessageSent={() => {
-            setReplyingTo(null);
-            setEditingMessage(null);
-          }}
-          onReplyCancel={() => setReplyingTo(null)}
-          onEditCancel={() => setEditingMessage(null)}
+          onCancelEdit={() => setEditingMessage(null)}
         />
       </div>
+
+      {/* Group Info Modal */}
+      {selectedRoom && (
+        <GroupInfoModal 
+          roomId={selectedRoom.id}
+          visible={isGroupInfoModalOpen}
+          onClose={() => setIsGroupInfoModalOpen(false)}
+          isOwner={selectedRoom.membership?.role === 'owner'}
+        />
+      )}
     </div>
   );
 };
 
 export default MobileChatPage;
+

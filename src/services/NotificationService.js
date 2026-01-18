@@ -1,6 +1,7 @@
 import { notification } from 'antd';
 import { MessageOutlined } from '@ant-design/icons';
 import { SAVE_PUSH_SUBSCRIPTION } from '../graphql/userQueries';
+import { getMobileEquivalentRoute } from '../config/mobileRoutes';
 
 // Centralized Electron detection so all call sites agree
 export const isElectronEnv = () => {
@@ -36,6 +37,18 @@ export const isElectronEnv = () => {
         ua
     });
     return detected;
+};
+
+// Lightweight mobile environment detection (screen width or user agent)
+export const isMobileEnv = () => {
+    try {
+        const widthMobile = typeof window !== 'undefined' && window.innerWidth <= 768;
+        const ua = (typeof navigator !== 'undefined' && navigator.userAgent) || '';
+        const uaMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+        return Boolean(widthMobile || uaMobile);
+    } catch (_) {
+        return false;
+    }
 };
 
 /**
@@ -603,6 +616,7 @@ class NotificationService {
         const title = `New message from ${sender?.firstName || 'Unknown'}`;
         const body = message?.content || message;
         const targetUrl = roomId ? `/messages/${roomId}` : undefined;
+        const normalizedUrl = targetUrl ? (isMobileEnv() ? (getMobileEquivalentRoute(targetUrl) || targetUrl) : targetUrl) : undefined;
 
         // Prefer native Electron notification when available
         const isElectron = isElectronEnv();
@@ -612,7 +626,7 @@ class NotificationService {
                 title,
                 body,
                 icon: '/images/logo192.png',
-                data: targetUrl ? { url: targetUrl } : {}
+                data: normalizedUrl ? { url: normalizedUrl } : {}
             });
             return; // Skip AntD toast in Electron
         }
@@ -631,7 +645,7 @@ class NotificationService {
                 title,
                 body,
                 icon: '/images/logo192.png',
-                data: targetUrl ? { url: targetUrl } : {}
+                data: normalizedUrl ? { url: normalizedUrl } : {}
             });
         }
     }
