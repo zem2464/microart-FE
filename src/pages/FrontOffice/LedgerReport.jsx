@@ -16,6 +16,7 @@ import {
   Tag,
   Dropdown,
   Input,
+  Tooltip,
 } from "antd";
 import {
   FilterOutlined,
@@ -389,6 +390,25 @@ const LedgerReport = () => {
   const closing = Number(
     ledgerData?.clientLedgerRange?.closingBalance ?? opening
   );
+
+  // Calculate totals from transactions for verification
+  const totalDebit = ledgerTableData.reduce((sum, tx) => sum + tx.debit, 0);
+  const totalCredit = ledgerTableData.reduce((sum, tx) => sum + tx.credit, 0);
+  const calculatedClosing = opening + totalCredit - totalDebit;
+
+  // Verify backend closing matches calculated closing
+  React.useEffect(() => {
+    if (ledgerTableData.length > 0) {
+      const lastRunningBalance = ledgerTableData[ledgerTableData.length - 1]?.runningBalance;
+      if (Math.abs(lastRunningBalance - closing) > 0.01) {
+        console.warn('Closing balance mismatch:', {
+          backend: closing,
+          calculated: lastRunningBalance,
+          difference: closing - lastRunningBalance
+        });
+      }
+    }
+  }, [ledgerTableData, closing]);
 
   // Prepare table data with opening and closing balance rows
   const tableDataWithBalances = () => {
@@ -976,26 +996,26 @@ const LedgerReport = () => {
   // Clients list table columns
   const clientsColumns = [
     {
-      title: "Client Code",
+      title: "Code",
       dataIndex: "clientCode",
       key: "clientCode",
-      width: 70,
+      width: 60,
       render: (text) => <Text strong>{text}</Text>,
     },
     {
       title: "Client Name",
       key: "displayName",
-      width: 150,
+      width: 140,
       ellipsis: true,
       render: (_, record) => (
         <div>
-          <div style={{ fontWeight: 500, fontSize: 13 }}>
+          <div style={{ fontWeight: 500, fontSize: 11 }}>
             {record.displayName || record.companyName}
           </div>
           {record.displayName &&
             record.companyName &&
             record.displayName !== record.companyName && (
-              <div style={{ fontSize: 11, color: "#666" }}>
+              <div style={{ fontSize: 10, color: "#666" }}>
                 {record.companyName}
               </div>
             )}
@@ -1003,10 +1023,10 @@ const LedgerReport = () => {
       ),
     },
     {
-      title: "Finance Manager",
+      title: "FM",
       dataIndex: "financeManagerName",
       key: "financeManagerName",
-      width: 100,
+      width: 80,
       ellipsis: true,
       render: (text) => text || "-",
       filters: financeManagers.map((manager) => ({
@@ -1016,35 +1036,15 @@ const LedgerReport = () => {
       filteredValue: financeManagerFilter ? [financeManagerFilter] : null,
     },
     {
-      title: "Debit",
-      dataIndex: "totalDebit",
-      key: "totalDebit",
-      width: 80,
-      align: "right",
-      render: (value) => formatCurrencyNoDecimal(value),
-      sorter: true,
-      sortOrder: sortConfig?.field === "totalDebit" ? sortConfig.order : null,
-    },
-    {
-      title: "Credit",
-      dataIndex: "totalCredit",
-      key: "totalCredit",
-      width: 80,
-      align: "right",
-      render: (value) => formatCurrencyNoDecimal(value),
-      sorter: true,
-      sortOrder: sortConfig?.field === "totalCredit" ? sortConfig.order : null,
-    },
-    {
       title: "Balance",
       dataIndex: "currentBalance",
       key: "currentBalance",
-      width: 90,
+      width: 80,
       align: "right",
       render: (value) => {
         const color = value > 0 ? "#f5222d" : value < 0 ? "#52c41a" : "#1890ff";
         return (
-          <Text strong style={{ color }}>
+          <Text strong style={{ color, fontSize: 11 }}>
             {formatCurrencyNoDecimal(value)}
           </Text>
         );
@@ -1059,59 +1059,43 @@ const LedgerReport = () => {
   const columns = [
     ...(hasLimitedRead ? [] : [
       {
-        title: "Order Date",
-        key: "orderDate",
-        width: 100,
+        title: "Invoice",
+        key: "invoiceInfo",
+        width: 130,
         render: (_, r) => {
           if (r.isBalanceRow) return null;
-          const project = r.invoice?.project;
-          return project?.createdAt
-            ? dayjs(project.createdAt).format("DD/MM/YYYY")
-            : "-";
-        },
-      },
-      {
-        title: "Invoice Date",
-        key: "invoiceDate",
-        width: 100,
-        render: (_, r) => {
-          if (r.isBalanceRow) return null;
-          return r.invoice?.invoiceDate
-            ? dayjs(r.invoice.invoiceDate).format("DD/MM/YYYY")
-            : "-";
-        },
-      },
-      {
-        title: "Work Days",
-        key: "workDays",
-        width: 90,
-        render: (_, r) => {
-          if (r.isBalanceRow) return null;
-          const project = r.invoice?.project;
-          if (project?.createdAt && r.invoice?.invoiceDate) {
-            const days = dayjs(r.invoice.invoiceDate).diff(
-              dayjs(project.createdAt),
-              "day"
+          
+          // For payment records, show payment number and date
+          if (r.payment) {
+            return (
+              <div style={{ fontSize: 11 }}>
+                <div>{r.payment?.paymentNumber || "Payment"}</div>
+                <div style={{ color: "#999" }}>
+                  {r.payment?.paymentDate
+                    ? dayjs(r.payment.paymentDate).format("DD/MM/YY")
+                    : "-"}
+                </div>
+              </div>
             );
-            return `${days}d`;
           }
-          return "-";
-        },
-      },
-      {
-        title: "Invoice No.",
-        key: "invoiceNumber",
-        width: 120,
-        render: (_, r) => {
-          if (r.isBalanceRow) return null;
-          return r.invoice?.invoiceNumber || "-";
+          
+          return (
+            <div style={{ fontSize: 11 }}>
+              <div>{r.invoice?.invoiceNumber || "-"}</div>
+              <div style={{ color: "#999" }}>
+                {r.invoice?.invoiceDate
+                  ? dayjs(r.invoice.invoiceDate).format("DD/MM/YY")
+                  : "-"}
+              </div>
+            </div>
+          );
         },
       },
     ]),
     {
       title: "Particulars",
       key: "particulars",
-      width: 200,
+      width: hasLimitedRead ? 250 : 180,
       ellipsis: true,
       render: (_, r) => {
         if (r.isBalanceRow) {
@@ -1119,7 +1103,7 @@ const LedgerReport = () => {
             <Text
               strong
               style={{
-                fontSize: 14,
+                fontSize: 13,
                 color: r.isOpeningBalance ? "#1890ff" : "#52c41a",
               }}
             >
@@ -1127,26 +1111,63 @@ const LedgerReport = () => {
             </Text>
           );
         }
-        const project = r.invoice?.project;
-        if (project) {
+        
+        // For payment records, show payment type and reference
+        if (r.payment) {
+          const paymentType = r.payment?.paymentType?.name || r.payment?.paymentType?.type || "Payment";
+          const refNum = r.payment?.referenceNumber ? ` (${r.payment.referenceNumber})` : "";
           return (
-            <div>
-              <div style={{ fontWeight: 500 }}>{project.projectCode}</div>
-              <div style={{ fontSize: 12, color: "#666" }}>
-                {project.name || project.description}
-              </div>
-            </div>
+            <Tooltip title={`${paymentType}${refNum}`}>
+              <span style={{ fontSize: 11 }}>{paymentType}{refNum}</span>
+            </Tooltip>
           );
         }
-        return r.description || "-";
+        
+        const project = r.invoice?.project;
+        if (project) {
+          const fullText = `${project.projectCode}${project.name || project.description ? ' - ' + (project.name || project.description) : ''}`;
+          return (
+            <Tooltip title={fullText}>
+              <div style={{ fontSize: 11 }}>
+                <div style={{ fontWeight: 500 }}>{project.projectCode}</div>
+                <div style={{ fontSize: 10, color: "#666" }}>
+                  {project.name || project.description}
+                </div>
+              </div>
+            </Tooltip>
+          );
+        }
+        return (
+          <Tooltip title={r.description || "-"}>
+            <span style={{ fontSize: 11 }}>{r.description || "-"}</span>
+          </Tooltip>
+        );
       },
     },
     {
       title: "Details",
       key: "details",
-      width: 300,
+      ellipsis: true,
       render: (_, r) => {
         if (r.isBalanceRow) return null;
+        
+        // For payment records, show payment type and reference details
+        if (r.payment) {
+          const paymentType = r.payment?.paymentType?.name || r.payment?.paymentType?.type || "Payment";
+          const refNum = r.payment?.referenceNumber ? `Ref: ${r.payment.referenceNumber}` : "";
+          const bankName = r.payment?.bankName ? `Bank: ${r.payment.bankName}` : "";
+          const chequeDate = r.payment?.chequeDate ? `Cheque: ${dayjs(r.payment.chequeDate).format("DD/MM/YY")}` : "";
+          
+          const details = [paymentType, refNum, bankName, chequeDate].filter(Boolean);
+          return (
+            <div style={{ fontSize: 10, lineHeight: "1.4" }}>
+              {details.map((detail, idx) => (
+                <div key={idx}>{detail}</div>
+              ))}
+            </div>
+          );
+        }
+        
         const project = r.invoice?.project;
         if (project?.projectGradings?.length > 0) {
           const lines = project.projectGradings.map((pg) => {
@@ -1155,19 +1176,20 @@ const LedgerReport = () => {
               ? pg.customRate
               : (pg.grading?.defaultRate ?? 0);
             const total = qty * rate;
-            return `${
-              pg.grading?.name || pg.grading?.shortCode
-            } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
+            const gradingName = pg.grading?.name || '-';
+            const gradingCode = pg.grading?.shortCode || '';
+            const label = gradingCode ? `${gradingName} (${gradingCode})` : gradingName;
+            return `${label} ${qty} × ₹${rate.toFixed(0)} = ₹${total.toFixed(0)}`;
           });
           return (
-            <div style={{ fontSize: 11, lineHeight: "1.4" }}>
+            <div style={{ fontSize: 10, lineHeight: "1.4" }}>
               {lines.map((line, idx) => (
                 <div key={idx}>{line}</div>
               ))}
             </div>
           );
         }
-        return r.description || "-";
+        return <span style={{ fontSize: 11 }}>{r.description || "-"}</span>;
       },
     },
     ...(hasLimitedRead ? [] : [
@@ -1175,37 +1197,37 @@ const LedgerReport = () => {
         title: "Debit",
         dataIndex: "debit",
         key: "debit",
-        width: 110,
+        width: 90,
         align: "right",
         render: (v, r) => {
           if (r.isBalanceRow) return null;
-          return v > 0 ? formatCurrency(v) : "-";
+          return v > 0 ? <span style={{ fontSize: 11, color: "#ff4d4f", fontWeight: 500 }}>{formatCurrencyNoDecimal(v)}</span> : "-";
         },
       },
       {
         title: "Credit",
         dataIndex: "credit",
         key: "credit",
-        width: 110,
+        width: 90,
         align: "right",
         render: (v, r) => {
           if (r.isBalanceRow) return null;
-          return v > 0 ? formatCurrency(v) : "-";
+          return v > 0 ? <span style={{ fontSize: 11, color: "#52c41a", fontWeight: 500 }}>{formatCurrencyNoDecimal(v)}</span> : "-";
         },
       },
       {
-        title: "Running Balance",
+        title: "Balance",
         dataIndex: "runningBalance",
         key: "runningBalance",
-        width: 130,
+        width: 100,
         align: "right",
         render: (v, r) => {
           const color = v > 0 ? "#f5222d" : v < 0 ? "#52c41a" : "#1890ff";
           const fontWeight = r.isBalanceRow ? 600 : 500;
-          const fontSize = r.isBalanceRow ? 14 : undefined;
+          const fontSize = r.isBalanceRow ? 13 : 11;
           return (
             <Text style={{ color, fontWeight, fontSize }}>
-              {formatCurrency(v)}
+              {formatCurrencyNoDecimal(v)}
             </Text>
           );
         },
@@ -1215,22 +1237,25 @@ const LedgerReport = () => {
 
   return (
     <div className="ledger-report">
-      <Card>
+      <Card bodyStyle={{ padding: '8px' }}>
         {/* Two Column Layout */}
-        <Row gutter={16} style={{ marginTop: 16 }}>
+        <Row gutter={8}>
           {/* Left Column - All Clients List */}
           <Col span={8}>
             <Card
               title="All Clients Summary"
               size="small"
-              style={{ height: "calc(100vh - 200px)", position: "relative" }}
+              bodyStyle={{ padding: '8px' }}
+              headStyle={{ padding: '0 12px', minHeight: '38px' }}
+              style={{ height: "calc(100vh - 100px)", position: "relative" }}
             >
               <Input
-                placeholder="Search by client code, name, or company..."
+                placeholder="Search clients..."
                 prefix={<SearchOutlined />}
                 value={clientSearch}
                 onChange={(e) => setClientSearch(e.target.value)}
-                style={{ marginBottom: 16 }}
+                style={{ marginBottom: 8 }}
+                size="small"
                 allowClear
               />
               {clientsBalanceLoading && allClientsData.length > 0 && (
@@ -1259,7 +1284,7 @@ const LedgerReport = () => {
                 <div
                   className="client-list-table"
                   style={{
-                    height: "calc(100vh - 300px)",
+                    height: "calc(100vh - 190px)",
                     overflow: "auto",
                   }}
                   onScroll={handleClientsScroll}
@@ -1269,7 +1294,6 @@ const LedgerReport = () => {
                     columns={clientsColumns}
                     rowKey="clientId"
                     size="small"
-                    sticky
                     rowClassName={(record) =>
                       record.clientId === selectedClient
                         ? "client-row-selected"
@@ -1280,7 +1304,6 @@ const LedgerReport = () => {
                       onClick: () => setSelectedClient(record.clientId),
                       style: { cursor: "pointer" },
                     })}
-                    // scroll={{ y: null }}
                     onChange={(pagination, filters, sorter) => {
                       // Handle filter changes
                       if (filters.financeManagerName !== undefined) {
@@ -1325,7 +1348,9 @@ const LedgerReport = () => {
                   : "Client Detail Ledger"
               }
               size="small"
-              style={{ height: "calc(100vh - 200px)", overflow: "auto", position: "relative" }}
+              bodyStyle={{ padding: '8px' }}
+              headStyle={{ padding: '0 12px', minHeight: '38px' }}
+              style={{ height: "calc(100vh - 100px)", overflow: "auto", position: "relative" }}
             >
               {!selectedClient ? (
                 <Empty
@@ -1364,158 +1389,124 @@ const LedgerReport = () => {
                     </div>
                   )}
                   {/* Date Filters */}
-                  <Card style={{ marginBottom: 16 }} size="small">
-                    <Row gutter={16}>
-                      <Col span={8}>
-                        <div style={{ marginBottom: 8 }}>
-                          <Text strong>Date Filter</Text>
-                        </div>
-                        <Select
-                          value={dateFilterType}
-                          onChange={handleDateFilterChange}
-                          style={{ width: "100%" }}
-                        >
-                          <Option value="monthly">Current Month</Option>
-                          <Option value="fy">Financial Year</Option>
-                          <Option value="yearly">Calendar Year</Option>
-                          <Option value="custom">Custom Range</Option>
-                        </Select>
-                      </Col>
+                  <Space direction="horizontal" style={{ width: "100%", marginBottom: 8 }} size={4}>
+                    <Select
+                      value={dateFilterType}
+                      onChange={handleDateFilterChange}
+                      style={{ width: 130 }}
+                      size="small"
+                    >
+                      <Option value="monthly">Monthly</Option>
+                      <Option value="fy">FY</Option>
+                      <Option value="yearly">Yearly</Option>
+                      <Option value="custom">Custom</Option>
+                    </Select>
 
-                      <Col span={12}>
-                        <div style={{ marginBottom: 8 }}>
-                          <Text strong>Date Range</Text>
-                        </div>
-                        {dateFilterType === "monthly" && (
-                          <DatePicker
-                            picker="month"
-                            value={selectedMonth}
-                            onChange={handleMonthChange}
-                            style={{ width: "100%" }}
-                            format="MMMM YYYY"
-                            placeholder="Select Month"
-                          />
-                        )}
-                        {dateFilterType === "yearly" && (
-                          <DatePicker
-                            picker="year"
-                            value={selectedYear}
-                            onChange={handleYearChange}
-                            style={{ width: "100%" }}
-                            format="YYYY"
-                            placeholder="Select Year"
-                          />
-                        )}
-                        {(dateFilterType === "custom" ||
-                          dateFilterType === "fy") && (
-                          <RangePicker
-                            value={
-                              dateFilterType === "custom"
-                                ? customDateRange
-                                : dateRange
-                            }
-                            onChange={handleCustomDateChange}
-                            disabled={dateFilterType === "fy"}
-                            style={{ width: "100%" }}
-                            format="DD/MM/YYYY"
-                          />
-                        )}
-                      </Col>
+                    {dateFilterType === "monthly" && (
+                      <DatePicker
+                        picker="month"
+                        value={selectedMonth}
+                        onChange={handleMonthChange}
+                        style={{ width: 180 }}
+                        format="MMM YYYY"
+                        placeholder="Month"
+                        size="small"
+                      />
+                    )}
+                    {dateFilterType === "yearly" && (
+                      <DatePicker
+                        picker="year"
+                        value={selectedYear}
+                        onChange={handleYearChange}
+                        style={{ width: 180 }}
+                        format="YYYY"
+                        placeholder="Year"
+                        size="small"
+                      />
+                    )}
+                    {(dateFilterType === "custom" ||
+                      dateFilterType === "fy") && (
+                      <RangePicker
+                        value={
+                          dateFilterType === "custom"
+                            ? customDateRange
+                            : dateRange
+                        }
+                        onChange={handleCustomDateChange}
+                        disabled={dateFilterType === "fy"}
+                        style={{ width: 260 }}
+                        format="DD/MM/YY"
+                        size="small"
+                      />
+                    )}
 
-                      <Col span={4}>
-                        <div style={{ marginBottom: 8 }}>&nbsp;</div>
-                        <Button
-                          icon={<ReloadOutlined />}
-                          onClick={handleReset}
-                          style={{ width: "100%" }}
-                        >
-                          Reset
-                        </Button>
-                      </Col>
-                    </Row>
-                  </Card>
+                    <Button
+                      icon={<ReloadOutlined />}
+                      onClick={handleReset}
+                      size="small"
+                    />
+
+                    <div style={{ flex: 1 }} />
+
+                    <Dropdown menu={{ items: exportMenuItems }}>
+                      <Button icon={<DownloadOutlined />} size="small">
+                        Export
+                      </Button>
+                    </Dropdown>
+                  </Space>
 
                   {/* Summary Statistics */}
                   {ledgerData && (
                     <>
-                      <Row gutter={8} style={{ marginBottom: 16 }}>
-                        <Col span={6}>
-                          <Card size="small">
-                            <Statistic
-                              title="Opening"
-                              value={opening}
-                              precision={2}
-                              prefix="₹"
-                              valueStyle={{
-                                fontSize: 16,
-                                color:
-                                  opening > 0
-                                    ? "#f5222d"
-                                    : opening < 0
-                                    ? "#52c41a"
-                                    : "#1890ff",
-                              }}
-                            />
+                      <Row gutter={4} style={{ marginBottom: 8 }}>
+                        <Col span={5}>
+                          <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
+                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>Opening</div>
+                            <div style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: opening > 0 ? "#f5222d" : opening < 0 ? "#52c41a" : "#1890ff"
+                            }}>
+                              {formatCurrencyNoDecimal(opening)}
+                            </div>
                           </Card>
                         </Col>
-                        <Col span={6}>
-                          <Card size="small">
-                            <Statistic
-                              title="Closing"
-                              value={closing}
-                              precision={2}
-                              prefix="₹"
-                              valueStyle={{
-                                fontSize: 16,
-                                color:
-                                  closing > 0
-                                    ? "#f5222d"
-                                    : closing < 0
-                                    ? "#52c41a"
-                                    : "#1890ff",
-                              }}
-                            />
+                        <Col span={5}>
+                          <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
+                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>Total Debit</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#ff4d4f" }}>
+                              {formatCurrencyNoDecimal(totalDebit)}
+                            </div>
                           </Card>
                         </Col>
-                        <Col span={6}>
-                          <Card size="small">
-                            <Statistic
-                              title="Transactions"
-                              value={ledgerTableData.length}
-                              valueStyle={{ fontSize: 16, color: "#1890ff" }}
-                            />
+                        <Col span={5}>
+                          <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
+                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>Total Credit</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#52c41a" }}>
+                              {formatCurrencyNoDecimal(totalCredit)}
+                            </div>
                           </Card>
                         </Col>
-                        <Col span={6}>
-                          <Card size="small">
-                            <Statistic
-                              title="Net"
-                              value={closing - opening}
-                              precision={2}
-                              prefix="₹"
-                              valueStyle={{
-                                fontSize: 16,
-                                color:
-                                  closing - opening > 0
-                                    ? "#f5222d"
-                                    : closing - opening < 0
-                                    ? "#52c41a"
-                                    : "#1890ff",
-                              }}
-                            />
+                        <Col span={5}>
+                          <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
+                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>Closing</div>
+                            <div style={{
+                              fontSize: 13,
+                              fontWeight: 600,
+                              color: closing > 0 ? "#f5222d" : closing < 0 ? "#52c41a" : "#1890ff"
+                            }}>
+                              {formatCurrencyNoDecimal(closing)}
+                            </div>
                           </Card>
                         </Col>
-                      </Row>
-
-                      {/* Export Actions */}
-                      <Row justify="end" style={{ marginBottom: 16 }}>
-                        <Space>
-                          <Dropdown menu={{ items: exportMenuItems }}>
-                            <Button icon={<DownloadOutlined />}>
-                              Export <DownloadOutlined />
-                            </Button>
-                          </Dropdown>
-                        </Space>
+                        <Col span={4}>
+                          <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
+                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>Txns</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#1890ff" }}>
+                              {ledgerTableData.length}
+                            </div>
+                          </Card>
+                        </Col>
                       </Row>
 
                       {/* Ledger Table */}
@@ -1527,7 +1518,6 @@ const LedgerReport = () => {
                           columns={columns}
                           rowKey="id"
                           size="xs"
-                          sticky
                           rowClassName={(record) => {
                             if (record.isOpeningBalance)
                               return "ledger-opening-balance-row";
@@ -1535,13 +1525,7 @@ const LedgerReport = () => {
                               return "ledger-closing-balance-row";
                             return "";
                           }}
-                          pagination={{
-                            pageSize: 20,
-                            showSizeChanger: true,
-                            showTotal: (total) =>
-                              `Total ${total - 2} transactions`,
-                          }}
-                          scroll={{ x: 1200, y: "calc(100vh - 620px)" }}
+                          pagination={false}
                         />
                       )}
                     </>

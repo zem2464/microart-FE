@@ -138,7 +138,7 @@ const Transactions = () => {
       dataIndex: 'transactionDate',
       key: 'transactionDate',
       width: 110,
-      fixed: 'left',
+      fixed: selectedClient === 'all' ? 'left' : false,
       sorter: (a, b) => new Date(a.transactionDate) - new Date(b.transactionDate),
       render: (date) => (
         <div>
@@ -154,7 +154,7 @@ const Transactions = () => {
       dataIndex: 'transactionType',
       key: 'transactionType',
       width: 100,
-      fixed: 'left',
+      fixed: selectedClient === 'all' ? 'left' : false,
       filters: [
         { text: 'Invoice', value: 'work_done' },
         { text: 'Payment', value: 'payment_received' },
@@ -360,7 +360,7 @@ const Transactions = () => {
       title: 'Action',
       key: 'action',
       width: 150,
-      fixed: 'right',
+      fixed: selectedClient === 'all' ? 'right' : false,
       render: (_, record) => (
         <Space>
           <Button
@@ -587,13 +587,13 @@ const Transactions = () => {
           </Row>
 
           {/* Transactions Table */}
-          <Card>
+          <Card style={{ width: '100%' }}>
             <Table
               columns={columns}
               dataSource={filteredTransactions}
               rowKey="id"
               loading={loading}
-              scroll={{ x: 1200 }}
+              scroll={selectedClient === 'all' ? { x: 1200 } : { x: 'max-content' }}
               pagination={{
                 pageSize: 50,
                 showSizeChanger: true,
@@ -619,7 +619,7 @@ const Transactions = () => {
                 return (
                   <Table.Summary fixed>
                     <Table.Summary.Row style={{ backgroundColor: '#fafafa' }}>
-                      <Table.Summary.Cell index={0} colSpan={5}>
+                      <Table.Summary.Cell index={0} colSpan={selectedClient === 'all' ? 5 : 4}>
                         <Text strong style={{ fontSize: '14px' }}>Summary</Text>
                       </Table.Summary.Cell>
                       <Table.Summary.Cell index={5} align="right">
@@ -760,7 +760,7 @@ const Transactions = () => {
                   {selectedTransaction.invoice.project?.projectGradings?.length > 0 && (
                     <div style={{ marginTop: 16 }}>
                       <Text strong style={{ fontSize: '14px', marginBottom: 8, display: 'block' }}>
-                        Service Details
+                        Service Details----
                       </Text>
                       <Table
                         size="small"
@@ -774,7 +774,12 @@ const Transactions = () => {
                             dataIndex: ['grading', 'name'],
                             key: 'grading',
                             width: '30%',
-                            render: (name) => <Text strong>{name}</Text>,
+                            render: (name, record) => {
+                              const gradingName = record.grading?.name || '-';
+                              const gradingCode = record.grading?.shortCode || '';
+                              const label = gradingCode ? `${gradingName} (${gradingCode})` : gradingName;
+                              return <Text strong>{label}</Text>;
+                            },
                           },
                           {
                             title: 'Image Qty',
@@ -1013,6 +1018,11 @@ const Transactions = () => {
                       {selectedTransaction.payment.referenceNumber && (
                         <Descriptions.Item label="Reference Number" span={2}>
                           {selectedTransaction.payment.referenceNumber}
+                        </Descriptions.Item>
+                      )}
+                      {selectedTransaction.payment.bankName && (
+                        <Descriptions.Item label="Bank Name" span={2}>
+                          {selectedTransaction.payment.bankName}
                         </Descriptions.Item>
                       )}
                       {selectedTransaction.payment.chequeDate && (
