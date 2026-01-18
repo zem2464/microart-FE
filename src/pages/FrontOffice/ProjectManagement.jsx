@@ -720,6 +720,29 @@ const ProjectManagement = () => {
       parts.push(project.name);
     }
 
+    // Pre-compute work type ordering so grading parts follow the configured sequence
+    const workTypeSequenceMap = (() => {
+      const map = {};
+      (project?.projectWorkTypes || []).forEach((pwt) => {
+        if (pwt?.workTypeId) {
+          map[String(pwt.workTypeId)] =
+            pwt.sequence ?? pwt.sortOrder ?? pwt?.workType?.sortOrder ?? 9999;
+        }
+      });
+      (workTypesData?.workTypes || []).forEach((wt) => {
+        if (!map[String(wt.id)]) {
+          map[String(wt.id)] = wt.sortOrder ?? 9999;
+        }
+      });
+      return map;
+    })();
+
+    const getWorkTypeOrder = (workTypeId) => {
+      if (!workTypeId) return 9999;
+      const key = String(workTypeId);
+      return workTypeSequenceMap[key] ?? 9999;
+    };
+
     // 3. Grading codes with image quantities
     // First try projectGradings (multiple gradings)
     if (
@@ -727,8 +750,16 @@ const ProjectManagement = () => {
       Array.isArray(project.projectGradings) &&
       project.projectGradings.length > 0
     ) {
-      const gradingParts = project.projectGradings
+      const gradingParts = [...project.projectGradings]
         .filter((pg) => pg.grading && pg.imageQuantity)
+        .sort((a, b) => {
+          const orderA = getWorkTypeOrder(a.grading?.workType?.id);
+          const orderB = getWorkTypeOrder(b.grading?.workType?.id);
+          if (orderA !== orderB) return orderA - orderB;
+          const nameA = a.grading?.name || "";
+          const nameB = b.grading?.name || "";
+          return nameA.localeCompare(nameB);
+        })
         .map((pg) => {
           // Use shortCode if available, otherwise use name with spaces replaced by hyphens
           let code = pg.grading.shortCode;

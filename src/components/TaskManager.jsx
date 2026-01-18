@@ -649,14 +649,8 @@ const TaskManager = ({
             <Table
               columns={tableColumns}
               dataSource={enhancedTasks.map(task => ({ ...task, key: resolveTaskId(task) }))}
-              pagination={{
-                pageSize: 10,
-                total: enhancedTasks.length,
-                showSizeChanger: true,
-                showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} tasks`,
-              }}
+              pagination={false}
               size="small"
-              scroll={{ x: 1200 }}
               style={{
                 fontSize: '12px',
               }}

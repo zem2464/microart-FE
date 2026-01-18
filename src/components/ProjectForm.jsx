@@ -42,7 +42,7 @@ import {
   PauseCircleOutlined,
 } from "@ant-design/icons";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Form,
   Input,
@@ -318,6 +318,106 @@ const ProjectForm = ({
   const { data: usersData } = useQuery(GET_AVAILABLE_USERS, {
     fetchPolicy: "cache-and-network",
   });
+
+  // Mapping of workTypeId -> project-specific sequence (fallbacks to global sort order)
+  const workTypeSequenceMap = useMemo(() => {
+    const mapping = new Map();
+
+    if (project?.projectWorkTypes?.length) {
+      [...project.projectWorkTypes]
+        .sort((a, b) => (a.sequence ?? 0) - (b.sequence ?? 0))
+        .forEach((pwt, index) => {
+          mapping.set(pwt.workTypeId, pwt.sequence ?? index);
+        });
+      return mapping;
+    }
+
+    if (workTypesData?.workTypes?.length) {
+      workTypesData.workTypes.forEach((wt, index) => {
+        mapping.set(wt.id, wt.sortOrder ?? index);
+      });
+    }
+
+    return mapping;
+  }, [project?.projectWorkTypes, workTypesData?.workTypes]);
+
+  // Mapping of workTypeId -> taskTypeId -> order (uses WorkTypeTask.order to align with TaskTable dynamic columns)
+  const workTypeTaskOrderMap = useMemo(() => {
+    const mapping = new Map();
+
+    (workTypesData?.workTypes || []).forEach((wt) => {
+      const taskOrderMap = new Map();
+      [...(wt.taskTypes || [])]
+        .sort(
+          (a, b) => (a.WorkTypeTask?.order ?? 0) - (b.WorkTypeTask?.order ?? 0)
+        )
+        .forEach((tt, index) => {
+          taskOrderMap.set(tt.id, tt.WorkTypeTask?.order ?? index);
+        });
+      mapping.set(wt.id, taskOrderMap);
+    });
+
+    return mapping;
+  }, [workTypesData?.workTypes]);
+
+  const orderTasksByWorkTypeSequence = useCallback(
+    (tasks = []) => {
+      if (!Array.isArray(tasks) || tasks.length === 0) {
+        return Array.isArray(tasks) ? tasks : [];
+      }
+
+      return [...tasks]
+        .map((task, index) => {
+          const workTypeId =
+            task.workTypeId ||
+            task.workType?.id ||
+            task.grading?.workType?.id ||
+            task.grading?.workTypeId ||
+            null;
+          const taskTypeId = task.taskTypeId || task.taskType?.id || null;
+
+          const mappingOrder =
+            (workTypeId !== null
+              ? workTypeSequenceMap.get(workTypeId)
+              : undefined) ?? task.workType?.sortOrder ?? index;
+
+          const taskSequence = task.sequence ?? 0;
+
+          const taskTypeOrder = (() => {
+            if (workTypeId && taskTypeId && workTypeTaskOrderMap.has(workTypeId)) {
+              const orderMap = workTypeTaskOrderMap.get(workTypeId);
+              if (orderMap && orderMap.has(taskTypeId)) {
+                return orderMap.get(taskTypeId);
+              }
+            }
+            return Number.MAX_SAFE_INTEGER; // place unknown task types at the end within worktype
+          })();
+
+          return { task, mappingOrder, taskTypeOrder, taskSequence, index };
+        })
+        .sort((a, b) => {
+          if (a.mappingOrder !== b.mappingOrder) {
+            return a.mappingOrder - b.mappingOrder;
+          }
+          if (a.taskTypeOrder !== b.taskTypeOrder) {
+            return a.taskTypeOrder - b.taskTypeOrder;
+          }
+          if (a.taskSequence !== b.taskSequence) {
+            return a.taskSequence - b.taskSequence;
+          }
+          return a.index - b.index;
+        })
+        .map(({ task }) => task);
+    },
+    [workTypeSequenceMap, workTypeTaskOrderMap]
+  );
+
+  const setOrderedProjectTasks = useCallback(
+    (tasks = []) => {
+      setProjectTasks(orderTasksByWorkTypeSequence(tasks));
+    },
+    [orderTasksByWorkTypeSequence]
+  );
 
   // Cache invalidation
   const { publishEvent, EVENTS } = useCacheInvalidation();
@@ -818,7 +918,7 @@ const ProjectForm = ({
               sequence: gradingTask.sequence || 0,
             };
           });
-          setProjectTasks(initialTasks);
+          setOrderedProjectTasks(initialTasks);
         }
       }
     } catch (error) {
@@ -1020,7 +1120,7 @@ const ProjectForm = ({
                   sequence: gradingTask.sequence || 0,
                 };
               });
-              setProjectTasks(initialTasks);
+              setOrderedProjectTasks(initialTasks);
             }
           }
         } catch (error) {
@@ -1122,7 +1222,7 @@ const ProjectForm = ({
               sequence: gradingTask.sequence || 0,
             };
           });
-          setProjectTasks(initialTasks);
+          setOrderedProjectTasks(initialTasks);
         }
       } catch (error) {
         console.error("Error fetching tasks for multiple gradings:", error);
@@ -1235,7 +1335,7 @@ const ProjectForm = ({
               updatedAt: new Date().toISOString(),
             };
           });
-          setProjectTasks(initialTasks);
+          setOrderedProjectTasks(initialTasks);
         }
       }
     } catch (error) {
@@ -1568,7 +1668,7 @@ const ProjectForm = ({
 
   // Handle task updates
   const handleTaskUpdate = (updatedTasks) => {
-    setProjectTasks(updatedTasks);
+    setOrderedProjectTasks(updatedTasks);
   };
 
   // Initialize form when project data changes
@@ -2435,7 +2535,7 @@ const ProjectForm = ({
                           updatedAt: new Date().toISOString(),
                         };
                       });
-                    setProjectTasks(initialTasks);
+                    setOrderedProjectTasks(initialTasks);
                   } else if (selectedGrading && gradingTasks.length === 0) {
                     // If we have a single grading but no tasks loaded yet, fetch them
                     handleGradingSelect(selectedGrading);
