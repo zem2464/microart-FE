@@ -1175,13 +1175,17 @@ const ProjectForm = ({
               }
             }
 
-            // Find which grading this task belongs to and get worktype info
-            const taskGrading = newSelectedGradings.find(
-              (sg) => sg.grading?.gradingTasks?.some((gt) => gt.id === gradingTask.id)
-            )?.grading;
-            const taskWorkType = workTypesData?.workTypes?.find(
-              (wt) => wt.id === (selectedWorkTypes && selectedWorkTypes[0])
+            // Find which grading this task belongs to by matching gradingId
+            const selectedGradingObj = newSelectedGradings.find(
+              (sg) => sg.gradingId === gradingTask.gradingId
             );
+            const taskGrading = selectedGradingObj?.grading;
+            
+            // Get the correct worktype for this grading (not all the same)
+            const taskWorkType = taskGrading?.workType || 
+              workTypesData?.workTypes?.find(
+                (wt) => wt.id === taskGrading?.workTypeId
+              );
 
             return {
               // Ensure each task has a stable unique id/key (gradingTask.id)
