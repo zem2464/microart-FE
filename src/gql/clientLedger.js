@@ -342,6 +342,12 @@ export const GET_INVOICE_BY_ID = gql`
           }
         }
       }
+      client {
+        id
+        clientCode
+        displayName
+        companyName
+      }
       allocations {
         id
         allocatedAmount

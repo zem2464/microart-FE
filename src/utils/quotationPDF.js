@@ -5,6 +5,13 @@ import QRCode from 'qrcode';
 import { font } from '../fonts/Noto_Sans/NotoSans.base64.js';
 import { boldFont } from '../fonts/Noto_Sans/NotoSans-bold.js';
 
+const BRAND_COLORS = {
+  primary: '#667eea',
+  primaryDark: '#4c51bf',
+  accent: '#f6f8ff',
+  text: '#1f2a44',
+};
+
 const COMPANY_DETAILS = {
   name: 'The Image Care',
   contactName: 'Rohit Ramani',
@@ -20,15 +27,112 @@ const COMPANY_DETAILS = {
   },
 };
 
+// Build normalized client details with broad fallbacks so Bill To always renders
+const buildClientDetails = (quoteData) => {
+  const fallbackClient = quoteData?.project?.client || {};
+  const client = quoteData?.client || fallbackClient;
+
+  const name =
+    client.companyName ||
+    client.displayName ||
+    client.name ||
+    quoteData?.clientName ||
+    `${client.firstName || ''} ${client.lastName || ''}`.trim() ||
+    `${fallbackClient.firstName || ''} ${fallbackClient.lastName || ''}`.trim() ||
+    '—';
+
+  const code =
+    client.clientCode ||
+    quoteData?.clientCode ||
+    fallbackClient.clientCode ||
+    quoteData?.project?.clientCode ||
+    '—';
+
+  const phone =
+    client.phone ||
+    client.mobile ||
+    client.contactNoWork ||
+    client.contactNoPersonal ||
+    quoteData?.clientPhone ||
+    fallbackClient.mobile ||
+    fallbackClient.phone;
+
+  const email = client.email || quoteData?.clientEmail || fallbackClient.email;
+  const pan = client.panCard || fallbackClient.panCard;
+
+  const address =
+    client.address ||
+    quoteData?.billingAddress ||
+    fallbackClient.address ||
+    quoteData?.project?.billingAddress;
+
+  const city =
+    client.city?.name ||
+    quoteData?.billingCity ||
+    fallbackClient.city?.name ||
+    quoteData?.project?.client?.city?.name;
+
+  const state =
+    client.state?.name ||
+    quoteData?.billingState ||
+    fallbackClient.state?.name ||
+    quoteData?.project?.client?.state?.name;
+
+  const pincode =
+    client.pincode ||
+    quoteData?.billingPincode ||
+    fallbackClient.pincode ||
+    quoteData?.project?.client?.pincode;
+
+  const addressLines = [];
+  if (address) addressLines.push(address);
+  const locality = [city, state].filter(Boolean).join(', ');
+  if (locality) addressLines.push(locality);
+  if (pincode) addressLines.push(`PIN: ${pincode}`);
+
+  return { name, code, phone, email, pan, addressLines };
+};
+
 const sanitizeFileName = (value = '') =>
   value
     .replace(/[\\/:*?"<>|]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-// Generate UPI QR code dynamically
-const generateUPIQR = async () => {
-  const upiString = `upi://pay?pa=${COMPANY_DETAILS.upiId}&pn=${COMPANY_DETAILS.name.replace(/ /g, '%20')}&tn=Invoice`;
+// Simple helper to fetch and inline a public asset
+const loadImageAsDataURL = async (path) => {
+  try {
+    const res = await fetch(path);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.error('Error loading image', path, err);
+    return null;
+  }
+};
+
+// Generate UPI QR code dynamically; keep amount editable unless locked explicitly
+const generateUPIQR = async (amount, lockAmount = false) => {
+  const payable = Number.isFinite(Number(amount)) ? Math.max(Number(amount), 0) : 0;
+  const formattedAmount = payable > 0 ? payable.toFixed(2) : null;
+
+  const queryParts = [
+    `pa=${COMPANY_DETAILS.upiId}`,
+    `pn=${COMPANY_DETAILS.name.replace(/ /g, '%20')}`,
+    'tn=Invoice',
+  ];
+
+  // Only lock the amount if explicitly requested; default keeps it editable in UPI apps
+  if (lockAmount && formattedAmount) {
+    queryParts.push(`am=${formattedAmount}`, 'cu=INR');
+  }
+
+  const upiString = `upi://pay?${queryParts.join('&')}`;
   try {
     return await QRCode.toDataURL(upiString, {
       errorCorrectionLevel: 'H',
@@ -47,9 +151,8 @@ const generateUPIQR = async () => {
 };
 
 export const generateQuotationPDF = async (quoteData) => {
-  // Generate QR code
-  const upiQRCode = await generateUPIQR();
-  
+  const logoPng = await loadImageAsDataURL(`${window.location.origin}/assets/icon.png`);
+  const clientDetails = buildClientDetails(quoteData);
   const doc = new jsPDF();
 
   // Embed fonts for consistent currency and typography
@@ -60,90 +163,110 @@ export const generateQuotationPDF = async (quoteData) => {
 
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  let yPos = 20;
+  let yPos = 8;
 
   // Header
+  if (logoPng) {
+    const logoSize = 26;
+    const logoX = (pageWidth - logoSize) / 2;
+    doc.addImage(logoPng, 'PNG', logoX, yPos, logoSize, logoSize);
+  }
+
   doc.setFont('NotoSans', 'bold');
-  doc.setFontSize(18);
-  doc.setTextColor(40);
-  doc.text('QUOTATION', pageWidth / 2, yPos, { align: 'center' });
-  yPos += 10;
+  doc.setFontSize(12);
+  doc.setTextColor(BRAND_COLORS.primary);
+  doc.text('QUOTATION', pageWidth / 2, yPos + 22, { align: 'center' });
+
+  yPos += 26;
 
   // Company (left) and client (right)
   doc.setFontSize(11);
-  doc.text(COMPANY_DETAILS.name, 15, yPos);
+  doc.setTextColor(BRAND_COLORS.text);
+  doc.text(COMPANY_DETAILS.name, 10, yPos);
   doc.setFontSize(9);
   doc.setFont('NotoSans', 'normal');
-  const addressLines = doc.splitTextToSize(COMPANY_DETAILS.address, pageWidth / 2 - 20);
+  const addressLines = doc.splitTextToSize(COMPANY_DETAILS.address, pageWidth / 2 - 14);
   let leftBlockY = yPos + 5;
   addressLines.forEach((line, idx) => {
-    doc.text(line, 15, leftBlockY + idx * 5);
+    doc.text(line, 10, leftBlockY + idx * 5);
   });
   leftBlockY += addressLines.length * 5;
-  doc.text(`Phone: ${COMPANY_DETAILS.phone}`, 15, leftBlockY + 5);
-  doc.text(`Contact: ${COMPANY_DETAILS.contactName}`, 15, leftBlockY + 10);
-  doc.text(`UPI: ${COMPANY_DETAILS.upiId}`, 15, leftBlockY + 15);
+  doc.text(`Phone: ${COMPANY_DETAILS.phone}`, 10, leftBlockY + 5);
+  doc.text(`Contact: ${COMPANY_DETAILS.contactName}`, 10, leftBlockY + 10);
+  doc.text(`UPI: ${COMPANY_DETAILS.upiId}`, 10, leftBlockY + 15);
 
   const rightX = pageWidth / 2 + 10;
   doc.setFontSize(10);
-  doc.setFont('NotoSans', 'bold');
-  doc.text('Quote For:', rightX, yPos);
-
   doc.setFont('NotoSans', 'normal');
-  const clientName = quoteData?.client?.companyName ||
-    `${quoteData?.client?.firstName || ''} ${quoteData?.client?.lastName || ''}`.trim() ||
-    quoteData?.client?.displayName || 'N/A';
-  doc.text(clientName, rightX, yPos + 5);
-  doc.text(`Client Code: ${quoteData?.client?.clientCode || 'N/A'}`, rightX, yPos + 10);
-  if (quoteData?.client?.mobile) {
-    doc.text(`Phone: ${quoteData.client.mobile}`, rightX, yPos + 15);
+  doc.setTextColor(BRAND_COLORS.text);
+  doc.text(clientDetails.name, rightX, yPos + 5);
+  doc.text(`Client Code: ${clientDetails.code}`, rightX, yPos + 10);
+
+  let clientLineY = yPos + 15;
+  if (clientDetails.addressLines.length) {
+    clientDetails.addressLines.forEach((line) => {
+      doc.text(line, rightX, clientLineY);
+      clientLineY += 5;
+    });
   }
-  if (quoteData?.client?.email) {
-    doc.text(`Email: ${quoteData.client.email}`, rightX, yPos + 20);
+  if (clientDetails.pan) {
+    doc.text(`PAN: ${clientDetails.pan}`, rightX, clientLineY);
+    clientLineY += 5;
+  }
+  if (clientDetails.phone) {
+    doc.text(`Phone: ${clientDetails.phone}`, rightX, clientLineY);
+    clientLineY += 5;
+  }
+  if (clientDetails.email) {
+    doc.text(`Email: ${clientDetails.email}`, rightX, clientLineY);
+    clientLineY += 5;
   }
 
   const leftBlockHeight = leftBlockY + 20 - yPos;
   const rightBlockHeight = 35;
   yPos += Math.max(leftBlockHeight, rightBlockHeight);
 
-  // Quote meta box
-  doc.setDrawColor(200);
-  doc.setLineWidth(0.5);
-  doc.rect(15, yPos, pageWidth - 30, 20);
-  const col2X = pageWidth / 3;
-  const col3X = (pageWidth / 3) * 2;
-  doc.line(col2X, yPos, col2X, yPos + 20);
-  doc.line(col3X, yPos, col3X, yPos + 20);
+  // Quote meta box - single row with project info
+  const detailsBoxHeight = 10;
+  const col1X = 10;
+  const col2X = 60;
+  const col3X = 110;
+  const col4X = 140;
+  const detailsY = yPos;
 
+  // Labels
   doc.setFont('NotoSans', 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(100);
-  doc.text('Quote Number', 20, yPos + 7);
-  doc.text('Quote Date', col2X + 5, yPos + 7);
-  doc.text('Valid Until', col3X + 5, yPos + 7);
+  doc.setFontSize(7);
+  doc.setTextColor(BRAND_COLORS.text);
+  doc.text('Quote No.', col1X, detailsY + 2);
+  doc.text('Date', col2X, detailsY + 2);
+  doc.text('Valid Until', col3X, detailsY + 2);
+  doc.text('Proj Code', col4X, detailsY + 2);
+  doc.text('Proj Name', col4X + 28, detailsY + 2);
 
-  doc.setFontSize(10);
+  // Values
+  doc.setFontSize(9);
   doc.setFont('NotoSans', 'bold');
-  doc.setTextColor(40);
-  doc.text(quoteData?.quoteNumber || 'N/A', 20, yPos + 14);
-  doc.text(dayjs(quoteData?.quoteDate || new Date()).format('DD MMM YYYY'), col2X + 5, yPos + 14);
+  doc.setTextColor(BRAND_COLORS.primaryDark);
+  doc.text(quoteData?.quoteNumber || 'N/A', col1X, detailsY + 7);
+  doc.text(dayjs(quoteData?.quoteDate || new Date()).format('DD MMM YY'), col2X, detailsY + 7);
   doc.text(
     quoteData?.validUntil
-      ? dayjs(quoteData.validUntil).format('DD MMM YYYY')
+      ? dayjs(quoteData.validUntil).format('DD MMM YY')
       : 'N/A',
-    col3X + 5,
-    yPos + 14
+    col3X,
+    detailsY + 7
   );
 
-  yPos += 25;
+  const projectCode = quoteData?.project?.projectCode || 'N/A';
+  const projectName = quoteData?.project?.name || quoteData?.project?.description || 'N/A';
+  doc.text(projectCode, col4X, detailsY + 7);
+  
+  doc.setFontSize(8);
+  const projNameShort = projectName.length > 25 ? projectName.substring(0, 22) + '...' : projectName;
+  doc.text(projNameShort, col4X + 28, detailsY + 7);
 
-  // Project details
-  doc.setFontSize(9);
-  doc.setFont('NotoSans', 'normal');
-  doc.setTextColor(80);
-  const projectLine = `Project Code: ${quoteData?.project?.projectCode || 'N/A'} | ${quoteData?.project?.name || quoteData?.project?.description || ''}`;
-  doc.text(projectLine, 15, yPos);
-  yPos += 8;
+  yPos += detailsBoxHeight + 1;
 
   // Services table
   const tableData = (quoteData?.items || []).map((item, idx) => {
@@ -165,14 +288,14 @@ export const generateQuotationPDF = async (quoteData) => {
     body: tableData,
     theme: 'grid',
     styles: {
-      fontSize: 9,
+      fontSize: 8.5,
       font: 'NotoSans',
-      cellPadding: 3,
+      cellPadding: 2
     },
     headStyles: {
-      fillColor: [41, 128, 185],
+      fillColor: [102, 126, 234],
       textColor: [255, 255, 255],
-      fontSize: 10,
+      fontSize: 9,
       fontStyle: 'bold',
       font: 'NotoSans',
       halign: 'center',
@@ -184,7 +307,7 @@ export const generateQuotationPDF = async (quoteData) => {
       3: { halign: 'right', cellWidth: 30 },
       4: { halign: 'right', cellWidth: 35 },
     },
-    margin: { left: 15, right: 15 },
+    margin: { left: 10, right: 10 },
   });
 
   yPos = doc.lastAutoTable.finalY + 5;
@@ -197,12 +320,14 @@ export const generateQuotationPDF = async (quoteData) => {
   const taxAmount = Number(quoteData?.taxAmount || 0);
   const totalAmount = Number(quoteData?.totalAmount || subtotal - discountAmount + taxAmount || 0);
 
+  // Generate QR only after we know the payable amount
+  const qrPayableAmount = Math.max(totalAmount, 0);
+  const upiQRCode = await generateUPIQR(qrPayableAmount, false);
+
   totals.push(['Subtotal:', `₹${subtotal.toFixed(2)}`]);
   if (discountAmount > 0) {
     totals.push(['Discount:', `-₹${discountAmount.toFixed(2)}`]);
   }
-  const taxLabel = quoteData?.taxRate ? `Tax (${quoteData.taxRate}%)` : 'Tax';
-  totals.push([`${taxLabel}:`, `₹${taxAmount.toFixed(2)}`]);
   totals.push(['Grand Total:', `₹${totalAmount.toFixed(2)}`]);
 
   autoTable(doc, {
@@ -210,7 +335,7 @@ export const generateQuotationPDF = async (quoteData) => {
     body: totals,
     theme: 'plain',
     styles: {
-      fontSize: 9,
+      fontSize: 8.5,
       font: 'NotoSans',
       cellPadding: 2,
     },
@@ -218,7 +343,7 @@ export const generateQuotationPDF = async (quoteData) => {
       0: { halign: 'right', cellWidth: 35, fontStyle: 'normal' },
       1: { halign: 'right', cellWidth: 35, fontStyle: 'bold' },
     },
-    margin: { left: pageWidth - 85 },
+    margin: { left: pageWidth - 78 },
     didParseCell: (data) => {
       if (data.row.index === totals.length - 1) {
         data.cell.styles.fontSize = 10;
@@ -231,13 +356,13 @@ export const generateQuotationPDF = async (quoteData) => {
   // Payment info
   doc.setFontSize(10);
   doc.setFont('NotoSans', 'bold');
-  doc.setTextColor(40);
-  doc.text('Payment Details:', 15, yPos);
+  doc.setTextColor(BRAND_COLORS.text);
+  doc.text('Payment Details:', 10, yPos);
 
   let paymentY = yPos + 5;
   doc.setFontSize(8);
   doc.setFont('NotoSans', 'normal');
-  doc.setTextColor(80);
+  doc.setTextColor(BRAND_COLORS.text);
   const paymentLines = [
     `Bank: ${COMPANY_DETAILS.bank.bankName}`,
     `A/C Name: ${COMPANY_DETAILS.bank.accountName}`,
@@ -246,7 +371,7 @@ export const generateQuotationPDF = async (quoteData) => {
     `UPI: ${COMPANY_DETAILS.upiId}`,
   ];
   paymentLines.forEach((line) => {
-    doc.text(line, 15, paymentY);
+    doc.text(line, 10, paymentY);
     paymentY += 5;
   });
 
@@ -256,7 +381,10 @@ export const generateQuotationPDF = async (quoteData) => {
     const qrX = pageWidth - qrSize - 20;
     doc.addImage(upiQRCode, 'PNG', qrX, yPos, qrSize, qrSize);
     doc.setFontSize(7);
-    doc.text('Scan to pay', qrX + qrSize / 2, yPos + qrSize + 5, { align: 'center' });
+    const amountLabel = qrPayableAmount > 0
+      ? `Scan to pay ₹${qrPayableAmount.toFixed(2)}`
+      : 'Scan to pay';
+    doc.text(amountLabel, qrX + qrSize / 2, yPos + qrSize + 5, { align: 'center' });
     paymentY = Math.max(paymentY, yPos + qrSize + 10);
   }
 
@@ -265,33 +393,33 @@ export const generateQuotationPDF = async (quoteData) => {
   // Amount in words
   doc.setFontSize(9);
   doc.setFont('NotoSans', 'italic');
-  doc.setTextColor(80);
+  doc.setTextColor(BRAND_COLORS.text);
   const amountInWords = numberToWords(totalAmount);
-  doc.text(`Amount in Words: ${amountInWords} Rupees Only`, 15, yPos);
+  doc.text(`Amount in Words: ${amountInWords} Rupees Only`, 10, yPos);
   yPos += 8;
 
   // Notes
-  if (yPos > pageHeight - 60) {
+  if (yPos > pageHeight - 65) {
     doc.addPage();
     yPos = 20;
   }
   doc.setFontSize(9);
   doc.setFont('NotoSans', 'bold');
-  doc.setTextColor(40);
-  doc.text('Notes:', 15, yPos);
+  doc.setTextColor(BRAND_COLORS.text);
+  doc.text('Notes:', 10, yPos);
   yPos += 5;
   doc.setFontSize(8);
   doc.setFont('NotoSans', 'normal');
-  doc.setTextColor(80);
+  doc.setTextColor(BRAND_COLORS.text);
   const notes = quoteData?.notes || 'This quotation is generated on request and is subject to change upon project updates.';
-  const notesLines = doc.splitTextToSize(notes, pageWidth - 30);
-  doc.text(notesLines, 15, yPos);
+  const notesLines = doc.splitTextToSize(notes, pageWidth - 20);
+  doc.text(notesLines, 10, yPos);
 
   // Footer
   const footerY = pageHeight - 30;
   doc.setFontSize(9);
   doc.setFont('NotoSans', 'bold');
-  doc.setTextColor(40);
+  doc.setTextColor(BRAND_COLORS.text);
   doc.text(`For ${COMPANY_DETAILS.name}`, pageWidth - 50, footerY);
   doc.line(pageWidth - 65, footerY + 15, pageWidth - 15, footerY + 15);
   doc.setFontSize(8);
@@ -308,10 +436,10 @@ export const generateQuotationPDF = async (quoteData) => {
     { align: 'center' }
   );
 
-  const projectCode = quoteData?.project?.projectCode || 'Project';
-  const projectName = quoteData?.project?.name || quoteData?.project?.description || 'Quotation';
+  const fileProjectCode = quoteData?.project?.projectCode || 'Project';
+  const fileProjectName = quoteData?.project?.name || quoteData?.project?.description || 'Quotation';
   const totalLabel = Number.isFinite(totalAmount) ? Math.round(totalAmount) : '0';
-  const fileName = `${sanitizeFileName(projectCode)} ${sanitizeFileName(projectName)} ₹${totalLabel}`;
+  const fileName = `${sanitizeFileName(fileProjectCode)} ${sanitizeFileName(fileProjectName)} ₹${totalLabel}`;
   doc.save(`${fileName}.pdf`);
 };
 
