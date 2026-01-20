@@ -1435,7 +1435,14 @@ const ProjectForm = ({
           });
 
           if (data?.validateProjectCredit) {
-            setProjectCreditValidation(data.validateProjectCredit);
+            let validationResult = { ...data.validateProjectCredit };
+
+            // If total budget is 0, allow project creation (override validation)
+            if (budget === 0) {
+              validationResult.canCreateProject = true;
+            }
+
+            setProjectCreditValidation(validationResult);
 
             // Show warning if credit validation fails
             // BUT skip if:
@@ -1447,15 +1454,15 @@ const ProjectForm = ({
               project?.creditRequest?.status === "approved" ||
               currentStatus === "requested";
             const isNewProjectWithExceededCredit =
-              mode === "create" && !data.validateProjectCredit.canCreateProject;
+              mode === "create" && !validationResult.canCreateProject;
 
             // Don't show warning if in fly-on-credit mode or if this is a new exceeded project
             if (
-              !data.validateProjectCredit.canCreateProject &&
+              !validationResult.canCreateProject &&
               !isInFlyOnCreditMode &&
               !isNewProjectWithExceededCredit
             ) {
-              message.warning(data.validateProjectCredit.message);
+              message.warning(validationResult.message);
             }
           }
         }
@@ -1507,23 +1514,39 @@ const ProjectForm = ({
         },
       });
 
-      if (data?.validateMultipleGradingCredit) {
-        setProjectCreditValidation(data.validateMultipleGradingCredit);
+      // Calculate total cost locally to check for 0 amount
+      const currentTotalCost = projectGradingsData.reduce(
+        (sum, item) => sum + item.imageQuantity * item.customRate,
+        0
+      );
 
-        const exceeded = !data.validateMultipleGradingCredit.canCreateProject;
+      if (data?.validateMultipleGradingCredit) {
+        let validationResult = { ...data.validateMultipleGradingCredit };
+        let exceeded = !validationResult.canCreateProject;
+
+        // If total amount is 0, we should not show fly-on-credit (override exceeded to false)
+        // and allow project creation (override canCreateProject to true)
+        if (currentTotalCost === 0) {
+          validationResult.canCreateProject = true;
+          exceeded = false;
+        }
+
+        setProjectCreditValidation(validationResult);
+
         console.log("💰 Credit validation result:", {
-          canCreateProject: data.validateMultipleGradingCredit.canCreateProject,
+          canCreateProject: validationResult.canCreateProject,
           exceeded,
-          message: data.validateMultipleGradingCredit.message,
-          availableCredit: data.validateMultipleGradingCredit.availableCredit,
-          requiredCredit: data.validateMultipleGradingCredit.requiredCredit,
+          message: validationResult.message,
+          availableCredit: validationResult.availableCredit,
+          requiredCredit: validationResult.requiredCredit,
+          currentTotalCost,
         });
         setCreditExceeded(exceeded);
 
         // Notify parent component about credit exceeded status
         if (onCreditExceeded) {
           console.log("📢 Notifying parent about credit exceeded:", exceeded);
-          onCreditExceeded(exceeded, data.validateMultipleGradingCredit);
+          onCreditExceeded(exceeded, validationResult);
         }
 
         // Show warning if credit validation fails
