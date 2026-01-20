@@ -1584,24 +1584,7 @@ const ProjectForm = ({
     }
   }, [usersData]);
 
-  // Listen for credit approval request event from parent drawer
-  useEffect(() => {
-    const handleCreditRequestEvent = () => {
-      handleRequestCreditApproval();
-    };
 
-    window.addEventListener(
-      "request-credit-approval",
-      handleCreditRequestEvent
-    );
-
-    return () => {
-      window.removeEventListener(
-        "request-credit-approval",
-        handleCreditRequestEvent
-      );
-    };
-  }, []);
 
   // Prefetch gradings for edit mode when project data is available
   useEffect(() => {
@@ -1998,6 +1981,25 @@ const ProjectForm = ({
       setLoading(false);
     }
   };
+
+  // Listen for credit approval request event from parent drawer
+  useEffect(() => {
+    const handleCreditRequestEvent = () => {
+      handleRequestCreditApproval();
+    };
+
+    window.addEventListener(
+      "request-credit-approval",
+      handleCreditRequestEvent
+    );
+
+    return () => {
+      window.removeEventListener(
+        "request-credit-approval",
+        handleCreditRequestEvent
+      );
+    };
+  }, [handleRequestCreditApproval]);
 
   const handleSubmit = async (values) => {
     setLoading(true);
