@@ -1,10 +1,55 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import dayjs from 'dayjs';
+import QRCode from 'qrcode';
 import { font } from '../fonts/Noto_Sans/NotoSans.base64.js';
 import { boldFont } from '../fonts/Noto_Sans/NotoSans-bold.js';
 
+const COMPANY_DETAILS = {
+  name: 'The Image Care',
+  contactName: 'Rohit Ramani',
+  address:
+    '204 MBC, Meridian Business Centre, Lajamni Chowk, opposite Opera Business Center, Shanti Niketan Society, Mota Varachha, Surat, Gujarat 394105',
+  phone: '+91 9904530103',
+  upiId: 'asmitaramani99@okhdfcbank',
+  bank: {
+    bankName: 'HDFC',
+    accountName: 'ASHMITABEN RAMANI',
+    accountNumber: '50100088829930',
+    ifsc: 'HDFC0001684',
+  },
+};
+
+const sanitizeFileName = (value = '') =>
+  value
+    .replace(/[\\/:*?"<>|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+// Generate UPI QR code dynamically
+const generateUPIQR = async () => {
+  const upiString = `upi://pay?pa=${COMPANY_DETAILS.upiId}&pn=${COMPANY_DETAILS.name.replace(/ /g, '%20')}&tn=Invoice`;
+  try {
+    return await QRCode.toDataURL(upiString, {
+      errorCorrectionLevel: 'H',
+      type: 'image/png',
+      width: 300,
+      margin: 1,
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF'
+      }
+    });
+  } catch (err) {
+    console.error('Error generating QR code:', err);
+    return null;
+  }
+};
+
 export const generateInvoicePDF = async (invoiceData) => {
+  // Generate QR code
+  const upiQRCode = await generateUPIQR();
+  
   const doc = new jsPDF();
 
   // Add Noto Sans fonts for proper rupee symbol rendering
@@ -30,15 +75,19 @@ export const generateInvoicePDF = async (invoiceData) => {
   // Left side - Company details
   doc.setFontSize(11);
   doc.setFont('NotoSans', 'bold');
-  doc.text('MicroArt', 15, yPos);
+  doc.text(COMPANY_DETAILS.name, 15, yPos);
 
   doc.setFontSize(9);
   doc.setFont('NotoSans', 'normal');
-  doc.text('Photo Editing & Workflow Management', 15, yPos + 5);
-  doc.text('123 Business Street, City - 400001', 15, yPos + 10);
-  doc.text('Phone: +91 98765 43210', 15, yPos + 15);
-  doc.text('Email: info@microart.com', 15, yPos + 20);
-  doc.text('GSTIN: 27XXXXX1234X1ZX', 15, yPos + 25);
+  const addressLines = doc.splitTextToSize(COMPANY_DETAILS.address, pageWidth / 2 - 20);
+  let leftBlockY = yPos + 5;
+  addressLines.forEach((line, idx) => {
+    doc.text(line, 15, leftBlockY + idx * 5);
+  });
+  leftBlockY += addressLines.length * 5;
+  doc.text(`Phone: ${COMPANY_DETAILS.phone}`, 15, leftBlockY + 5);
+  doc.text(`Contact: ${COMPANY_DETAILS.contactName}`, 15, leftBlockY + 10);
+  doc.text(`UPI: ${COMPANY_DETAILS.upiId}`, 15, leftBlockY + 15);
 
   // Right side - Bill To
   const rightX = pageWidth / 2 + 10;
@@ -60,7 +109,9 @@ export const generateInvoicePDF = async (invoiceData) => {
     doc.text(`Email: ${invoiceData.client.email}`, rightX, yPos + 20);
   }
 
-  yPos += 35;
+  const leftBlockHeight = leftBlockY + 20 - yPos;
+  const rightBlockHeight = 35;
+  yPos += Math.max(leftBlockHeight, rightBlockHeight);
 
   // ===== INVOICE DETAILS BOX =====
   doc.setDrawColor(200);
@@ -214,6 +265,41 @@ export const generateInvoicePDF = async (invoiceData) => {
 
   yPos = doc.lastAutoTable.finalY + 8;
 
+  // ===== PAYMENT INSTRUCTIONS =====
+  doc.setFontSize(10);
+  doc.setFont('NotoSans', 'bold');
+  doc.setTextColor(40);
+  doc.text('Payment Instructions:', 15, yPos);
+
+  let paymentY = yPos + 5;
+  doc.setFontSize(8);
+  doc.setFont('NotoSans', 'normal');
+  doc.setTextColor(80);
+  const paymentLines = [
+    `Bank: ${COMPANY_DETAILS.bank.bankName}`,
+    `A/C Name: ${COMPANY_DETAILS.bank.accountName}`,
+    `A/C No: ${COMPANY_DETAILS.bank.accountNumber}`,
+    `IFSC: ${COMPANY_DETAILS.bank.ifsc}`,
+    `UPI: ${COMPANY_DETAILS.upiId}`,
+  ];
+
+  paymentLines.forEach((line) => {
+    doc.text(line, 15, paymentY);
+    paymentY += 5;
+  });
+
+  // Add QR code if generated successfully
+  if (upiQRCode) {
+    const qrSize = 40;
+    const qrX = pageWidth - qrSize - 20;
+    doc.addImage(upiQRCode, 'PNG', qrX, yPos, qrSize, qrSize);
+    doc.setFontSize(7);
+    doc.text('Scan to pay', qrX + qrSize / 2, yPos + qrSize + 5, { align: 'center' });
+    paymentY = Math.max(paymentY, yPos + qrSize + 10);
+  }
+
+  yPos = paymentY + 3;
+
   // ===== AMOUNT IN WORDS =====
   doc.setFontSize(9);
   doc.setFont('NotoSans', 'italic');
@@ -223,12 +309,12 @@ export const generateInvoicePDF = async (invoiceData) => {
 
   yPos += 8;
 
-  // ===== PAYMENT DETAILS (if allocations exist) =====
+  // ===== PAYMENTS RECEIVED (if allocations exist) =====
   if (invoiceData.allocations && invoiceData.allocations.length > 0) {
     doc.setFontSize(10);
     doc.setFont('NotoSans', 'bold');
     doc.setTextColor(40);
-    doc.text('Payment Details:', 15, yPos);
+    doc.text('Payments Received:', 15, yPos);
 
     yPos += 5;
 
@@ -305,7 +391,7 @@ export const generateInvoicePDF = async (invoiceData) => {
   doc.setFontSize(9);
   doc.setFont('NotoSans', 'bold');
   doc.setTextColor(40);
-  doc.text('For MicroArt', pageWidth - 50, yPos);
+  doc.text(`For ${COMPANY_DETAILS.name}`, pageWidth - 50, yPos);
 
   yPos += 15;
   doc.setLineWidth(0.5);
@@ -334,7 +420,12 @@ export const generateInvoicePDF = async (invoiceData) => {
   );
 
   // Save PDF
-  doc.save(`Invoice_${invoiceData.invoiceNumber}.pdf`);
+  const projectCode = invoiceData.project?.projectCode || invoiceData.invoiceNumber || 'Invoice';
+  const projectName = invoiceData.project?.name || invoiceData.project?.description || 'Invoice';
+  const totalValue = Math.round(Number(invoiceData.totalAmount || 0));
+  const totalLabel = Number.isFinite(totalValue) ? totalValue : '0';
+  const fileName = `${sanitizeFileName(projectCode)} ${sanitizeFileName(projectName)} ₹${totalLabel}`;
+  doc.save(`${fileName}.pdf`);
 };
 
 // Helper function to convert number to words (Indian system)
