@@ -42,7 +42,7 @@ import {
   PauseCircleOutlined,
 } from "@ant-design/icons";
 
-import React, { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
   Form,
   Input,
@@ -55,10 +55,8 @@ import {
   Typography,
   DatePicker,
   InputNumber,
-  Divider,
   Alert,
-  Radio,
-  Space,
+  Modal,
 } from "antd";
 
 const { Option } = Select;
@@ -74,7 +72,7 @@ const ProjectForm = ({
 }) => {
   // ✅ Call hook at component top level (React Rules of Hooks)
   const assignmentValidator = useAssignmentValidator();
-  
+
   const [form] = Form.useForm();
   const user = useReactiveVar(userCacheVar);
 
@@ -934,9 +932,15 @@ const ProjectForm = ({
 
   // Multiple grading selection handler
   const handleMultipleGradingSelect = async (selectedGradingIds) => {
-    const currentSelectedIds = selectedGradings.map((sg) => sg.gradingId);
+    if (!selectedGradingIds || selectedGradingIds.length === 0) {
+      message.error("At least one grading must be selected.");
+      // Revert selection in form
+      const currentIds = selectedGradings.map((sg) => sg.gradingId);
+      form.setFieldsValue({ gradings: currentIds });
+      return;
+    }
 
-    // Find newly added and removed gradings
+    const currentSelectedIds = selectedGradings.map((sg) => sg.gradingId);
     const addedIds = selectedGradingIds.filter(
       (id) => !currentSelectedIds.includes(id)
     );
@@ -944,51 +948,19 @@ const ProjectForm = ({
       (id) => !selectedGradingIds.includes(id)
     );
 
-    // Check if trying to remove original gradings from a started project
-    // This applies to ALL users, not just those with limited edit permission
-    if (mode === "edit" && isActiveProject && originalGradingIds.length > 0) {
-      const attemptedRemoveOriginal = removedIds.filter((id) =>
-        originalGradingIds.includes(id)
-      );
+    // Function to execute the grading change
+    const executeGradingChange = async (idsToProcess) => {
+      // Reconstruct the selected gradings list based on the IDs from the form
+      // This is more reliable than manually adding/removing from the current state
+      const newSelectedGradings = idsToProcess.map((id) => {
+        // Keep existing object if it's already selected to preserve quantities/rates
+        const existing = selectedGradings.find((sg) => sg.gradingId === id);
+        if (existing) return existing;
 
-      if (attemptedRemoveOriginal.length > 0) {
-        message.warning(
-          "You cannot remove existing gradings from a started project. You can only add new gradings and adjust quantities or prices."
-        );
-
-        // Restore original gradings that user tried to remove
-        const restoredIds = selectedGradingIds.concat(attemptedRemoveOriginal);
-
-        // Update the select to show the restored state
-        // We need to filter out the removed ones first, then add back the originals
-        const validRemovedIds = removedIds.filter(
-          (id) => !originalGradingIds.includes(id)
-        );
-
-        let newSelectedGradings = [...selectedGradings];
-        newSelectedGradings = newSelectedGradings.filter(
-          (sg) => !validRemovedIds.includes(sg.gradingId)
-        );
-
-        setSelectedGradings(newSelectedGradings);
-        return; // Exit early to prevent further processing
-      }
-    }
-
-    let newSelectedGradings = [...selectedGradings];
-
-    // Remove unselected gradings (only those allowed to be removed)
-    newSelectedGradings = newSelectedGradings.filter(
-      (sg) => !removedIds.includes(sg.gradingId)
-    );
-
-    // Add newly selected gradings
-    addedIds.forEach((gradingId) => {
-      const grading = workTypeGradings?.find((g) => g.id === gradingId);
-      if (grading) {
-        // Check if client has a custom rate for this grading
+        // Otherwise create a new object for the added grading
+        const grading = workTypeGradings?.find((g) => g.id === id);
         const clientPref = clientPreferences?.gradings?.find(
-          (pref) => pref.grading?.id === gradingId
+          (pref) => pref.grading?.id === id
         );
         const clientCustomRate =
           clientPref &&
@@ -997,251 +969,263 @@ const ProjectForm = ({
             ? clientPref.customRate
             : null;
 
-        newSelectedGradings.push({
-          gradingId: gradingId,
+        return {
+          gradingId: id,
           grading: grading,
           imageQuantity: 1, // Default quantity
-          customRate: clientCustomRate, // Pre-fill with client's custom rate if available
-          sequence: newSelectedGradings.length + 1,
-        });
-      }
-    });
+          customRate: clientCustomRate,
+          sequence: 0, // Will be set correctly below
+        };
+      }).map((sg, index) => ({ ...sg, sequence: index + 1 }));
 
-    setSelectedGradings(newSelectedGradings);
+      setSelectedGradings(newSelectedGradings);
 
-    // If this is the first selection or all selections were removed, handle legacy state
-    if (newSelectedGradings.length === 0) {
-      setSelectedGrading(null);
-      setCalculatedBudget(0);
-      setGradingTasks([]);
-      setProjectTasks([]);
-    } else if (newSelectedGradings.length === 1) {
-      // For single selection, maintain backward compatibility
-      const singleGrading = newSelectedGradings[0];
-      setSelectedGrading(singleGrading.gradingId);
+      // If this is the first selection or all selections were removed, handle legacy state
+      if (newSelectedGradings.length === 0) {
+        setSelectedGrading(null);
+        setCalculatedBudget(0);
+        setGradingTasks([]);
+        setProjectTasks([]);
+      } else if (newSelectedGradings.length === 1) {
+        // For single selection, maintain backward compatibility
+        const singleGrading = newSelectedGradings[0];
+        setSelectedGrading(singleGrading.gradingId);
 
-      // Set per-image rate for single selection
-      const clientCustomRate = clientPreferences?.gradings?.find(
-        (g) => g.grading?.id === singleGrading.gradingId
-      )?.customRate;
-      const gradingDefault = singleGrading.grading?.defaultRate;
-      const initialRate =
-        clientCustomRate !== undefined &&
-          clientCustomRate !== null
-          ? clientCustomRate
-          : gradingDefault || null;
-      setPerImageRate(initialRate);
+        // Set per-image rate for single selection
+        const clientCustomRate = clientPreferences?.gradings?.find(
+          (g) => g.grading?.id === singleGrading.gradingId
+        )?.customRate;
+        const gradingDefault = singleGrading.grading?.defaultRate;
+        const initialRate =
+          clientCustomRate !== undefined &&
+            clientCustomRate !== null
+            ? clientCustomRate
+            : gradingDefault || null;
+        setPerImageRate(initialRate);
 
-      // Fetch grading tasks for the single selection
-      if (singleGrading.gradingId) {
-        try {
-          const { data } = await refetchGradingTasks({
-            variables: {
-              gradingId: singleGrading.gradingId,
-            },
-          });
+        // Fetch grading tasks for the single selection
+        if (singleGrading.gradingId) {
+          try {
+            const { data } = await refetchGradingTasks({
+              variables: {
+                gradingId: singleGrading.gradingId,
+              },
+            });
 
-          if (data?.gradingTasks) {
-            // Filter to only include active grading tasks
-            const activeGradingTasks = data.gradingTasks.filter(
-              (gt) => gt.isActive === true
-            );
-            setGradingTasks(activeGradingTasks);
-
-            // Initialize project tasks if needed
-            if (
-              currentStatus === "active" ||
-              (mode === "edit" && isActiveProject)
-            ) {
-              // Get project deadline from form
-              const projectDeadline = form.getFieldValue("deadlineDate");
-
-              const currentGrading = singleGrading.grading;
-              const currentWorkType = workTypesData?.workTypes?.find(
-                (wt) => wt.id === (selectedWorkTypes && selectedWorkTypes[0])
+            if (data?.gradingTasks) {
+              // Filter to only include active grading tasks
+              const activeGradingTasks = data.gradingTasks.filter(
+                (gt) => gt.isActive === true
               );
+              setGradingTasks(activeGradingTasks);
 
-              const initialTasks = activeGradingTasks.map((gradingTask) => {
-                let preferredUserId = null;
-                if (
-                  clientPreferences?.taskPreferences &&
-                  gradingTask?.taskType
-                ) {
-                  const taskPreference = clientPreferences.taskPreferences.find(
-                    (pref) => pref?.taskType?.id === gradingTask.taskType.id
-                  );
-                  if (
-                    taskPreference &&
-                    taskPreference.preferredUserIds &&
-                    taskPreference.preferredUserIds.length > 0
-                  ) {
-                    preferredUserId = taskPreference.preferredUserIds[0];
-                  }
-                }
-
-                return {
-                  // Stable task identity for validation and updates
-                  id: gradingTask.id,
-                  taskKey: gradingTask.id,
-                  gradingTaskId: gradingTask.id,
-                  taskTypeId: gradingTask?.taskType?.id,
-                  name:
-                    gradingTask?.taskType?.name ||
-                    gradingTask.name ||
-                    "Unnamed Task",
-                  title:
-                    gradingTask?.taskType?.name ||
-                    gradingTask.name ||
-                    "Unnamed Task",
-                  description:
-                    gradingTask.description ||
-                    gradingTask?.taskType?.description ||
-                    "",
-                  instructions: gradingTask.instructions || "",
-                  status: "todo",
-                  priority: gradingTask.priority || "B",
-                  estimatedHours: gradingTask.estimatedHours || 0,
-                  estimatedCost: gradingTask.estimatedCost || 0,
-                  dueDate: projectDeadline
-                    ? projectDeadline.toISOString()
-                    : null,
-                  assigneeId: preferredUserId,
-                  notes: "",
-                  taskType: gradingTask.taskType,
-                  gradingTask: gradingTask,
-                  customFields: {},
-                  createdAt: new Date().toISOString(),
-                  updatedAt: new Date().toISOString(),
-                  workType: currentWorkType,
-                  workTypeId: currentWorkType?.id,
-                  grading: currentGrading,
-                  gradingId: currentGrading?.id,
-                  gradingName: currentGrading?.name,
-                  sequence: gradingTask.sequence || 0,
-                };
-              });
-              setOrderedProjectTasks(initialTasks);
-            }
-          }
-        } catch (error) {
-          console.error("Error fetching grading tasks:", error);
-          message.error("Failed to load grading tasks");
-        }
-      }
-    } else {
-      // Multiple selections - fetch tasks for all gradings and combine them
-      setSelectedGrading(null);
-      setPerImageRate(null);
-
-      // Fetch tasks for all selected gradings
-      try {
-        const taskPromises = newSelectedGradings.map((sg) =>
-          refetchGradingTasks({
-            variables: {
-              gradingId: sg.gradingId,
-            },
-          })
-        );
-
-        const taskResults = await Promise.all(taskPromises);
-
-        // Combine all tasks from all gradings and filter to only include active ones
-        const allGradingTasks = taskResults
-          .flatMap((result) => result.data?.gradingTasks || [])
-          .filter((gt) => gt.isActive === true);
-
-        setGradingTasks(allGradingTasks);
-
-        // Initialize project tasks if status is active
-        if (
-          currentStatus === "active" ||
-          (mode === "edit" && isActiveProject)
-        ) {
-          // Get project deadline from form
-          const projectDeadline = form.getFieldValue("deadlineDate");
-
-          const initialTasks = allGradingTasks.map((gradingTask) => {
-            let preferredUserId = null;
-            if (clientPreferences?.taskPreferences && gradingTask?.taskType) {
-              const taskPreference = clientPreferences.taskPreferences.find(
-                (pref) => pref?.taskType?.id === gradingTask.taskType.id
-              );
+              // Initialize project tasks if needed
               if (
-                taskPreference &&
-                taskPreference.preferredUserIds &&
-                taskPreference.preferredUserIds.length > 0
+                currentStatus === "active" ||
+                (mode === "edit" && isActiveProject)
               ) {
-                preferredUserId = taskPreference.preferredUserIds[0];
+                // Get project deadline from form
+                const projectDeadline = form.getFieldValue("deadlineDate");
+                const currentGrading = singleGrading.grading;
+                const currentWorkType = workTypesData?.workTypes?.find(
+                  (wt) => wt.id === (selectedWorkTypes && selectedWorkTypes[0])
+                );
+
+                const initialTasks = activeGradingTasks.map((gradingTask) => {
+                  let preferredUserId = null;
+                  if (
+                    clientPreferences?.taskPreferences &&
+                    gradingTask?.taskType
+                  ) {
+                    const taskPreference = clientPreferences.taskPreferences.find(
+                      (pref) => pref?.taskType?.id === gradingTask.taskType.id
+                    );
+                    if (
+                      taskPreference &&
+                      taskPreference.preferredUserIds &&
+                      taskPreference.preferredUserIds.length > 0
+                    ) {
+                      preferredUserId = taskPreference.preferredUserIds[0];
+                    }
+                  }
+
+                  return {
+                    id: gradingTask.id,
+                    taskKey: gradingTask.id,
+                    gradingTaskId: gradingTask.id,
+                    taskTypeId: gradingTask?.taskType?.id,
+                    name: gradingTask?.taskType?.name || gradingTask.name || "Unnamed Task",
+                    title: gradingTask?.taskType?.name || gradingTask.name || "Unnamed Task",
+                    description: gradingTask.description || gradingTask?.taskType?.description || "",
+                    instructions: gradingTask.instructions || "",
+                    status: "todo",
+                    priority: gradingTask.priority || "B",
+                    estimatedHours: gradingTask.estimatedHours || 0,
+                    estimatedCost: gradingTask.estimatedCost || 0,
+                    dueDate: projectDeadline ? projectDeadline.toISOString() : null,
+                    assigneeId: preferredUserId,
+                    notes: "",
+                    taskType: gradingTask.taskType,
+                    gradingTask: gradingTask,
+                    customFields: {},
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    workType: currentWorkType,
+                    workTypeId: currentWorkType?.id,
+                    grading: currentGrading,
+                    gradingId: currentGrading?.id,
+                    gradingName: currentGrading?.name,
+                    sequence: gradingTask.sequence || 0,
+                  };
+                });
+                setOrderedProjectTasks(initialTasks);
               }
             }
-
-            // Find which grading this task belongs to by matching gradingId
-            const selectedGradingObj = newSelectedGradings.find(
-              (sg) => sg.gradingId === gradingTask.gradingId
-            );
-            const taskGrading = selectedGradingObj?.grading;
-            
-            // Get the correct worktype for this grading (not all the same)
-            const taskWorkType = taskGrading?.workType || 
-              workTypesData?.workTypes?.find(
-                (wt) => wt.id === taskGrading?.workTypeId
-              );
-
-            return {
-              // Ensure each task has a stable unique id/key (gradingTask.id)
-              id: gradingTask.id,
-              taskKey: gradingTask.id,
-              gradingTaskId: gradingTask.id,
-              taskTypeId: gradingTask?.taskType?.id,
-              name:
-                gradingTask?.taskType?.name ||
-                gradingTask.name ||
-                "Unnamed Task",
-              title:
-                gradingTask?.taskType?.name ||
-                gradingTask.name ||
-                "Unnamed Task",
-              description:
-                gradingTask.description ||
-                gradingTask?.taskType?.description ||
-                "",
-              instructions: gradingTask.instructions || "",
-              status: "todo",
-              priority: gradingTask.priority || "B",
-              estimatedHours: gradingTask.estimatedHours || 0,
-              estimatedCost: gradingTask.estimatedCost || 0,
-              dueDate: projectDeadline ? projectDeadline.toISOString() : null,
-              assigneeId: preferredUserId,
-              notes: "",
-              taskType: gradingTask.taskType,
-              gradingTask: gradingTask,
-              customFields: {},
-              createdAt: new Date().toISOString(),
-              updatedAt: new Date().toISOString(),
-              workType: taskWorkType,
-              workTypeId: taskWorkType?.id,
-              grading: taskGrading,
-              gradingId: taskGrading?.id,
-              gradingName: taskGrading?.name,
-              sequence: gradingTask.sequence || 0,
-            };
-          });
-          setOrderedProjectTasks(initialTasks);
+          } catch (error) {
+            console.error("Error fetching grading tasks:", error);
+          }
         }
-      } catch (error) {
-        console.error("Error fetching tasks for multiple gradings:", error);
-        message.error("Failed to load tasks for selected gradings");
+      } else {
+        // Multiple selections - fetch tasks for all gradings and combine them
+        setSelectedGrading(null);
+        setPerImageRate(null);
+
+        try {
+          const taskPromises = newSelectedGradings.map((sg) =>
+            refetchGradingTasks({
+              variables: {
+                gradingId: sg.gradingId,
+              },
+            })
+          );
+
+          const taskResults = await Promise.all(taskPromises);
+
+          // Combine all tasks from all gradings and filter to only include active ones
+          const allGradingTasks = taskResults
+            .flatMap((result) => result.data?.gradingTasks || [])
+            .filter((gt) => gt.isActive === true);
+
+          setGradingTasks(allGradingTasks);
+
+          // Initialize project tasks if status is active
+          if (
+            currentStatus === "active" ||
+            (mode === "edit" && isActiveProject)
+          ) {
+            // Get project deadline from form
+            const projectDeadline = form.getFieldValue("deadlineDate");
+
+            const initialTasks = allGradingTasks.map((gradingTask) => {
+              let preferredUserId = null;
+              if (clientPreferences?.taskPreferences && gradingTask?.taskType) {
+                const taskPreference = clientPreferences.taskPreferences.find(
+                  (pref) => pref?.taskType?.id === gradingTask.taskType.id
+                );
+                if (
+                  taskPreference &&
+                  taskPreference.preferredUserIds &&
+                  taskPreference.preferredUserIds.length > 0
+                ) {
+                  preferredUserId = taskPreference.preferredUserIds[0];
+                }
+              }
+
+              // Find which grading this task belongs to by matching gradingId
+              const selectedGradingObj = newSelectedGradings.find(
+                (sg) => sg.gradingId === gradingTask.gradingId
+              );
+              const taskGrading = selectedGradingObj?.grading;
+
+              // Get the correct worktype for this grading
+              const taskWorkType = taskGrading?.workType ||
+                workTypesData?.workTypes?.find(
+                  (wt) => wt.id === taskGrading?.workTypeId
+                );
+
+              return {
+                id: gradingTask.id,
+                taskKey: gradingTask.id,
+                gradingTaskId: gradingTask.id,
+                taskTypeId: gradingTask?.taskType?.id,
+                name: gradingTask?.taskType?.name || gradingTask.name || "Unnamed Task",
+                title: gradingTask?.taskType?.name || gradingTask.name || "Unnamed Task",
+                description: gradingTask.description || gradingTask?.taskType?.description || "",
+                instructions: gradingTask.instructions || "",
+                status: "todo",
+                priority: gradingTask.priority || "B",
+                estimatedHours: gradingTask.estimatedHours || 0,
+                estimatedCost: gradingTask.estimatedCost || 0,
+                dueDate: projectDeadline ? projectDeadline.toISOString() : null,
+                assigneeId: preferredUserId,
+                notes: "",
+                taskType: gradingTask.taskType,
+                gradingTask: gradingTask,
+                customFields: {},
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                workType: taskWorkType,
+                workTypeId: taskWorkType?.id,
+                grading: taskGrading,
+                gradingId: taskGrading?.id,
+                gradingName: taskGrading?.name,
+                sequence: gradingTask.sequence || 0,
+              };
+            });
+            setOrderedProjectTasks(initialTasks);
+          }
+        } catch (error) {
+          console.error("Error fetching tasks for multiple gradings:", error);
+          message.error("Failed to load tasks for selected gradings");
+        }
+      }
+
+      // Trigger credit validation
+      if (newSelectedGradings.length > 0 && selectedClientId) {
+        setTimeout(() => {
+          validateMultipleGradingsCredit(newSelectedGradings);
+        }, 200);
+      } else {
+        setProjectCreditValidation(null);
+      }
+    };
+
+    // Check if trying to remove original gradings from a started project
+    if (mode === "edit" && isActiveProject && originalGradingIds.length > 0) {
+      const attemptedRemoveOriginal = removedIds.filter((id) =>
+        originalGradingIds.includes(id)
+      );
+
+      if (attemptedRemoveOriginal.length > 0) {
+        Modal.confirm({
+          title: "Remove Existing Grading?",
+          content: (
+            <div>
+              <p>You are removing gradings that are already part of this active project.</p>
+              <p style={{ color: "red", fontWeight: "bold" }}>
+                Warning: Removing these gradings will also delete all associated tasks and assignments when you save.
+              </p>
+              <p>Are you sure you want to proceed?</p>
+            </div>
+          ),
+          okText: "Yes, Remove",
+          okType: "danger",
+          cancelText: "Cancel",
+          onOk: () => {
+            executeGradingChange(selectedGradingIds);
+          },
+          onCancel: () => {
+            // Restore original selection in form
+            const currentIds = selectedGradings.map((sg) => sg.gradingId);
+            form.setFieldsValue({ gradings: currentIds });
+          },
+        });
+        return;
       }
     }
 
-    // Trigger credit validation for the new grading selection
-    if (newSelectedGradings.length > 0 && selectedClientId) {
-      setTimeout(() => {
-        validateMultipleGradingsCredit(newSelectedGradings);
-      }, 200);
-    } else {
-      setProjectCreditValidation(null);
-    }
+    // Normal path
+    executeGradingChange(selectedGradingIds);
   };
 
   // Load work type data without resetting form (for edit mode)
@@ -2007,9 +1991,9 @@ const ProjectForm = ({
       // ========== ASSIGNMENT VALIDATION (NEW) ==========
       // Validate all task assignments before form submission
       const { validateAllAssignments, formatValidationError } = assignmentValidator;
-      
+
       const assignmentValidation = validateAllAssignments(projectTasks, availableUsers);
-      
+
       if (!assignmentValidation.valid) {
         const errorMsg = `Invalid assignments detected:\n${formatValidationError(assignmentValidation)}`;
         console.error('[ProjectForm] Assignment validation failed:', assignmentValidation);
@@ -3121,7 +3105,9 @@ const ProjectForm = ({
                               updateGradingCustomRate(index, value)
                             }
                             disabled={
-                              isActiveProject && !canEditFlyOnCreditProject
+                              mode !== "edit" &&
+                              isActiveProject &&
+                              !canEditFlyOnCreditProject
                             }
                             style={{
                               width: "100%",

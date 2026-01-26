@@ -129,19 +129,19 @@ const CustomFieldRenderer = ({ field, value, onChange, disabled = false }) => {
           rules.push({
             validator: (_, val) => {
               if (!val) return Promise.resolve();
-              
+
               // Ensure val is a dayjs object
               let dateValue = val;
               if (!dayjs.isDayjs(val)) {
                 dateValue = dayjs(val);
               }
-              
+
               if (!dateValue.isValid()) {
                 return Promise.reject(
                   new Error(`Please enter a valid ${fieldType}`)
                 );
               }
-              
+
               if (parsedValidation.min) {
                 const minDate = dayjs(parsedValidation.min);
                 if (minDate.isValid() && dateValue.isBefore(minDate)) {
@@ -150,7 +150,7 @@ const CustomFieldRenderer = ({ field, value, onChange, disabled = false }) => {
                   );
                 }
               }
-              
+
               if (parsedValidation.max) {
                 const maxDate = dayjs(parsedValidation.max);
                 if (maxDate.isValid() && dateValue.isAfter(maxDate)) {
@@ -159,7 +159,7 @@ const CustomFieldRenderer = ({ field, value, onChange, disabled = false }) => {
                   );
                 }
               }
-              
+
               return Promise.resolve();
             },
           });
@@ -252,10 +252,6 @@ const CustomFieldRenderer = ({ field, value, onChange, disabled = false }) => {
             placeholder={placeholder}
             disabled={disabled}
             style={{ width: "100%" }}
-            value={value ? dayjs(value) : null}
-            onChange={(date) =>
-              handleChange(date ? date.format("YYYY-MM-DD") : null)
-            }
           />
         );
 
@@ -266,8 +262,6 @@ const CustomFieldRenderer = ({ field, value, onChange, disabled = false }) => {
             placeholder={placeholder}
             disabled={disabled}
             style={{ width: "100%" }}
-            value={value ? dayjs(value) : null}
-            onChange={(date) => handleChange(date ? date.toISOString() : null)}
           />
         );
 
@@ -374,17 +368,28 @@ const CustomFieldRenderer = ({ field, value, onChange, disabled = false }) => {
     }
   };
 
+  const dateFormItemProps = (fieldType === "date" || fieldType === "datetime") ? {
+    getValueProps: (val) => ({
+      value: val ? dayjs(val) : null,
+    }),
+    getValueFromEvent: (val) => {
+      if (!val) return null;
+      return fieldType === "date" ? val.format("YYYY-MM-DD") : val.toISOString();
+    },
+  } : {};
+
   return (
     <Form.Item
       name={fieldKey}
       label={fieldName}
       rules={getFormRules()}
       help={helpText}
-      initialValue={(function(){
+      {...dateFormItemProps}
+      initialValue={(function () {
         // Ensure initialValue type matches component type to avoid rc-picker errors
         if ((fieldType === "date" || fieldType === "datetime") && field.defaultValue) {
           const dv = dayjs(field.defaultValue);
-          return dv.isValid() ? dv : null;
+          return dv.isValid() ? (fieldType === "date" ? dv.format("YYYY-MM-DD") : dv.toISOString()) : null;
         }
         return field.defaultValue;
       })()}

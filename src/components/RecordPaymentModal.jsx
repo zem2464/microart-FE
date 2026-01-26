@@ -98,15 +98,18 @@ const RecordPaymentModal = () => {
                 placeholder="Select client"
                 showSearch
                 loading={clientsLoading}
-                filterOption={(input, option) =>
-                  (option?.children ?? '')
-                    .toLowerCase()
-                    .includes(input.toLowerCase())
-                }
+                filterOption={(input, option) => {
+                  const children = option?.children;
+                  // Handle case where children might be an array or non-string
+                  const searchText = Array.isArray(children) 
+                    ? children.join(' ') 
+                    : String(children ?? '');
+                  return searchText.toLowerCase().includes(input.toLowerCase());
+                }}
               >
                 {clientsData?.clients?.map((client) => (
                   <Option key={client.id} value={client.id}>
-                    {client.displayName} ({client.clientCode})
+                    {client.displayName || ''} ({client.clientCode || ''})
                   </Option>
                 ))}
               </Select>
