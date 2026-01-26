@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useReactiveVar } from "@apollo/client";
 import {
   Spin,
@@ -7,11 +7,9 @@ import {
   Tag,
   Tooltip,
   Empty,
-  Statistic,
   Row,
   Col,
   Card,
-  Progress,
   Input,
   Button,
   Space,
@@ -33,20 +31,11 @@ import {
   FileTextOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import {
-  GET_PROJECT_DETAIL,
-  GET_AVAILABLE_USERS,
-} from "../graphql/projectQueries";
-import { GET_TASKS } from "../gql/tasks";
-import { GET_GRADINGS_BY_WORK_TYPES } from "../gql/gradings";
-import { GET_PROJECT_AUDIT_HISTORY } from "../gql/auditLogs";
 import AuditDisplay from "./common/AuditDisplay.jsx";
 import TasksTable from "./common/TasksTable";
 import { generateBaseColumns } from "./common/TasksTableColumns";
 import { useAppDrawer } from "../contexts/DrawerContext";
 import { AppDrawerContext } from "../contexts/DrawerContext";
-import ProjectDetailHeader from "./ProjectDetailHeader";
-import ProjectDetailModals from "./ProjectDetailModals";
 import ProjectReminderNotesPopover from "./ProjectReminderNotesPopover.jsx";
 import ReminderNotesModal from "./ReminderNotesModal";
 import { useProjectDetailData } from "../hooks/useProjectDetailData";

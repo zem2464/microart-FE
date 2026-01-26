@@ -70,6 +70,7 @@ import { GENERATE_PROJECT_INVOICE } from "../../gql/clientLedger";
 // tasks are loaded in ProjectDetail drawer when needed
 import { AppDrawerContext } from "../../contexts/DrawerContext";
 import ReminderNotesModal from "../../components/ReminderNotesModal";
+import ProjectReminderNotesPopover from "../../components/ProjectReminderNotesPopover.jsx";
 import usePageRefresh from "../../hooks/usePageRefresh";
 import { useCacheInvalidation } from "../../apolloClient/cacheInvalidationStrategy";
 import dayjs from "dayjs";
@@ -282,10 +283,7 @@ const ProjectManagement = () => {
       }
     }
 
-    // Add search filter (handled server-side)
-    if (searchText && searchText.trim()) {
-      filters.search = searchText.trim();
-    }
+    // Note: search is NOT part of filters - it's passed as a separate query argument
 
     return filters;
   }, [
@@ -328,8 +326,9 @@ const ProjectManagement = () => {
       limit: 20,
       sortBy: "createdAt",
       sortOrder: "DESC",
+      search: searchText && searchText.trim() ? searchText.trim() : undefined,
     }),
-    [lastAppliedFilters, page]
+    [lastAppliedFilters, page, searchText]
   );
 
   // GraphQL Queries
@@ -647,6 +646,7 @@ const ProjectManagement = () => {
           limit: 20,
           sortBy: "createdAt",
           sortOrder: "DESC",
+          search: searchText && searchText.trim() ? searchText.trim() : undefined,
         },
       });
       setPage(nextPage);
@@ -656,7 +656,7 @@ const ProjectManagement = () => {
     } finally {
       setIsLoadingMore(false);
     }
-  }, [isLoadingMore, hasMore, projectsLoading, fetchMore, page, lastAppliedFilters, buildFilters]);
+  }, [isLoadingMore, hasMore, projectsLoading, fetchMore, page, lastAppliedFilters, buildFilters, searchText]);
 
   // Handle scroll event for infinite scroll (window-level)
   const handleScroll = useCallback(() => {
@@ -1330,6 +1330,7 @@ const ProjectManagement = () => {
             <Text strong style={{ whiteSpace: "pre-wrap", maxWidth: 200 }}>
               {generateFolderName(record)}
             </Text>
+            <ProjectReminderNotesPopover projectId={record.id} />
           </Space>
         </Space>
       ),
@@ -1573,16 +1574,6 @@ const ProjectManagement = () => {
               type="text"
               icon={<EyeOutlined />}
               onClick={() => handleViewProject(record)}
-            />
-          </Tooltip>
-          <Tooltip title="Add Note">
-            <Button
-              type="text"
-              icon={<FileTextOutlined />}
-              onClick={() => {
-                setReminderNotesProjectId(record.id);
-                setReminderNotesModalVisible(true);
-              }}
             />
           </Tooltip>
           {canEditProjects &&
