@@ -1,16 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@apollo/client';
-import { 
-  Table, 
-  Card, 
+import {
+  Table,
+  Card,
   Typography,
-  Space, 
-  Tag, 
-  DatePicker, 
-  Select, 
-  Input, 
-  Button, 
-  Row, 
+  Space,
+  Tag,
+  DatePicker,
+  Select,
+  Input,
+  Button,
+  Row,
   Col,
   Descriptions,
   Modal,
@@ -18,9 +18,9 @@ import {
   Tooltip,
   Badge
 } from 'antd';
-import { 
-  EyeOutlined, 
-  FilterOutlined, 
+import {
+  EyeOutlined,
+  FilterOutlined,
   ReloadOutlined,
   SecurityScanOutlined,
   UserOutlined,
@@ -190,7 +190,7 @@ const AuditLogs = () => {
       dataIndex: 'description',
       key: 'description',
       render: (description) => (
-        <div style={{ 
+        <div style={{
           wordWrap: 'break-word',
           wordBreak: 'break-word',
           whiteSpace: 'normal',
@@ -212,9 +212,9 @@ const AuditLogs = () => {
       key: 'actions',
       width: 80,
       render: (_, record) => (
-        <Button 
-          type="link" 
-          icon={<EyeOutlined />} 
+        <Button
+          type="link"
+          icon={<EyeOutlined />}
           onClick={() => showLogDetails(record)}
           size="small"
         >
@@ -225,7 +225,7 @@ const AuditLogs = () => {
   ];
 
   return (
-    <Card 
+    <Card
       title={
         <Space>
           <SecurityScanOutlined />
@@ -233,8 +233,8 @@ const AuditLogs = () => {
         </Space>
       }
       extra={
-        <Button 
-          icon={<ReloadOutlined />} 
+        <Button
+          icon={<ReloadOutlined />}
           onClick={() => refetch()}
           loading={loading}
         >
@@ -244,170 +244,154 @@ const AuditLogs = () => {
     >
       <Space direction="vertical" size="large" style={{ width: '100%' }}>
 
-          {/* Filters */}
-          <Card size="small" title={<><FilterOutlined /> Filters</>}>
-            <Row gutter={16}>
-              <Col span={6}>
-                <div style={{ marginBottom: 8 }}>Action</div>
-                <Select
-                  placeholder="Select action"
-                  allowClear
-                  style={{ width: '100%' }}
-                  onChange={(value) => handleFilterChange('action', value)}
-                  value={filters.action}
-                >
-                  <Option value="CREATE">Create</Option>
-                  <Option value="UPDATE">Update</Option>
-                  <Option value="DELETE">Delete</Option>
-                  <Option value="LOGIN">Login</Option>
-                  <Option value="LOGOUT">Logout</Option>
-                  <Option value="VIEW">View</Option>
-                </Select>
-              </Col>
-              <Col span={6}>
-                <div style={{ marginBottom: 8 }}>Table</div>
-                <Select
-                  placeholder="Select table"
-                  allowClear
-                  style={{ width: '100%' }}
-                  onChange={(value) => handleFilterChange('tableName', value)}
-                  value={filters.tableName}
-                >
-                  <Option value="Users">Users</Option>
-                  <Option value="Projects">Projects</Option>
-                  <Option value="Tasks">Tasks</Option>
-                  <Option value="Roles">Roles</Option>
-                </Select>
-              </Col>
-              <Col span={6}>
-                <div style={{ marginBottom: 8 }}>Status</div>
-                <Select
-                  placeholder="Select status"
-                  allowClear
-                  style={{ width: '100%' }}
-                  onChange={(value) => handleFilterChange('status', value)}
-                  value={filters.status}
-                >
-                  <Option value="SUCCESS">Success</Option>
-                  <Option value="FAILED">Failed</Option>
-                  <Option value="PARTIAL">Partial</Option>
-                </Select>
-              </Col>
-              <Col span={6}>
-                <div style={{ marginBottom: 8 }}>Date Range</div>
-                <RangePicker
-                  style={{ width: '100%' }}
-                  onChange={(dates) => {
-                    if (dates) {
-                      handleFilterChange('fromDate', dates[0].toISOString());
-                      handleFilterChange('toDate', dates[1].toISOString());
-                    } else {
-                      handleFilterChange('fromDate', undefined);
-                      handleFilterChange('toDate', undefined);
-                    }
-                  }}
-                />
-              </Col>
-            </Row>
-            <div style={{ marginTop: 16 }}>
-              <Button onClick={clearFilters}>Clear Filters</Button>
-            </div>
-          </Card>
+        {/* Filters */}
+        <Card size="small" title={<><FilterOutlined /> Filters</>}>
+          <Row gutter={16}>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>Action</div>
+              <Select
+                placeholder="Select action"
+                allowClear
+                style={{ width: '100%' }}
+                onChange={(value) => handleFilterChange('action', value)}
+                value={filters.action}
+              >
+                <Option value="CREATE">Create</Option>
+                <Option value="UPDATE">Update</Option>
+                <Option value="DELETE">Delete</Option>
+                <Option value="LOGIN">Login</Option>
+                <Option value="LOGOUT">Logout</Option>
+                <Option value="VIEW">View</Option>
+              </Select>
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>Table</div>
+              <Select
+                placeholder="Select table"
+                allowClear
+                style={{ width: '100%' }}
+                onChange={(value) => handleFilterChange('tableName', value)}
+                value={filters.tableName}
+              >
+                <Option value="Users">Users</Option>
+                <Option value="Projects">Projects</Option>
+                <Option value="Tasks">Tasks</Option>
+                <Option value="Roles">Roles</Option>
+              </Select>
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>Status</div>
+              <Select
+                placeholder="Select status"
+                allowClear
+                style={{ width: '100%' }}
+                onChange={(value) => handleFilterChange('status', value)}
+                value={filters.status}
+              >
+                <Option value="SUCCESS">Success</Option>
+                <Option value="FAILED">Failed</Option>
+                <Option value="PARTIAL">Partial</Option>
+              </Select>
+            </Col>
+            <Col span={6}>
+              <div style={{ marginBottom: 8 }}>Date Range</div>
+              <RangePicker
+                style={{ width: '100%' }}
+                onChange={(dates) => {
+                  if (dates) {
+                    handleFilterChange('fromDate', dates[0].toISOString());
+                    handleFilterChange('toDate', dates[1].toISOString());
+                  } else {
+                    handleFilterChange('fromDate', undefined);
+                    handleFilterChange('toDate', undefined);
+                  }
+                }}
+              />
+            </Col>
+          </Row>
+          <div style={{ marginTop: 16 }}>
+            <Button onClick={clearFilters}>Clear Filters</Button>
+          </div>
+        </Card>
 
-          {/* Audit Logs Table */}
-          <Table
-            columns={columns}
-            dataSource={data?.auditLogs || []}
-            loading={loading}
-            rowKey="id"
-            pagination={{
-              pageSize: 10,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) =>
-                `${range[0]}-${range[1]} of ${total} logs`,
-              pageSizeOptions: [10, 25, 50, 100],
-            }}
-            size="middle"
-          />
-        </Space>
+        {/* Audit Logs Table */}
+        <Table
+          columns={columns}
+          dataSource={data?.auditLogs || []}
+          loading={loading}
+          rowKey="id"
+          pagination={{
+            pageSize: 10,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) =>
+              `${range[0]}-${range[1]} of ${total} logs`,
+            pageSizeOptions: [10, 25, 50, 100],
+          }}
+          size="middle"
+        />
+      </Space>
 
-        {/* Detail Modal */}
-        <Modal
-          title="Audit Log Details"
-          open={detailModalVisible}
-          onCancel={() => setDetailModalVisible(false)}
-          footer={null}
-          width={800}
-        >
-          {selectedLog && (
-            <Space direction="vertical" size="large" style={{ width: '100%' }}>
-              <Descriptions title="Basic Information" bordered column={2}>
-                <Descriptions.Item label="ID">{selectedLog.id}</Descriptions.Item>
-                <Descriptions.Item label="Timestamp">
-                  {dayjs(selectedLog.timestamp).format('YYYY-MM-DD HH:mm:ss')}
-                </Descriptions.Item>
-                <Descriptions.Item label="Action">
-                  <Tag color={getActionColor(selectedLog.action)} icon={getActionIcon(selectedLog.action)}>
-                    {selectedLog.action}
-                  </Tag>
-                </Descriptions.Item>
-                <Descriptions.Item label="Status">
-                  {getStatusBadge(selectedLog.status)}
-                </Descriptions.Item>
-                <Descriptions.Item label="Table">{selectedLog.tableName}</Descriptions.Item>
-                <Descriptions.Item label="Record ID">{selectedLog.recordId || 'N/A'}</Descriptions.Item>
-                <Descriptions.Item label="User Email">{selectedLog.userEmail}</Descriptions.Item>
-                <Descriptions.Item label="User Role">{selectedLog.userRole}</Descriptions.Item>
-                <Descriptions.Item label="IP Address">{selectedLog.ipAddress || 'N/A'}</Descriptions.Item>
-                <Descriptions.Item label="User Agent" span={2}>
-                  {selectedLog.userAgent || 'N/A'}
-                </Descriptions.Item>
-              </Descriptions>
+      {/* Detail Modal */}
+      <Modal
+        title="Audit Log Details"
+        open={detailModalVisible}
+        onCancel={() => setDetailModalVisible(false)}
+        footer={null}
+        width={800}
+      >
+        {selectedLog && (
+          <Space direction="vertical" size="large" style={{ width: '100%' }}>
+            <Descriptions title="Basic Information" bordered column={2}>
+              <Descriptions.Item label="ID">{selectedLog.id}</Descriptions.Item>
+              <Descriptions.Item label="Timestamp">
+                {dayjs(selectedLog.timestamp).format('YYYY-MM-DD HH:mm:ss')}
+              </Descriptions.Item>
+              <Descriptions.Item label="Action">
+                <Tag color={getActionColor(selectedLog.action)} icon={getActionIcon(selectedLog.action)}>
+                  {selectedLog.action}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="Status">
+                {getStatusBadge(selectedLog.status)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Table">{selectedLog.tableName}</Descriptions.Item>
+              <Descriptions.Item label="Record ID">{selectedLog.recordId || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="User Email">{selectedLog.userEmail}</Descriptions.Item>
+              <Descriptions.Item label="User Role">{selectedLog.userRole}</Descriptions.Item>
+              <Descriptions.Item label="IP Address">{selectedLog.ipAddress || 'N/A'}</Descriptions.Item>
+              <Descriptions.Item label="User Agent" span={2}>
+                {selectedLog.userAgent || 'N/A'}
+              </Descriptions.Item>
+            </Descriptions>
 
-              <Descriptions title="Description" bordered>
-                <Descriptions.Item span={3}>
+            <Descriptions title="Description" bordered>
+              <Descriptions.Item span={3}>
+                {selectedLog.description}
+              </Descriptions.Item>
+            </Descriptions>
+
+            {selectedLog.errorMessage && (
+              <Alert
+                message="Error"
+                description={selectedLog.errorMessage}
+                type="error"
+                showIcon
+              />
+            )}
+
+            {selectedLog.oldValues && (
+              <Descriptions title="Change Details" bordered column={1}>
+                <Descriptions.Item label="Summary">
                   {selectedLog.description}
                 </Descriptions.Item>
               </Descriptions>
+            )}
 
-              {selectedLog.errorMessage && (
-                <Alert
-                  message="Error"
-                  description={selectedLog.errorMessage}
-                  type="error"
-                  showIcon
-                />
-              )}
-
-              {selectedLog.oldValues && (
-                <div>
-                  <Title level={5}>Old Values</Title>
-                  <pre style={{ background: '#f5f5f5', padding: '12px', borderRadius: '4px', fontSize: '12px' }}>
-                    {JSON.stringify(JSON.parse(selectedLog.oldValues), null, 2)}
-                  </pre>
-                </div>
-              )}
-
-              {selectedLog.newValues && (
-                <div>
-                  <Title level={5}>New Values</Title>
-                  <pre style={{ background: '#f5f5f5', padding: '12px', borderRadius: '4px', fontSize: '12px' }}>
-                    {JSON.stringify(JSON.parse(selectedLog.newValues), null, 2)}
-                  </pre>
-                </div>
-              )}
-
-              {selectedLog.metadata && (
-                <div>
-                  <Title level={5}>Metadata</Title>
-                  {formatMetadata(selectedLog.metadata)}
-                </div>
-              )}
-            </Space>
-          )}
-        </Modal>
-      </Card>
+          </Space>
+        )}
+      </Modal>
+    </Card>
   );
 };
 

@@ -19,6 +19,7 @@ import {
   Modal,
   Select,
   DatePicker,
+  Tabs
 } from "antd";
 import {
   ClockCircleOutlined,
@@ -1372,10 +1373,41 @@ const ProjectDetailDrawer = ({ projectId, onAction }) => {
         title={<Title level={4}>Audit History</Title>}
         size="small"
         style={{ marginTop: 16 }}
+        bodyStyle={{ padding: '0 12px 12px 12px' }}
       >
-        <AuditDisplay
-          auditLogs={auditData?.projectAuditHistory || []}
-          loading={auditLoading}
+        <Tabs
+          defaultActiveKey="project"
+          items={[
+            {
+              key: 'project',
+              label: 'Project Logs',
+              children: (
+                <AuditDisplay
+                  auditLogs={(auditData?.projectAuditHistory || []).filter(log => log.tableName === 'Projects')}
+                  loading={auditLoading}
+                />
+              )
+            },
+            {
+              key: 'tasks',
+              label: 'Task Logs',
+              children: (
+                <AuditDisplay
+                  auditLogs={(auditData?.projectAuditHistory || []).filter(log => {
+                    if (['Tasks', 'TaskAssignments', 'TaskComments'].includes(log.tableName)) return true;
+                    // Also include consolidated project logs that involve tasks
+                    try {
+                      const meta = typeof log.metadata === 'string' ? JSON.parse(log.metadata) : (log.metadata || {});
+                      return ['PROJECT_CREATION_CONSOLIDATED', 'PROJECT_ACTIVATION_CONSOLIDATED', 'TASKS_ADDED_TO_PROJECT'].includes(meta.operationType);
+                    } catch (e) {
+                      return false;
+                    }
+                  })}
+                  loading={auditLoading}
+                />
+              )
+            }
+          ]}
         />
       </Card>
 
