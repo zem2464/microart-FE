@@ -96,7 +96,7 @@ const ClientForm = ({
       } else {
         // Check if worktypes were removed (not just added)
         const removedWorkTypes = currentWorkTypes.filter(wt => !values.includes(wt));
-        
+
         // Only filter gradings if worktypes were actually removed
         // When adding new worktypes, keep existing gradings and let the user select new ones
         if (removedWorkTypes.length > 0 && gradingsData?.gradingsByWorkType) {
@@ -156,7 +156,7 @@ const ClientForm = ({
   const handleClientTypeChange = (value) => {
     const previousType = clientType;
     setClientType(value);
-    
+
     // Reset Business Details fields if switching to Walk-in
     if (value === "walkIn") {
       // Reset state toggles for walk-in
@@ -173,7 +173,7 @@ const ClientForm = ({
         openingBalanceType: undefined,
         accountMessage: undefined,
       });
-      
+
       // Clear business details (work types, gradings, task preferences)
       setSelectedWorkTypes([]);
       setSelectedGradings([]);
@@ -183,7 +183,7 @@ const ClientForm = ({
         workTypes: [],
         gradings: [],
       });
-      
+
       // If on step 1, move back to step 0 since walk-in has only 1 step
       if (currentStep === 1) {
         setCurrentStep(0);
@@ -345,7 +345,7 @@ const ClientForm = ({
   const userOptions = useMemo(() => {
     const users = usersData?.users || [];
     const serviceProviders = fullClientData?.client?.serviceProviders || [];
-    
+
     console.log("Computing userOptions:", {
       usersCount: users.length,
       serviceProvidersCount: serviceProviders.length,
@@ -358,10 +358,10 @@ const ClientForm = ({
       })),
       allUsers: users.map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
     });
-    
+
     // Create a map to avoid duplicates
     const userMap = new Map();
-    
+
     // Step 1: Add only users with isServiceProvider flag set to true
     users.forEach(user => {
       // Filter to only include service providers
@@ -376,16 +376,16 @@ const ClientForm = ({
         });
       }
     });
-    
+
     // Step 2: For each service provider in client, ensure we have the full user data
     // Look up in API users first, then use user data as fallback
     serviceProviders.forEach(sp => {
       const userId = sp.user?.id;
-      
+
       if (userId) {
         // Look up full user data from API
         const fullUserData = users.find(u => u.id === userId);
-        
+
         if (fullUserData) {
           // Use full user data from API (already added above, just ensure it exists)
           console.log("Service provider found in API users:", {
@@ -415,12 +415,12 @@ const ClientForm = ({
         }
       }
     });
-    
+
     const result = Array.from(userMap.values());
     console.log("Final userOptions computed:", {
       count: result.length,
-      users: result.map(u => ({ 
-        id: u.id, 
+      users: result.map(u => ({
+        id: u.id,
         name: `${u.firstName} ${u.lastName}`,
         hasFirstName: !!u.firstName,
         hasLastName: !!u.lastName
@@ -581,7 +581,7 @@ const ClientForm = ({
       }
     } else {
       // Set default values for new clients
-      form.setFieldsValue({ 
+      form.setFieldsValue({
         clientType: "permanent",
         isCreditEnabled: true,
         creditDays: 30
@@ -720,7 +720,7 @@ const ClientForm = ({
       if (finalClientType === "permanent") {
         const hasWorkTypes = values.workTypes && values.workTypes.length > 0;
         const hasGradings = values.gradings && values.gradings.length > 0;
-        
+
         if (!hasWorkTypes || !hasGradings) {
           message.warning(
             "Permanent clients typically have Work Types and Gradings configured. You can add them later if needed."
@@ -849,7 +849,8 @@ const ClientForm = ({
       console.log("Task Preferences being sent:", input.taskPreferences);
 
       // Remove fields that are not in the GraphQL schema or will be processed separately
-      delete input.openingBalanceType; // This is handled by the backend based on openingBalance value
+      // Process associations for grading task assignments if any
+      // ... already handled above in taskPreferences ...
 
       // For updates, remove read-only fields that are not part of ClientUpdateInput
       if (client) {
@@ -872,7 +873,7 @@ const ClientForm = ({
         } else if (Array.isArray(form.getFieldValue("gradings"))) {
           // Form has gradings field - either with values or empty
           const gradingIdsFromForm = form.getFieldValue("gradings");
-          
+
           if (gradingIdsFromForm.length === 0) {
             // Explicitly send empty array to clear all gradings
             gradingsPayload = [];
@@ -1153,9 +1154,9 @@ const ClientForm = ({
                     { required: true, message: "Please enter first name!" },
                   ]}
                 >
-                  <Input 
-                    placeholder="Enter first name" 
-                    size="middle" 
+                  <Input
+                    placeholder="Enter first name"
+                    size="middle"
                     autoComplete="new-password"
                     data-form-type="other"
                   />
@@ -1163,9 +1164,9 @@ const ClientForm = ({
               </Col>
               <Col span={8}>
                 <Form.Item name="lastName" label="Last Name">
-                  <Input 
-                    placeholder="Enter last name" 
-                    size="middle" 
+                  <Input
+                    placeholder="Enter last name"
+                    size="middle"
                     autoComplete="new-password"
                     data-form-type="other"
                   />
@@ -1268,9 +1269,9 @@ const ClientForm = ({
                     { required: true, message: "Please enter phone number!" },
                   ]}
                 >
-                  <Input 
-                    placeholder="Enter phone number" 
-                    size="middle" 
+                  <Input
+                    placeholder="Enter phone number"
+                    size="middle"
                     autoComplete="new-password"
                     data-form-type="other"
                   />
@@ -1282,9 +1283,9 @@ const ClientForm = ({
 
             {clientType !== "walkIn" && (
               <Form.Item name="address" label={<span>Street Address</span>}>
-                <TextArea 
-                  rows={2} 
-                  placeholder="Enter full address" 
+                <TextArea
+                  rows={2}
+                  placeholder="Enter full address"
                   autoComplete="new-password"
                   data-form-type="other"
                 />
@@ -1433,13 +1434,13 @@ const ClientForm = ({
                       !formWorkTypes || formWorkTypes.length === 0
                         ? "Please select work types first"
                         : !gradingsData
-                        ? "Loading gradings..."
-                        : "No gradings found"
+                          ? "Loading gradings..."
+                          : "No gradings found"
                     }
                   >
                     {(() => {
                       const gradings = gradingsData?.gradingsByWorkType || [];
-                      
+
                       // Group gradings by work type
                       const groupedByWorkType = gradings.reduce((acc, grading) => {
                         const workTypeName = grading.workType?.name || "Other";
@@ -1649,7 +1650,7 @@ const ClientForm = ({
                                 gradingId,
                                 currentValue:
                                   gradingTaskAssignments[gradingId]?.[
-                                    task.id
+                                  task.id
                                   ] || [],
                                 allAssignments: gradingTaskAssignments,
                               }
@@ -1671,7 +1672,7 @@ const ClientForm = ({
                                     style={{ width: "100%" }}
                                     value={
                                       gradingTaskAssignments[gradingId]?.[
-                                        task.id
+                                      task.id
                                       ] || []
                                     }
                                     onChange={(userIds) =>
@@ -1741,14 +1742,14 @@ const ClientForm = ({
                     tagRender={(props) => {
                       const { value, closable, onClose } = props;
                       const user = userOptions.find(u => u.id === value);
-                      
+
                       // Ensure we have proper names
                       const firstName = user?.firstName || "";
                       const lastName = user?.lastName || "";
-                      const displayName = (firstName || lastName) 
+                      const displayName = (firstName || lastName)
                         ? `${firstName} ${lastName}`.trim()
                         : `Unknown (${value})`;
-                      
+
                       console.log("tagRender for value:", {
                         value,
                         userFound: !!user,
@@ -1757,7 +1758,7 @@ const ClientForm = ({
                         displayName,
                         allUserOptions: userOptions.map(u => ({ id: u.id, name: `${u.firstName} ${u.lastName}` }))
                       });
-                      
+
                       return (
                         <span
                           style={{
@@ -1821,7 +1822,7 @@ const ClientForm = ({
                 </Form.Item>
               </Col>
               <Col span={8}>
-                                <Form.Item name="notes" label="Client Notes">
+                <Form.Item name="notes" label="Client Notes">
                   <TextArea
                     rows={3}
                     placeholder="Enter any notes or special instructions about this client"
@@ -1916,9 +1917,9 @@ const ClientForm = ({
                         },
                       ]}
                     >
-                      <Input 
-                        placeholder="Enter GST number" 
-                        size="middle" 
+                      <Input
+                        placeholder="Enter GST number"
+                        size="middle"
                         autoComplete="new-password"
                         data-form-type="other"
                       />
@@ -1954,9 +1955,9 @@ const ClientForm = ({
               )}
               <Col span={isGSTEnabled ? 8 : 16}>
                 <Form.Item name="panCard" label="PAN Card">
-                  <Input 
-                    placeholder="Enter PAN card number" 
-                    size="middle" 
+                  <Input
+                    placeholder="Enter PAN card number"
+                    size="middle"
                     autoComplete="new-password"
                     data-form-type="other"
                   />
@@ -1970,8 +1971,8 @@ const ClientForm = ({
                 {isCreditEnabled && (
                   <Row gutter={16}>
                     <Col span={8}>
-                      <Form.Item 
-                        name="creditDays" 
+                      <Form.Item
+                        name="creditDays"
                         label="Credit in Days"
                         initialValue={30}
                       >
@@ -2026,9 +2027,9 @@ const ClientForm = ({
                     >
                       <Select placeholder="Select balance type" size="middle">
                         <Option value="to_receive">
-                          To Receive (We owe them)
+                          Debit (Client owes us)
                         </Option>
-                        <Option value="to_pay">To Pay (They owe us)</Option>
+                        <Option value="to_pay">Credit (We owe them)</Option>
                       </Select>
                     </Form.Item>
                   </Col>
@@ -2111,10 +2112,10 @@ const ClientForm = ({
 
   if (isLoadingEssentialData) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
         minHeight: '400px',
         flexDirection: 'column',
         gap: '16px'

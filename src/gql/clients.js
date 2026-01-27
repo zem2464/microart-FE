@@ -40,6 +40,7 @@ export const GET_CLIENTS = gql`
       creditDays
       creditAmountLimit
       openingBalance
+      openingBalanceType
       accountMessage
       isActive
       totalBalance

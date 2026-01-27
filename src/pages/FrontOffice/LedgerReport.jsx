@@ -374,10 +374,12 @@ const LedgerReport = () => {
     );
 
     // Calculate running balance starting from opening balance
+    // Positive = We Owe Client (Credit), Negative = Client Owes Us (Debit)
     let running = opening;
     return txs.map((t) => {
       const debit = Number(t.debitAmount || 0);
       const credit = Number(t.creditAmount || 0);
+      // New balance = Old Balance + Credit - Debit
       running = running + credit - debit;
       return { ...t, debit, credit, runningBalance: running };
     });
@@ -391,10 +393,27 @@ const LedgerReport = () => {
     ledgerData?.clientLedgerRange?.closingBalance ?? opening
   );
 
-  // Calculate totals from transactions for verification
-  const totalDebit = ledgerTableData.reduce((sum, tx) => sum + tx.debit, 0);
-  const totalCredit = ledgerTableData.reduce((sum, tx) => sum + tx.credit, 0);
-  const calculatedClosing = opening + totalCredit - totalDebit;
+  // Calculate transaction totals
+  const transactionDebit = ledgerTableData.reduce((sum, tx) => sum + tx.debit, 0);
+  const transactionCredit = ledgerTableData.reduce((sum, tx) => sum + tx.credit, 0);
+
+  // Include opening balance in totals
+  // In this system: Positive = we owe client (credit), Negative = client owes us (debit)
+  const totalDebit = transactionDebit + (opening < 0 ? Math.abs(opening) : 0);
+  const totalCredit = transactionCredit + (opening > 0 ? opening : 0);
+
+  const calculatedClosing = opening + transactionCredit - transactionDebit;
+
+  // Debug logging for closing balance calculation
+  console.log('=== LEDGER BALANCE DEBUG ===', {
+    opening,
+    transactionDebit,
+    transactionCredit,
+    calculatedClosing,
+    backendClosing: closing,
+    difference: closing - calculatedClosing,
+    lastTxRunningBalance: ledgerTableData.length > 0 ? ledgerTableData[ledgerTableData.length - 1]?.runningBalance : null
+  });
 
   // Verify backend closing matches calculated closing
   React.useEffect(() => {
@@ -458,10 +477,9 @@ const LedgerReport = () => {
     const excelData = [
       ["MicroArt - Client Ledger Report"],
       [
-        `Client: ${
-          selectedClientData?.displayName ||
-          selectedClientData?.companyName ||
-          "N/A"
+        `Client: ${selectedClientData?.displayName ||
+        selectedClientData?.companyName ||
+        "N/A"
         } (${selectedClientData?.clientCode || "N/A"})`,
       ],
       [
@@ -511,9 +529,8 @@ const LedgerReport = () => {
             ? pg.customRate
             : (pg.grading?.defaultRate ?? 0);
           const total = qty * rate;
-          return `${
-            pg.grading?.name || pg.grading?.shortCode
-          } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
+          return `${pg.grading?.name || pg.grading?.shortCode
+            } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
         });
         detailsText = lines.join("\n"); // Use newline for Excel
       }
@@ -544,13 +561,12 @@ const LedgerReport = () => {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Client Ledger");
 
-    const fileName = `${
-      selectedClientData?.displayName ||
+    const fileName = `${selectedClientData?.displayName ||
       selectedClientData?.companyName ||
       "Client"
-    }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
-      "DD-MMM-YYYY"
-    )}.xlsx`;
+      }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
+        "DD-MMM-YYYY"
+      )}.xlsx`;
     XLSX.writeFile(wb, fileName);
     message.success("Excel file downloaded successfully");
   };
@@ -600,10 +616,9 @@ const LedgerReport = () => {
     doc.setFontSize(10);
     doc.setFont("NotoSans", "normal");
     doc.text(
-      `Client: ${
-        selectedClientData?.displayName ||
-        selectedClientData?.companyName ||
-        "N/A"
+      `Client: ${selectedClientData?.displayName ||
+      selectedClientData?.companyName ||
+      "N/A"
       } (${selectedClientData?.clientCode || "N/A"})`,
       pageWidth - 14,
       30,
@@ -647,9 +662,8 @@ const LedgerReport = () => {
             ? pg.customRate
             : (pg.grading?.defaultRate ?? 0);
           const total = qty * rate;
-          return `${
-            pg.grading?.name || pg.grading?.shortCode
-          } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
+          return `${pg.grading?.name || pg.grading?.shortCode
+            } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
         });
         detailsText = lines.join("\n"); // Use newline for PDF
       }
@@ -720,13 +734,12 @@ const LedgerReport = () => {
       { align: "center" }
     );
 
-    const fileName = `${
-      selectedClientData?.displayName ||
+    const fileName = `${selectedClientData?.displayName ||
       selectedClientData?.companyName ||
       "Client"
-    }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
-      "DD-MMM-YYYY"
-    )}.pdf`;
+      }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
+        "DD-MMM-YYYY"
+      )}.pdf`;
     doc.save(fileName);
     message.success("PDF file downloaded successfully");
   };
@@ -782,10 +795,9 @@ const LedgerReport = () => {
       doc.setFontSize(10);
       doc.setFont("NotoSans", "normal");
       doc.text(
-        `Client: ${
-          selectedClientData?.displayName ||
-          selectedClientData?.companyName ||
-          "N/A"
+        `Client: ${selectedClientData?.displayName ||
+        selectedClientData?.companyName ||
+        "N/A"
         } (${selectedClientData?.clientCode || "N/A"})`,
         pageWidth - 14,
         30,
@@ -829,9 +841,8 @@ const LedgerReport = () => {
               ? pg.customRate
               : (pg.grading?.defaultRate ?? 0);
             const total = qty * rate;
-            return `${
-              pg.grading?.name || pg.grading?.shortCode
-            } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
+            return `${pg.grading?.name || pg.grading?.shortCode
+              } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
           });
           detailsText = lines.join("\n");
         }
@@ -902,13 +913,12 @@ const LedgerReport = () => {
         { align: "center" }
       );
 
-      const fileName = `${
-        selectedClientData?.displayName ||
+      const fileName = `${selectedClientData?.displayName ||
         selectedClientData?.companyName ||
         "Client"
-      }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
-        "DD-MMM-YYYY"
-      )}.pdf`;
+        }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
+          "DD-MMM-YYYY"
+        )}.pdf`;
 
       // Get PDF as blob
       const pdfBlob = doc.output("blob");
@@ -920,19 +930,18 @@ const LedgerReport = () => {
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: "Client Ledger Report",
-            text: `*Client Ledger Report*\n\nClient: ${
-              selectedClientData?.displayName ||
+            text: `*Client Ledger Report*\n\nClient: ${selectedClientData?.displayName ||
               selectedClientData?.companyName ||
               "N/A"
-            }\nPeriod: ${dateRange[0].format(
-              "DD/MM/YYYY"
-            )} to ${dateRange[1].format(
-              "DD/MM/YYYY"
-            )}\nOpening Balance: ${formatCurrency(
-              opening
-            )}\nClosing Balance: ${formatCurrency(
-              closing
-            )}\nTotal Transactions: ${ledgerTableData.length}`,
+              }\nPeriod: ${dateRange[0].format(
+                "DD/MM/YYYY"
+              )} to ${dateRange[1].format(
+                "DD/MM/YYYY"
+              )}\nOpening Balance: ${formatCurrency(
+                opening
+              )}\nClosing Balance: ${formatCurrency(
+                closing
+              )}\nTotal Transactions: ${ledgerTableData.length}`,
             files: [file],
           });
           message.success("PDF shared successfully");
@@ -943,21 +952,19 @@ const LedgerReport = () => {
       // Fallback: Download PDF and open WhatsApp with text
       doc.save(fileName);
 
-      const whatsappMessage = `*Client Ledger Report*%0A%0A*Client:* ${
-        selectedClientData?.displayName ||
+      const whatsappMessage = `*Client Ledger Report*%0A%0A*Client:* ${selectedClientData?.displayName ||
         selectedClientData?.companyName ||
         "N/A"
-      }%0A*Period:* ${dateRange[0].format(
-        "DD/MM/YYYY"
-      )} to ${dateRange[1].format(
-        "DD/MM/YYYY"
-      )}%0A*Opening Balance:* ${formatCurrency(
-        opening
-      )}%0A*Closing Balance:* ${formatCurrency(
-        closing
-      )}%0A*Total Transactions:* ${
-        ledgerTableData.length
-      }%0A%0APlease find the detailed ledger report attached.`;
+        }%0A*Period:* ${dateRange[0].format(
+          "DD/MM/YYYY"
+        )} to ${dateRange[1].format(
+          "DD/MM/YYYY"
+        )}%0A*Opening Balance:* ${formatCurrency(
+          opening
+        )}%0A*Closing Balance:* ${formatCurrency(
+          closing
+        )}%0A*Total Transactions:* ${ledgerTableData.length
+        }%0A%0APlease find the detailed ledger report attached.`;
 
       const whatsappUrl = `https://wa.me/?text=${whatsappMessage}`;
 
@@ -1042,7 +1049,7 @@ const LedgerReport = () => {
       width: 80,
       align: "right",
       render: (value) => {
-        const color = value > 0 ? "#f5222d" : value < 0 ? "#52c41a" : "#1890ff";
+        const color = value > 0 ? "#52c41a" : value < 0 ? "#f5222d" : "#1890ff";
         return (
           <Text strong style={{ color, fontSize: 11 }}>
             {formatCurrencyNoDecimal(value)}
@@ -1064,7 +1071,7 @@ const LedgerReport = () => {
         width: 130,
         render: (_, r) => {
           if (r.isBalanceRow) return null;
-          
+
           // For payment records, show payment number and date
           if (r.payment) {
             return (
@@ -1078,7 +1085,7 @@ const LedgerReport = () => {
               </div>
             );
           }
-          
+
           return (
             <div style={{ fontSize: 11 }}>
               <div>{r.invoice?.invoiceNumber || "-"}</div>
@@ -1111,7 +1118,7 @@ const LedgerReport = () => {
             </Text>
           );
         }
-        
+
         // For payment records, show payment type and reference
         if (r.payment) {
           const paymentType = r.payment?.paymentType?.name || r.payment?.paymentType?.type || "Payment";
@@ -1122,7 +1129,7 @@ const LedgerReport = () => {
             </Tooltip>
           );
         }
-        
+
         const project = r.invoice?.project;
         if (project) {
           const fullText = `${project.projectCode}${project.name || project.description ? ' - ' + (project.name || project.description) : ''}`;
@@ -1150,14 +1157,14 @@ const LedgerReport = () => {
       ellipsis: true,
       render: (_, r) => {
         if (r.isBalanceRow) return null;
-        
+
         // For payment records, show payment type and reference details
         if (r.payment) {
           const paymentType = r.payment?.paymentType?.name || r.payment?.paymentType?.type || "Payment";
           const refNum = r.payment?.referenceNumber ? `Ref: ${r.payment.referenceNumber}` : "";
           const bankName = r.payment?.bankName ? `Bank: ${r.payment.bankName}` : "";
           const chequeDate = r.payment?.chequeDate ? `Cheque: ${dayjs(r.payment.chequeDate).format("DD/MM/YY")}` : "";
-          
+
           const details = [paymentType, refNum, bankName, chequeDate].filter(Boolean);
           return (
             <div style={{ fontSize: 10, lineHeight: "1.4" }}>
@@ -1167,7 +1174,7 @@ const LedgerReport = () => {
             </div>
           );
         }
-        
+
         const project = r.invoice?.project;
         if (project?.projectGradings?.length > 0) {
           const lines = project.projectGradings.map((pg) => {
@@ -1179,7 +1186,7 @@ const LedgerReport = () => {
             const gradingName = pg.grading?.name || '-';
             const gradingCode = pg.grading?.shortCode || '';
             const label = gradingCode ? `${gradingName} (${gradingCode})` : gradingName;
-            return `${label} ${qty} × ₹${rate.toFixed(0)} = ₹${total.toFixed(0)}`;
+            return `${label} ${qty} × ₹${rate} = ₹${total}`;
           });
           return (
             <div style={{ fontSize: 10, lineHeight: "1.4" }}>
@@ -1222,7 +1229,7 @@ const LedgerReport = () => {
         width: 100,
         align: "right",
         render: (v, r) => {
-          const color = v > 0 ? "#f5222d" : v < 0 ? "#52c41a" : "#1890ff";
+          const color = v > 0 ? "#52c41a" : v < 0 ? "#f5222d" : "#1890ff";
           const fontWeight = r.isBalanceRow ? 600 : 500;
           const fontSize = r.isBalanceRow ? 13 : 11;
           return (
@@ -1341,10 +1348,9 @@ const LedgerReport = () => {
             <Card
               title={
                 selectedClientData
-                  ? `${selectedClientData.clientCode} - ${
-                      selectedClientData.displayName ||
-                      selectedClientData.companyName
-                    }`
+                  ? `${selectedClientData.clientCode} - ${selectedClientData.displayName ||
+                  selectedClientData.companyName
+                  }`
                   : "Client Detail Ledger"
               }
               size="small"
@@ -1426,19 +1432,19 @@ const LedgerReport = () => {
                     )}
                     {(dateFilterType === "custom" ||
                       dateFilterType === "fy") && (
-                      <RangePicker
-                        value={
-                          dateFilterType === "custom"
-                            ? customDateRange
-                            : dateRange
-                        }
-                        onChange={handleCustomDateChange}
-                        disabled={dateFilterType === "fy"}
-                        style={{ width: 260 }}
-                        format="DD/MM/YY"
-                        size="small"
-                      />
-                    )}
+                        <RangePicker
+                          value={
+                            dateFilterType === "custom"
+                              ? customDateRange
+                              : dateRange
+                          }
+                          onChange={handleCustomDateChange}
+                          disabled={dateFilterType === "fy"}
+                          style={{ width: 260 }}
+                          format="DD/MM/YY"
+                          size="small"
+                        />
+                      )}
 
                     <Button
                       icon={<ReloadOutlined />}
@@ -1461,13 +1467,18 @@ const LedgerReport = () => {
                       <Row gutter={4} style={{ marginBottom: 8 }}>
                         <Col span={5}>
                           <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
-                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>Opening</div>
+                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>
+                              Opening {opening > 0 ? "(CR)" : opening < 0 ? "(DR)" : ""}
+                            </div>
                             <div style={{
                               fontSize: 13,
                               fontWeight: 600,
-                              color: opening > 0 ? "#f5222d" : opening < 0 ? "#52c41a" : "#1890ff"
+                              color: opening > 0 ? "#52c41a" : opening < 0 ? "#f5222d" : "#1890ff"
                             }}>
-                              {formatCurrencyNoDecimal(opening)}
+                              {formatCurrencyNoDecimal(Math.abs(opening))}
+                              <span style={{ fontSize: 9, marginLeft: 2 }}>
+                                {opening > 0 ? "Credit" : opening < 0 ? "Debit" : ""}
+                              </span>
                             </div>
                           </Card>
                         </Col>
@@ -1489,13 +1500,18 @@ const LedgerReport = () => {
                         </Col>
                         <Col span={5}>
                           <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
-                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>Closing</div>
+                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>
+                              Closing {closing > 0 ? "(CR)" : closing < 0 ? "(DR)" : ""}
+                            </div>
                             <div style={{
                               fontSize: 13,
                               fontWeight: 600,
-                              color: closing > 0 ? "#f5222d" : closing < 0 ? "#52c41a" : "#1890ff"
+                              color: closing > 0 ? "#52c41a" : closing < 0 ? "#f5222d" : "#1890ff"
                             }}>
-                              {formatCurrencyNoDecimal(closing)}
+                              {formatCurrencyNoDecimal(Math.abs(closing))}
+                              <span style={{ fontSize: 9, marginLeft: 2 }}>
+                                {closing > 0 ? "Credit balance" : closing < 0 ? "Debit balance" : ""}
+                              </span>
                             </div>
                           </Card>
                         </Col>
