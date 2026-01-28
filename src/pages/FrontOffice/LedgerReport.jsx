@@ -1184,14 +1184,22 @@ const LedgerReport = () => {
       key: "currentBalance",
       width: 90,
       align: "right",
-      render: (value) => {
+      render: (value, record) => {
+        // If this is the currently selected client, use the calculated closing balance
+        // This ensures the sidebar list matches the detail view
+        let displayValue = value;
+        
+        if (selectedClient === record.clientId && ledgerData?.clientLedgerRange) {
+           displayValue = Number(ledgerData.clientLedgerRange.closingBalance ?? value);
+        }
+
         const color =
-          value > 0 ? "#52c41a" : value < 0 ? "#f5222d" : "#1890ff";
-        const label = value > 0 ? "(CR)" : value < 0 ? "(DR)" : "";
+          displayValue > 0 ? "#52c41a" : displayValue < 0 ? "#f5222d" : "#1890ff";
+        const label = displayValue > 0 ? "(CR)" : displayValue < 0 ? "(DR)" : "";
         return (
           <Space direction="vertical" size={0} align="end">
             <Text strong style={{ color, fontSize: 11 }}>
-              {formatCurrencyNoDecimal(Math.abs(value))}
+              {formatCurrencyNoDecimal(Math.abs(displayValue))}
             </Text>
             <Text style={{ color, fontSize: 9, opacity: 0.8 }}>{label}</Text>
           </Space>
