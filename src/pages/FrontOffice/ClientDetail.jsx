@@ -239,6 +239,42 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
     }).format(amount || 0);
   };
 
+  const buildWorkTypeSequenceMap = (project) => {
+    const map = {};
+
+    (project?.projectWorkTypes || []).forEach((pwt) => {
+      const workTypeId = pwt?.workTypeId || pwt?.workType?.id;
+      if (!workTypeId) return;
+      map[String(workTypeId)] =
+        pwt.sequence ?? pwt.sortOrder ?? pwt?.workType?.sortOrder ?? 9999;
+    });
+
+    (project?.projectGradings || []).forEach((pg) => {
+      const workTypeId = pg?.grading?.workType?.id;
+      if (!workTypeId) return;
+      const key = String(workTypeId);
+      if (map[key] === undefined || map[key] === null) {
+        map[key] = pg?.grading?.workType?.sortOrder ?? 9999;
+      }
+    });
+
+    return map;
+  };
+
+  const getSortedProjectGradings = (project) => {
+    if (!project?.projectGradings?.length) return [];
+    const workTypeSequenceMap = buildWorkTypeSequenceMap(project);
+
+    return [...project.projectGradings].sort((a, b) => {
+      const orderA = workTypeSequenceMap[String(a?.grading?.workType?.id)] ?? 9999;
+      const orderB = workTypeSequenceMap[String(b?.grading?.workType?.id)] ?? 9999;
+      if (orderA !== orderB) return orderA - orderB;
+      const nameA = a?.grading?.name || "";
+      const nameB = b?.grading?.name || "";
+      return nameA.localeCompare(nameB);
+    });
+  };
+
   // Transaction table columns
   const transactionColumns = [
     {
@@ -981,7 +1017,7 @@ const ClientDetail = ({ client, onClose, onEdit }) => {
                             );
                           } else if (project?.projectGradings?.length > 0) {
                             // Show project grading details
-                            const lines = project.projectGradings.map((pg) => {
+                            const lines = getSortedProjectGradings(project).map((pg) => {
                               const qty = pg.imageQuantity || 0;
                               const rate =
                                 (pg.customRate !== undefined && pg.customRate !== null)

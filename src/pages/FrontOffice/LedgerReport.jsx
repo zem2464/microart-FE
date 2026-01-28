@@ -102,6 +102,42 @@ const formatCurrencyNoDecimal = (amount) =>
     maximumFractionDigits: 0,
   }).format(amount || 0);
 
+const buildWorkTypeSequenceMap = (project) => {
+  const map = {};
+
+  (project?.projectWorkTypes || []).forEach((pwt) => {
+    const workTypeId = pwt?.workTypeId || pwt?.workType?.id;
+    if (!workTypeId) return;
+    map[String(workTypeId)] =
+      pwt.sequence ?? pwt.sortOrder ?? pwt?.workType?.sortOrder ?? 9999;
+  });
+
+  (project?.projectGradings || []).forEach((pg) => {
+    const workTypeId = pg?.grading?.workType?.id;
+    if (!workTypeId) return;
+    const key = String(workTypeId);
+    if (map[key] === undefined || map[key] === null) {
+      map[key] = pg?.grading?.workType?.sortOrder ?? 9999;
+    }
+  });
+
+  return map;
+};
+
+const getSortedProjectGradings = (project) => {
+  if (!project?.projectGradings?.length) return [];
+  const workTypeSequenceMap = buildWorkTypeSequenceMap(project);
+
+  return [...project.projectGradings].sort((a, b) => {
+    const orderA = workTypeSequenceMap[String(a?.grading?.workType?.id)] ?? 9999;
+    const orderB = workTypeSequenceMap[String(b?.grading?.workType?.id)] ?? 9999;
+    if (orderA !== orderB) return orderA - orderB;
+    const nameA = a?.grading?.name || "";
+    const nameB = b?.grading?.name || "";
+    return nameA.localeCompare(nameB);
+  });
+};
+
 const LedgerReport = () => {
   const user = useReactiveVar(userCacheVar);
 
@@ -709,7 +745,7 @@ const LedgerReport = () => {
       doc.setTextColor(40);
 
       const openingLabel = opening > 0 ? " (CR)" : opening < 0 ? " (DR)" : "";
-      doc.text(`Opening Balance: ${formatCurrency(Math.abs(opening))}${openingLabel}`, 14, yPos);
+      doc.text(`Opening Balance: ${formatCurrencyNoDecimal(Math.abs(opening))}${openingLabel}`, 14, yPos);
 
       // Prepare table data
       const tableData = ledgerTableData.map((row) => {
@@ -737,22 +773,25 @@ const LedgerReport = () => {
 
         // Format project gradings details same as table with new lines for PDF
         if (project?.projectGradings?.length > 0) {
-          const lines = project.projectGradings.map((pg) => {
+          const lines = getSortedProjectGradings(project).map((pg) => {
             const qty = pg.imageQuantity || 0;
             const rate = (pg.customRate !== undefined && pg.customRate !== null)
               ? pg.customRate
               : (pg.grading?.defaultRate ?? 0);
             const total = qty * rate;
             const gradingName = pg.grading?.name || pg.grading?.shortCode || "N/A";
-            const workTypeName = pg.grading?.workType?.name || "";
-            const label = workTypeName ? `${workTypeName} - ${gradingName}` : gradingName;
-            return `${label}: ${qty} x ${rate} = ${total}`;
+            const gradingCode = pg.grading?.shortCode || '';
+            const gradingLabel = gradingCode && gradingCode !== gradingName
+              ? `${gradingName} (${gradingCode})`
+              : gradingName;
+            // Format without work type name, just grading details
+            return `${gradingLabel}: ${qty} x ₹${Math.round(rate)} = ₹${Math.round(total)}`;
           });
           detailsText = lines.join("\n");
         }
 
         const balanceLabel = row.runningBalance > 0 ? " (CR)" : row.runningBalance < 0 ? " (DR)" : "";
-        const formattedBalance = `${formatCurrency(Math.abs(row.runningBalance))}${balanceLabel}`;
+        const formattedBalance = `${formatCurrencyNoDecimal(Math.abs(row.runningBalance))}${balanceLabel}`;
 
         return [
           row.invoice?.project?.createdAt
@@ -765,8 +804,8 @@ const LedgerReport = () => {
           row.invoice?.invoiceNumber || "-",
           particularsText,
           detailsText,
-          row.debit > 0 ? formatCurrency(row.debit) : "",
-          row.credit > 0 ? formatCurrency(row.credit) : "",
+          row.debit > 0 ? formatCurrencyNoDecimal(row.debit) : "",
+          row.credit > 0 ? formatCurrencyNoDecimal(row.credit) : "",
           formattedBalance,
         ];
       });
@@ -811,7 +850,7 @@ const LedgerReport = () => {
       doc.setTextColor(40);
 
       const closingLabel = closing > 0 ? " (CR)" : closing < 0 ? " (DR)" : "";
-      doc.text(`Closing Balance: ${formatCurrency(Math.abs(closing))}${closingLabel}`, 14, finalY + 10);
+      doc.text(`Closing Balance: ${formatCurrencyNoDecimal(Math.abs(closing))}${closingLabel}`, 14, finalY + 10);
 
       // Add footer with Generated on
       const pageHeight = doc.internal.pageSize.getHeight();
@@ -1279,18 +1318,17 @@ const LedgerReport = () => {
 
         const project = r.invoice?.project;
         if (project?.projectGradings?.length > 0) {
-          const lines = project.projectGradings.map((pg) => {
+          const lines = getSortedProjectGradings(project).map((pg) => {
             const qty = pg.imageQuantity || 0;
             const rate = (pg.customRate !== undefined && pg.customRate !== null)
               ? pg.customRate
               : (pg.grading?.defaultRate ?? 0);
             const total = qty * rate;
             const gradingName = pg.grading?.name || "N/A";
-            const workTypeName = pg.grading?.workType?.name || "";
             const gradingCode = pg.grading?.shortCode || '';
             const gradingLabel = gradingCode ? `${gradingName} (${gradingCode})` : gradingName;
-            const fullLabel = workTypeName ? `${workTypeName} - ${gradingLabel}` : gradingLabel;
-            return `${fullLabel}: ${qty} × ₹${rate} = ₹${total}`;
+            // Format without work type name, just grading details
+            return `${gradingLabel}: ${qty} × ₹${Math.round(rate)} = ₹${Math.round(total)}`;
           });
           return (
             <div style={{ fontSize: 10, lineHeight: "1.4" }}>

@@ -193,15 +193,31 @@ export const GET_CLIENT_LEDGER_RANGE = gql`
             name
             description
             createdAt
+            projectWorkTypes {
+              id
+              workTypeId
+              sequence
+              workType {
+                id
+                name
+                sortOrder
+              }
+            }
             projectGradings {
               id
               imageQuantity
               customRate
+              sequence
               grading {
                 id
                 name
                 shortCode
                 defaultRate
+                workType {
+                  id
+                  name
+                  sortOrder
+                }
               }
             }
           }
