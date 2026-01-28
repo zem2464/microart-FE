@@ -45,6 +45,45 @@ import autoTable from "jspdf-autotable";
 import { font } from "../../fonts/Noto_Sans/NotoSans.base64.js";
 import { boldFont } from "../../fonts/Noto_Sans/NotoSans-bold.js";
 
+const BRAND_COLORS = {
+  primary: '#667eea', // matches logo background
+  primaryDark: '#4c51bf',
+  accent: '#f6f8ff',
+  text: '#1f2a44',
+};
+
+const COMPANY_DETAILS = {
+  name: 'The Image Care',
+  contactName: 'Rohit Ramani',
+  address:
+    '204 MBC, Meridian Business Centre, Lajamni Chowk, opposite Opera Business Center, Shanti Niketan Society, Mota Varachha, Surat, Gujarat 394105',
+  phone: '+91 9904530103',
+  upiId: 'asmitaramani99@okhdfcbank',
+  bank: {
+    bankName: 'HDFC',
+    accountName: 'ASHMITABEN RAMANI',
+    accountNumber: '50100088829930',
+    ifsc: 'HDFC0001684',
+  },
+};
+
+// Simple helper to fetch and inline a public asset
+const loadImageAsDataURL = async (path) => {
+  try {
+    const res = await fetch(path);
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  } catch (err) {
+    console.error('Error loading image', path, err);
+    return null;
+  }
+};
+
 const { Title, Text } = Typography;
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -473,9 +512,12 @@ const LedgerReport = () => {
       return;
     }
 
+    const openingLabel = opening > 0 ? " (CR)" : opening < 0 ? " (DR)" : "";
+    const closingLabel = closing > 0 ? " (CR)" : closing < 0 ? " (DR)" : "";
+
     // Prepare Excel data with header information (similar to HMS-FE)
     const excelData = [
-      ["MicroArt - Client Ledger Report"],
+      [`${COMPANY_DETAILS.name} - Client Ledger Report`],
       [
         `Client: ${selectedClientData?.displayName ||
         selectedClientData?.companyName ||
@@ -490,7 +532,7 @@ const LedgerReport = () => {
       [`Generated on: ${dayjs().format("DD MMM YYYY, HH:mm")}`],
       [],
       ["OPENING BALANCE"],
-      ["Opening Balance", opening],
+      ["Opening Balance", `${formatCurrency(Math.abs(opening))}${openingLabel}`],
       [],
       ["LEDGER TRANSACTIONS"],
       [
@@ -521,7 +563,16 @@ const LedgerReport = () => {
         workDays = `${days}d`;
       }
 
-      // Format project gradings details same as table with new lines for Excel
+      // Format project code with project name
+      let particularsText = row.description || "-";
+      if (project?.projectCode) {
+        particularsText = project.projectCode;
+        if (project.name) {
+          particularsText += ` - ${project.name}`;
+        }
+      }
+
+      // Format project gradings details
       if (project?.projectGradings?.length > 0) {
         const lines = project.projectGradings.map((pg) => {
           const qty = pg.imageQuantity || 0;
@@ -529,11 +580,14 @@ const LedgerReport = () => {
             ? pg.customRate
             : (pg.grading?.defaultRate ?? 0);
           const total = qty * rate;
-          return `${pg.grading?.name || pg.grading?.shortCode
-            } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
+          return `${pg.grading?.name || pg.grading?.shortCode} (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
         });
-        detailsText = lines.join("\n"); // Use newline for Excel
+        detailsText = lines.join(", ");
       }
+
+      // Format running balance with DR/CR
+      const balanceLabel = row.runningBalance > 0 ? " (CR)" : row.runningBalance < 0 ? " (DR)" : "";
+      const formattedBalance = `${formatCurrency(Math.abs(row.runningBalance))}${balanceLabel}`;
 
       excelData.push([
         row.invoice?.project?.createdAt
@@ -544,18 +598,18 @@ const LedgerReport = () => {
           : "-",
         workDays,
         row.invoice?.invoiceNumber || "-",
-        row.invoice?.project?.projectCode || row.description || "-",
+        particularsText,
         detailsText,
         row.debit > 0 ? row.debit : "",
         row.credit > 0 ? row.credit : "",
-        row.runningBalance,
+        formattedBalance,
       ]);
     });
 
     // Add closing balance section
     excelData.push([]);
     excelData.push(["CLOSING BALANCE"]);
-    excelData.push(["Closing Balance", closing]);
+    excelData.push(["Closing Balance", `${formatCurrency(Math.abs(closing))}${closingLabel}`]);
 
     const ws = XLSX.utils.aoa_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
@@ -572,176 +626,219 @@ const LedgerReport = () => {
   };
 
   // Export to PDF
-  const handleExportPDF = () => {
+  const handleExportPDF = async () => {
     if (!ledgerTableData.length) {
       message.warning("No data to export");
       return;
     }
 
-    const doc = new jsPDF({ orientation: "landscape" });
+    const hideLoading = message.loading("Generating PDF...", 0);
 
-    // Add Noto Sans fonts for proper rupee symbol rendering
-    doc.addFileToVFS("NotoSans-Regular.ttf", font);
-    doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
-    doc.addFileToVFS("NotoSans-Bold.ttf", boldFont);
-    doc.addFont("NotoSans-Bold.ttf", "NotoSans", "bold");
+    try {
+      const doc = new jsPDF({ orientation: "landscape" });
 
-    const pageWidth = doc.internal.pageSize.width;
+      // Add Noto Sans fonts for proper rupee symbol rendering
+      doc.addFileToVFS("NotoSans-Regular.ttf", font);
+      doc.addFont("NotoSans-Regular.ttf", "NotoSans", "normal");
+      doc.addFileToVFS("NotoSans-Bold.ttf", boldFont);
+      doc.addFont("NotoSans-Bold.ttf", "NotoSans", "bold");
 
-    // Add header - Client Ledger Report centered
-    doc.setFontSize(16);
-    doc.setFont("NotoSans", "bold");
-    doc.setTextColor(40);
-    doc.text("Client Ledger Report", pageWidth / 2, 15, { align: "center" });
+      const pageWidth = doc.internal.pageSize.getWidth();
 
-    // Period on next line, centered
-    doc.setFontSize(10);
-    doc.setFont("NotoSans", "normal");
-    doc.setTextColor(100);
-    doc.text(
-      `Period: ${dateRange[0].format("DD MMM YYYY")} to ${dateRange[1].format(
-        "DD MMM YYYY"
-      )}`,
-      pageWidth / 2,
-      22,
-      { align: "center" }
-    );
+      let yPos = 8;
 
-    // Next line: MicroArt on left, Client Info on right
-    doc.setFontSize(12);
-    doc.setFont("NotoSans", "bold");
-    doc.setTextColor(40);
-    doc.text("MicroArt", 14, 30);
+      // Load Logo
+      const logoPng = await loadImageAsDataURL(`${window.location.origin}/assets/icon.png`);
 
-    doc.setFontSize(10);
-    doc.setFont("NotoSans", "normal");
-    doc.text(
-      `Client: ${selectedClientData?.displayName ||
-      selectedClientData?.companyName ||
-      "N/A"
-      } (${selectedClientData?.clientCode || "N/A"})`,
-      pageWidth - 14,
-      30,
-      { align: "right" }
-    );
-
-    doc.setFontSize(10);
-    doc.setFont("NotoSans", "bold");
-    doc.setTextColor(40);
-    doc.text(`Opening Balance: ${formatCurrency(opening)}`, 14, 38);
-
-    // Prepare table data
-    const tableData = ledgerTableData.map((row) => {
-      const project = row.invoice?.project;
-      let detailsText = row.description || "-";
-      let particularsText = row.description || "-";
-
-      // Calculate work days
-      let workDays = "-";
-      if (project?.createdAt && row.invoice?.invoiceDate) {
-        const days = dayjs(row.invoice.invoiceDate).diff(
-          dayjs(project.createdAt),
-          "day"
-        );
-        workDays = `${days}d`;
+      // ===== HEADER =====
+      if (logoPng) {
+        const logoSize = 26;
+        const logoX = (pageWidth - logoSize) / 2;
+        doc.addImage(logoPng, 'PNG', logoX, yPos, logoSize, logoSize);
       }
 
-      // Format project code with project name
-      if (project?.projectCode) {
-        particularsText = project.projectCode;
-        if (project.name) {
-          particularsText += ` - ${project.name}`;
+      doc.setFontSize(14);
+      doc.setFont('NotoSans', 'bold');
+      doc.setTextColor(BRAND_COLORS.primary);
+      doc.text('CLIENT LEDGER REPORT', pageWidth / 2, yPos + 22, { align: 'center' });
+
+      yPos += 26;
+
+      // ===== COMPANY AND CLIENT INFO =====
+      // Left side - Company details
+      doc.setFontSize(10);
+      doc.setFont('NotoSans', 'bold');
+      doc.setTextColor(BRAND_COLORS.text);
+      doc.text(COMPANY_DETAILS.name, 14, yPos);
+
+      doc.setFontSize(8);
+      doc.setFont('NotoSans', 'normal');
+      // Wrap address
+      const addressLines = doc.splitTextToSize(COMPANY_DETAILS.address, pageWidth / 2 - 30);
+      let leftBlockY = yPos + 5;
+      addressLines.forEach((line, idx) => {
+        doc.text(line, 14, leftBlockY + idx * 4);
+      });
+      leftBlockY += addressLines.length * 4;
+      doc.text(`Phone: ${COMPANY_DETAILS.phone}`, 14, leftBlockY + 4);
+      doc.text(`Contact: ${COMPANY_DETAILS.contactName}`, 14, leftBlockY + 8);
+
+      // Right side - Client Details
+      const rightX = pageWidth / 2 + 20;
+      doc.setFontSize(10);
+      doc.setFont('NotoSans', 'bold');
+      doc.text('Client Details:', rightX, yPos);
+
+      doc.setFont('NotoSans', 'normal');
+      doc.setTextColor(BRAND_COLORS.text);
+
+      // Client Name
+      const clientName = selectedClientData?.displayName || selectedClientData?.companyName || "N/A";
+      doc.text(clientName, rightX, yPos + 5);
+      doc.text(`Client Code: ${selectedClientData?.clientCode || "N/A"}`, rightX, yPos + 9);
+
+      const periodText = `Period: ${dateRange[0].format("DD MMM YYYY")} to ${dateRange[1].format("DD MMM YYYY")}`;
+      doc.text(periodText, rightX, yPos + 14);
+
+      // Adjust yPos for content
+      yPos = Math.max(leftBlockY + 16, yPos + 25);
+
+      // Opening Balance Line
+      doc.setFontSize(10);
+      doc.setFont("NotoSans", "bold");
+      doc.setTextColor(40);
+
+      const openingLabel = opening > 0 ? " (CR)" : opening < 0 ? " (DR)" : "";
+      doc.text(`Opening Balance: ${formatCurrency(Math.abs(opening))}${openingLabel}`, 14, yPos);
+
+      // Prepare table data
+      const tableData = ledgerTableData.map((row) => {
+        const project = row.invoice?.project;
+        let detailsText = row.description || "-";
+
+        // Calculate work days
+        let workDays = "-";
+        if (project?.createdAt && row.invoice?.invoiceDate) {
+          const days = dayjs(row.invoice.invoiceDate).diff(
+            dayjs(project.createdAt),
+            "day"
+          );
+          workDays = `${days}d`;
         }
-      }
 
-      // Format project gradings details same as table with new lines for PDF
-      if (project?.projectGradings?.length > 0) {
-        const lines = project.projectGradings.map((pg) => {
-          const qty = pg.imageQuantity || 0;
-          const rate = (pg.customRate !== undefined && pg.customRate !== null)
-            ? pg.customRate
-            : (pg.grading?.defaultRate ?? 0);
-          const total = qty * rate;
-          return `${pg.grading?.name || pg.grading?.shortCode
-            } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
-        });
-        detailsText = lines.join("\n"); // Use newline for PDF
-      }
+        // Format project code with project name
+        let particularsText = row.description || "-";
+        if (project?.projectCode) {
+          particularsText = project.projectCode;
+          if (project.name) {
+            particularsText += ` - ${project.name}`;
+          }
+        }
 
-      return [
-        row.invoice?.project?.createdAt
-          ? dayjs(row.invoice.project.createdAt).format("DD/MM/YY")
-          : "-",
-        row.invoice?.invoiceDate
-          ? dayjs(row.invoice.invoiceDate).format("DD/MM/YY")
-          : "-",
-        workDays,
-        row.invoice?.invoiceNumber || "-",
-        particularsText,
-        detailsText,
-        row.debit > 0 ? formatCurrency(row.debit) : "",
-        row.credit > 0 ? formatCurrency(row.credit) : "",
-        formatCurrency(row.runningBalance),
-      ];
-    });
+        // Format project gradings details same as table with new lines for PDF
+        if (project?.projectGradings?.length > 0) {
+          const lines = project.projectGradings.map((pg) => {
+            const qty = pg.imageQuantity || 0;
+            const rate = (pg.customRate !== undefined && pg.customRate !== null)
+              ? pg.customRate
+              : (pg.grading?.defaultRate ?? 0);
+            const total = qty * rate;
+            const gradingName = pg.grading?.name || pg.grading?.shortCode || "N/A";
+            const workTypeName = pg.grading?.workType?.name || "";
+            const label = workTypeName ? `${workTypeName} - ${gradingName}` : gradingName;
+            return `${label}: ${qty} x ${rate} = ${total}`;
+          });
+          detailsText = lines.join("\n");
+        }
 
-    // Add table
-    autoTable(doc, {
-      startY: 44,
-      head: [
-        [
-          "Order Date",
-          "Inv. Date",
-          "Work Days",
-          "Inv. No.",
-          "Particulars",
-          "Details",
-          "Debit",
-          "Credit",
-          "Balance",
+        const balanceLabel = row.runningBalance > 0 ? " (CR)" : row.runningBalance < 0 ? " (DR)" : "";
+        const formattedBalance = `${formatCurrency(Math.abs(row.runningBalance))}${balanceLabel}`;
+
+        return [
+          row.invoice?.project?.createdAt
+            ? dayjs(row.invoice.project.createdAt).format("DD/MM/YY")
+            : "-",
+          row.invoice?.invoiceDate
+            ? dayjs(row.invoice.invoiceDate).format("DD/MM/YY")
+            : "-",
+          workDays,
+          row.invoice?.invoiceNumber || "-",
+          particularsText,
+          detailsText,
+          row.debit > 0 ? formatCurrency(row.debit) : "",
+          row.credit > 0 ? formatCurrency(row.credit) : "",
+          formattedBalance,
+        ];
+      });
+
+      // Add table
+      autoTable(doc, {
+        startY: yPos + 4,
+        head: [
+          [
+            "Order Date",
+            "Inv. Date",
+            "Days",
+            "Inv. No.",
+            "Particulars",
+            "Details",
+            "Debit",
+            "Credit",
+            "Balance",
+          ],
         ],
-      ],
-      body: tableData,
-      styles: { fontSize: 7, font: "NotoSans" },
-      headStyles: {
-        fillColor: [22, 160, 133],
-        fontStyle: "bold",
-        font: "NotoSans",
-      },
-      margin: { left: 14, right: 14 },
-      columnStyles: {
-        2: { cellWidth: 20, halign: "center" },
-        5: { cellWidth: 75 },
-      },
-    });
+        body: tableData,
+        styles: { fontSize: 8, font: "NotoSans" },
+        headStyles: {
+          fillColor: [102, 126, 234], // Brand primary
+          fontStyle: "bold",
+          font: "NotoSans",
+        },
+        margin: { left: 14, right: 14 },
+        columnStyles: {
+          2: { cellWidth: 15, halign: "center" },
+          5: { cellWidth: 70 },
+          6: { halign: 'right' },
+          7: { halign: 'right' },
+          8: { halign: 'right' },
+        },
+      });
 
-    // Add closing balance
-    const finalY = doc.lastAutoTable.finalY;
-    doc.setFontSize(10);
-    doc.setFont("NotoSans", "bold");
-    doc.setTextColor(40);
-    doc.text(`Closing Balance: ${formatCurrency(closing)}`, 14, finalY + 10);
+      // Add closing balance
+      const finalY = doc.lastAutoTable.finalY;
+      doc.setFontSize(10);
+      doc.setFont("NotoSans", "bold");
+      doc.setTextColor(40);
 
-    // Add footer with Generated on
-    const pageHeight = doc.internal.pageSize.height;
-    doc.setFontSize(8);
-    doc.setFont("NotoSans", "normal");
-    doc.setTextColor(100);
-    doc.text(
-      `Generated on: ${dayjs().format("DD MMM YYYY, HH:mm")}`,
-      pageWidth / 2,
-      pageHeight - 10,
-      { align: "center" }
-    );
+      const closingLabel = closing > 0 ? " (CR)" : closing < 0 ? " (DR)" : "";
+      doc.text(`Closing Balance: ${formatCurrency(Math.abs(closing))}${closingLabel}`, 14, finalY + 10);
 
-    const fileName = `${selectedClientData?.displayName ||
-      selectedClientData?.companyName ||
-      "Client"
-      }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
-        "DD-MMM-YYYY"
-      )}.pdf`;
-    doc.save(fileName);
-    message.success("PDF file downloaded successfully");
+      // Add footer with Generated on
+      const pageHeight = doc.internal.pageSize.getHeight();
+      doc.setFontSize(8);
+      doc.setFont("NotoSans", "normal");
+      doc.setTextColor(100);
+      doc.text(
+        `Generated on: ${dayjs().format("DD MMM YYYY, HH:mm")}`,
+        pageWidth / 2,
+        pageHeight - 10,
+        { align: "center" }
+      );
+
+      const fileName = `${selectedClientData?.displayName ||
+        selectedClientData?.companyName ||
+        "Client"
+        }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
+          "DD-MMM-YYYY"
+        )}.pdf`;
+      doc.save(fileName);
+      hideLoading();
+      message.success("PDF file downloaded successfully");
+    } catch (error) {
+      hideLoading();
+      console.error("PDF Export Error:", error);
+      message.error("Failed to export PDF");
+    }
   };
 
   // Share on WhatsApp
@@ -1046,14 +1143,19 @@ const LedgerReport = () => {
       title: "Balance",
       dataIndex: "currentBalance",
       key: "currentBalance",
-      width: 80,
+      width: 90,
       align: "right",
       render: (value) => {
-        const color = value > 0 ? "#52c41a" : value < 0 ? "#f5222d" : "#1890ff";
+        const color =
+          value > 0 ? "#52c41a" : value < 0 ? "#f5222d" : "#1890ff";
+        const label = value > 0 ? "(CR)" : value < 0 ? "(DR)" : "";
         return (
-          <Text strong style={{ color, fontSize: 11 }}>
-            {formatCurrencyNoDecimal(value)}
-          </Text>
+          <Space direction="vertical" size={0} align="end">
+            <Text strong style={{ color, fontSize: 11 }}>
+              {formatCurrencyNoDecimal(Math.abs(value))}
+            </Text>
+            <Text style={{ color, fontSize: 9, opacity: 0.8 }}>{label}</Text>
+          </Space>
         );
       },
       sorter: true,
@@ -1183,10 +1285,12 @@ const LedgerReport = () => {
               ? pg.customRate
               : (pg.grading?.defaultRate ?? 0);
             const total = qty * rate;
-            const gradingName = pg.grading?.name || '-';
+            const gradingName = pg.grading?.name || "N/A";
+            const workTypeName = pg.grading?.workType?.name || "";
             const gradingCode = pg.grading?.shortCode || '';
-            const label = gradingCode ? `${gradingName} (${gradingCode})` : gradingName;
-            return `${label} ${qty} × ₹${rate} = ₹${total}`;
+            const gradingLabel = gradingCode ? `${gradingName} (${gradingCode})` : gradingName;
+            const fullLabel = workTypeName ? `${workTypeName} - ${gradingLabel}` : gradingLabel;
+            return `${fullLabel}: ${qty} × ₹${rate} = ₹${total}`;
           });
           return (
             <div style={{ fontSize: 10, lineHeight: "1.4" }}>

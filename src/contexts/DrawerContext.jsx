@@ -411,7 +411,7 @@ export const AppDrawerProvider = ({ children }) => {
 				<ModuleDrawer
 					open={projectDetailDrawer.open}
 					title="Project Details"
-					width={1000}
+					width="90%"
 					placement="right"
 					onClose={closeProjectDetailDrawer}
 					destroyOnClose
@@ -624,7 +624,7 @@ export const AppDrawerProvider = ({ children }) => {
 				<ModuleDrawer
 					open={projectDetailDrawerV2.open}
 					title={projectDetailDrawerV2.title}
-					width={1400}
+					width="90%"
 					placement="right"
 					onClose={closeProjectDetailDrawerV2}
 					destroyOnClose
