@@ -1,6 +1,6 @@
 {
   "name": "microart-frontend",
-  "version": "0.1.65",
+  "version": "0.1.66",
   "private": true,
   "dependencies": {
     "@apollo/client": "^3.8.1",
