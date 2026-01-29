@@ -260,17 +260,14 @@ const Transactions = () => {
             </>
           ) : record.payment?.paymentType ? (
             <>
-              <Text strong style={{ fontSize: '13px' }}>Payment Received</Text>
-              <div>
-                <Tag color="blue" style={{ fontSize: '11px', marginTop: '2px' }}>
-                  {record.payment.paymentType.name}
-                </Tag>
-                {record.payment.referenceNumber && (
-                  <Text type="secondary" style={{ fontSize: '11px', marginLeft: '4px' }}>
-                    Ref: {record.payment.referenceNumber}
+              <Text strong style={{ fontSize: '13px' }}>{record.payment.paymentType.name}</Text>
+              {record.payment.notes && (
+                <div>
+                  <Text type="secondary" style={{ fontSize: '11px' }}>
+                    {record.payment.notes}
                   </Text>
-                )}
-              </div>
+                </div>
+              )}
             </>
           ) : (
             <Text style={{ fontSize: '12px' }}>{desc}</Text>
