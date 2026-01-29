@@ -23,12 +23,14 @@ import {
 import {
   PlusOutlined,
   EditOutlined,
+  DeleteOutlined,
   DollarOutlined,
   BankOutlined,
   WalletOutlined,
   CreditCardOutlined,
   QrcodeOutlined,
   SwapOutlined,
+  ExclamationCircleOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
 import { useQuery, useMutation } from "@apollo/client";
@@ -36,6 +38,7 @@ import {
   GET_PAYMENT_TYPES,
   CREATE_PAYMENT_TYPE,
   UPDATE_PAYMENT_TYPE,
+  DELETE_PAYMENT_TYPE,
   CREATE_PAYMENT_TYPE_TRANSFER,
 } from "../../gql/paymentTypes";
 
@@ -107,6 +110,19 @@ const PaymentTypes = () => {
     }
   );
 
+  const [deletePaymentType, { loading: deleting }] = useMutation(
+    DELETE_PAYMENT_TYPE,
+    {
+      onCompleted: (data) => {
+        message.success(data.deletePaymentType.message);
+        refetch();
+      },
+      onError: (error) => {
+        message.error(`Error: ${error.message}`);
+      },
+    }
+  );
+
   // Handlers
   const showCreateModal = () => {
     setEditingPaymentType(null);
@@ -155,6 +171,40 @@ const PaymentTypes = () => {
     } catch (error) {
       console.error("Error submitting payment type:", error);
     }
+  };
+
+  const handleDelete = (record) => {
+    Modal.confirm({
+      title: "Delete Payment Type",
+      icon: <ExclamationCircleOutlined />,
+      content: (
+        <div>
+          <p>Are you sure you want to delete payment type <strong>{record.name}</strong>?</p>
+          {record.currentBalance !== 0 && (
+            <Alert
+              type="warning"
+              message={`This payment type has a balance of ₹${Number(record.currentBalance || 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`}
+              style={{ marginTop: 8 }}
+            />
+          )}
+          <p style={{ marginTop: 8, color: "#ff4d4f" }}>
+            This action cannot be undone.
+          </p>
+        </div>
+      ),
+      okText: "Delete",
+      okType: "danger",
+      cancelText: "Cancel",
+      onOk: async () => {
+        try {
+          await deletePaymentType({
+            variables: { id: record.id },
+          });
+        } catch (error) {
+          console.error("Error deleting payment type:", error);
+        }
+      },
+    });
   };
 
   const showTransferModal = () => {
@@ -317,15 +367,26 @@ const PaymentTypes = () => {
       title: "Actions",
       key: "actions",
       align: "center",
-      width: 100,
+      width: 120,
       render: (_, record) => (
-        <Tooltip title="Edit">
-          <Button
-            type="link"
-            icon={<EditOutlined />}
-            onClick={() => showEditModal(record)}
-          />
-        </Tooltip>
+        <Space>
+          <Tooltip title="Edit">
+            <Button
+              type="link"
+              icon={<EditOutlined />}
+              onClick={() => showEditModal(record)}
+            />
+          </Tooltip>
+          <Tooltip title="Delete">
+            <Button
+              type="link"
+              danger
+              icon={<DeleteOutlined />}
+              onClick={() => handleDelete(record)}
+              loading={deleting}
+            />
+          </Tooltip>
+        </Space>
       ),
     },
   ];
@@ -493,23 +554,24 @@ const PaymentTypes = () => {
             />
           </Form.Item>
 
-          {!editingPaymentType && (
-            <Form.Item
-              name="openingBalance"
-              label="Opening Balance"
-              tooltip="Initial balance for this account"
-            >
-              <InputNumber
-                style={{ width: "100%" }}
-                placeholder="0.00"
-                precision={2}
-                formatter={(value) =>
-                  `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-                }
-                parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
-              />
-            </Form.Item>
-          )}
+          <Form.Item
+            name="openingBalance"
+            label="Opening Balance"
+            tooltip={editingPaymentType 
+              ? "Changing the opening balance will adjust the current balance accordingly" 
+              : "Initial balance for this account"
+            }
+          >
+            <InputNumber
+              style={{ width: "100%" }}
+              placeholder="0.00"
+              precision={2}
+              formatter={(value) =>
+                `₹ ${value}`.replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+              }
+              parser={(value) => value.replace(/₹\s?|(,*)/g, "")}
+            />
+          </Form.Item>
 
           <Row gutter={16}>
             <Col span={12}>

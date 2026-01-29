@@ -10,6 +10,7 @@ export const GET_PAYMENT_TYPES = gql`
       accountNumber
       bankName
       upiId
+      openingBalance
       currentBalance
       isActive
       sortOrder
@@ -66,10 +67,20 @@ export const UPDATE_PAYMENT_TYPE = gql`
       accountNumber
       bankName
       upiId
+      openingBalance
       currentBalance
       isActive
       sortOrder
       updatedAt
+    }
+  }
+`;
+
+export const DELETE_PAYMENT_TYPE = gql`
+  mutation DeletePaymentType($id: ID!) {
+    deletePaymentType(id: $id) {
+      success
+      message
     }
   }
 `;
