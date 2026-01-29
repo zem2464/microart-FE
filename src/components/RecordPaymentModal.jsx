@@ -11,6 +11,7 @@ import {
   Col,
   Space,
   Spin,
+  Typography,
 } from 'antd';
 import { useQuery } from '@apollo/client';
 import { GET_PAYMENT_TYPES } from '../gql/paymentTypes';
@@ -20,6 +21,7 @@ import dayjs from 'dayjs';
 
 const { Option } = Select;
 const { TextArea } = Input;
+const { Text } = Typography;
 
 const RecordPaymentModal = () => {
   const [form] = Form.useForm();
@@ -99,19 +101,32 @@ const RecordPaymentModal = () => {
                 showSearch
                 loading={clientsLoading}
                 filterOption={(input, option) => {
-                  const children = option?.children;
-                  // Handle case where children might be an array or non-string
-                  const searchText = Array.isArray(children) 
-                    ? children.join(' ') 
-                    : String(children ?? '');
+                  const searchText = option?.['data-search'] || '';
                   return searchText.toLowerCase().includes(input.toLowerCase());
                 }}
               >
-                {clientsData?.clients?.map((client) => (
-                  <Option key={client.id} value={client.id}>
-                    {client.displayName || ''} ({client.clientCode || ''})
-                  </Option>
-                ))}
+                {clientsData?.clients?.map((client) => {
+                  const balance = parseFloat(client.totalBalance || 0);
+                  const isCredit = balance > 0;
+                  const isDebit = balance < 0;
+                  const balanceColor = isCredit ? '#52c41a' : isDebit ? '#ff4d4f' : '#666';
+                  const balanceLabel = isCredit ? 'CR' : isDebit ? 'DR' : '';
+                  
+                  return (
+                    <Option 
+                      key={client.id} 
+                      value={client.id}
+                      data-search={`${client.displayName || ''} ${client.clientCode || ''} ${client.companyName || ''}`}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>{client.displayName || ''} ({client.clientCode || ''})</span>
+                        <Text style={{ fontSize: '12px', color: balanceColor, fontWeight: 500 }}>
+                          ₹{Math.abs(balance).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} {balanceLabel}
+                        </Text>
+                      </div>
+                    </Option>
+                  );
+                })}
               </Select>
             </Form.Item>
           )}
@@ -131,7 +146,12 @@ const RecordPaymentModal = () => {
                 >
                   {paymentTypesData?.paymentTypes?.map((type) => (
                     <Option key={type.id} value={type.id}>
-                      {type.name} ({type.type})
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span>{type.name} ({type.type})</span>
+                        <Text type="secondary" style={{ fontSize: '12px' }}>
+                          Bal: ₹{(type.currentBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </Text>
+                      </div>
                     </Option>
                   ))}
                 </Select>

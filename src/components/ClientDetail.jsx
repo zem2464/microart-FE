@@ -25,9 +25,12 @@ const { TabPane } = Tabs;
 const { RangePicker } = DatePicker;
 
 const formatCurrency = (amount) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR" }).format(
-    amount || 0
-  );
+  new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount || 0);
 
 /**
  * Get balance color based on amount sign
