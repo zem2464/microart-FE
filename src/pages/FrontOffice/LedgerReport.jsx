@@ -102,6 +102,72 @@ const formatCurrencyNoDecimal = (amount) =>
     maximumFractionDigits: 0,
   }).format(amount || 0);
 
+/**
+ * Get balance label (CR/DR) based on amount sign
+ * Positive = Credit (CR) - We owe client
+ * Negative = Debit (DR) - Client owes us
+ */
+const getBalanceLabel = (amount) => {
+  if (amount > 0) return "(CR)";
+  if (amount < 0) return "(DR)";
+  return "";
+};
+
+/**
+ * Get balance color based on amount sign
+ * Positive = Green (CR), Negative = Red (DR)
+ */
+const getBalanceColor = (amount) => {
+  if (amount > 0) return "#52c41a";
+  if (amount < 0) return "#f5222d";
+  return "#1890ff";
+};
+
+/**
+ * Format balance with absolute value and CR/DR label
+ */
+const formatBalanceWithLabel = (amount, formatter = formatCurrencyNoDecimal) => {
+  const label = getBalanceLabel(amount);
+  return `${formatter(Math.abs(amount))}${label ? ` ${label}` : ""}`;
+};
+
+/**
+ * Process ledger transactions and calculate running balances
+ * @param {Array} transactions - Raw transactions from backend
+ * @param {number} openingBalance - Opening balance to start from
+ * @returns {Array} Transactions with calculated running balance
+ */
+const processLedgerTransactions = (transactions, openingBalance) => {
+  const txs = (transactions || []).slice();
+  
+  // Sort by transaction date
+  txs.sort((a, b) => new Date(a.transactionDate) - new Date(b.transactionDate));
+  
+  // Calculate running balance starting from opening balance
+  // Positive = We Owe Client (Credit), Negative = Client Owes Us (Debit)
+  let running = openingBalance;
+  return txs.map((t) => {
+    const debit = Number(t.debitAmount || 0);
+    const credit = Number(t.creditAmount || 0);
+    // New balance = Old Balance + Credit - Debit
+    running = running + credit - debit;
+    return { ...t, debit, credit, runningBalance: running };
+  });
+};
+
+/**
+ * Calculate closing balance from processed transactions
+ * @param {Array} processedTransactions - Transactions with running balance
+ * @param {number} openingBalance - Opening balance (used if no transactions)
+ * @returns {number} Closing balance
+ */
+const calculateClosingBalance = (processedTransactions, openingBalance) => {
+  if (processedTransactions.length > 0) {
+    return processedTransactions[processedTransactions.length - 1].runningBalance;
+  }
+  return openingBalance;
+};
+
 const buildWorkTypeSequenceMap = (project) => {
   const map = {};
 
@@ -435,41 +501,17 @@ const LedgerReport = () => {
     setSelectedYear(today);
   };
 
-  // Prepare ledger data for table
-  const prepareLedgerData = () => {
-    if (!ledgerData?.clientLedgerRange) return [];
-
-    const range = ledgerData.clientLedgerRange;
-    const opening = Number(range.openingBalance ?? 0);
-    const txs = (range.transactions || []).slice();
-
-    // Transactions are already sorted by backend, but ensure they're in order
-    txs.sort(
-      (a, b) => new Date(a.transactionDate) - new Date(b.transactionDate)
-    );
-
-    // Calculate running balance starting from opening balance
-    // Positive = We Owe Client (Credit), Negative = Client Owes Us (Debit)
-    let running = opening;
-    return txs.map((t) => {
-      const debit = Number(t.debitAmount || 0);
-      const credit = Number(t.creditAmount || 0);
-      // New balance = Old Balance + Credit - Debit
-      running = running + credit - debit;
-      return { ...t, debit, credit, runningBalance: running };
-    });
-  };
-
-  const ledgerTableData = prepareLedgerData();
-
   // Use backend opening balance
   const opening = Number(ledgerData?.clientLedgerRange?.openingBalance ?? 0);
   
-  // Calculate closing balance from last transaction's running balance
-  // Don't use backend's closingBalance as it uses transaction's balanceAfter which doesn't include client's openingBalance
-  const closing = ledgerTableData.length > 0 
-    ? ledgerTableData[ledgerTableData.length - 1].runningBalance 
-    : opening;
+  // Process transactions using common utility function
+  const ledgerTableData = processLedgerTransactions(
+    ledgerData?.clientLedgerRange?.transactions,
+    opening
+  );
+  
+  // Calculate closing balance using common utility function
+  const closing = calculateClosingBalance(ledgerTableData, opening);
 
   // Calculate transaction totals
   const transactionDebit = ledgerTableData.reduce((sum, tx) => sum + tx.debit, 0);
@@ -551,9 +593,6 @@ const LedgerReport = () => {
       return;
     }
 
-    const openingLabel = opening > 0 ? " (CR)" : opening < 0 ? " (DR)" : "";
-    const closingLabel = closing > 0 ? " (CR)" : closing < 0 ? " (DR)" : "";
-
     // Prepare Excel data with header information (similar to HMS-FE)
     const excelData = [
       [`${COMPANY_DETAILS.name} - Client Ledger Report`],
@@ -571,7 +610,7 @@ const LedgerReport = () => {
       [`Generated on: ${dayjs().format("DD MMM YYYY, HH:mm")}`],
       [],
       ["OPENING BALANCE"],
-      ["Opening Balance", `${formatCurrency(Math.abs(opening))}${openingLabel}`],
+      ["Opening Balance", formatBalanceWithLabel(opening, formatCurrency)],
       [],
       ["LEDGER TRANSACTIONS"],
       [
@@ -624,9 +663,8 @@ const LedgerReport = () => {
         detailsText = lines.join(", ");
       }
 
-      // Format running balance with DR/CR
-      const balanceLabel = row.runningBalance > 0 ? " (CR)" : row.runningBalance < 0 ? " (DR)" : "";
-      const formattedBalance = `${formatCurrency(Math.abs(row.runningBalance))}${balanceLabel}`;
+      // Format running balance with DR/CR using common utility
+      const formattedBalance = formatBalanceWithLabel(row.runningBalance, formatCurrency);
 
       excelData.push([
         row.invoice?.project?.createdAt
@@ -648,7 +686,7 @@ const LedgerReport = () => {
     // Add closing balance section
     excelData.push([]);
     excelData.push(["CLOSING BALANCE"]);
-    excelData.push(["Closing Balance", `${formatCurrency(Math.abs(closing))}${closingLabel}`]);
+    excelData.push(["Closing Balance", formatBalanceWithLabel(closing, formatCurrency)]);
 
     const ws = XLSX.utils.aoa_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
@@ -747,8 +785,7 @@ const LedgerReport = () => {
       doc.setFont("NotoSans", "bold");
       doc.setTextColor(40);
 
-      const openingLabel = opening > 0 ? " (CR)" : opening < 0 ? " (DR)" : "";
-      doc.text(`Opening Balance: ${formatCurrencyNoDecimal(Math.abs(opening))}${openingLabel}`, 14, yPos);
+      doc.text(`Opening Balance: ${formatBalanceWithLabel(opening, formatCurrencyNoDecimal)}`, 14, yPos);
 
       // Prepare table data
       const tableData = ledgerTableData.map((row) => {
@@ -793,8 +830,8 @@ const LedgerReport = () => {
           detailsText = lines.join("\n");
         }
 
-        const balanceLabel = row.runningBalance > 0 ? " (CR)" : row.runningBalance < 0 ? " (DR)" : "";
-        const formattedBalance = `${formatCurrencyNoDecimal(Math.abs(row.runningBalance))}${balanceLabel}`;
+        // Use common utility for balance formatting
+        const formattedBalance = formatBalanceWithLabel(row.runningBalance, formatCurrencyNoDecimal);
 
         return [
           row.invoice?.project?.createdAt
@@ -852,8 +889,7 @@ const LedgerReport = () => {
       doc.setFont("NotoSans", "bold");
       doc.setTextColor(40);
 
-      const closingLabel = closing > 0 ? " (CR)" : closing < 0 ? " (DR)" : "";
-      doc.text(`Closing Balance: ${formatCurrencyNoDecimal(Math.abs(closing))}${closingLabel}`, 14, finalY + 10);
+      doc.text(`Closing Balance: ${formatBalanceWithLabel(closing, formatCurrencyNoDecimal)}`, 14, finalY + 10);
 
       // Add footer with Generated on
       const pageHeight = doc.internal.pageSize.getHeight();
@@ -946,7 +982,7 @@ const LedgerReport = () => {
       doc.setFontSize(10);
       doc.setFont("NotoSans", "bold");
       doc.setTextColor(40);
-      doc.text(`Opening Balance: ${formatCurrency(opening)}`, 14, 38);
+      doc.text(`Opening Balance: ${formatBalanceWithLabel(opening, formatCurrency)}`, 14, 38);
 
       // Prepare table data
       const tableData = ledgerTableData.map((row) => {
@@ -999,7 +1035,7 @@ const LedgerReport = () => {
           detailsText,
           row.debit > 0 ? formatCurrency(row.debit) : "",
           row.credit > 0 ? formatCurrency(row.credit) : "",
-          formatCurrency(row.runningBalance),
+          formatBalanceWithLabel(row.runningBalance, formatCurrency),
         ];
       });
 
@@ -1038,7 +1074,7 @@ const LedgerReport = () => {
       doc.setFontSize(10);
       doc.setFont("NotoSans", "bold");
       doc.setTextColor(40);
-      doc.text(`Closing Balance: ${formatCurrency(closing)}`, 14, finalY + 10);
+      doc.text(`Closing Balance: ${formatBalanceWithLabel(closing, formatCurrency)}`, 14, finalY + 10);
 
       // Add footer
       const pageHeight = doc.internal.pageSize.height;
@@ -1076,11 +1112,9 @@ const LedgerReport = () => {
                 "DD/MM/YYYY"
               )} to ${dateRange[1].format(
                 "DD/MM/YYYY"
-              )}\nOpening Balance: ${formatCurrency(
-                opening
-              )}\nClosing Balance: ${formatCurrency(
-                closing
-              )}\nTotal Transactions: ${ledgerTableData.length}`,
+              )}\nOpening Balance: ${formatBalanceWithLabel(opening, formatCurrency)
+              }\nClosing Balance: ${formatBalanceWithLabel(closing, formatCurrency)
+              }\nTotal Transactions: ${ledgerTableData.length}`,
             files: [file],
           });
           message.success("PDF shared successfully");

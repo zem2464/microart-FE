@@ -29,6 +29,53 @@ const formatCurrency = (amount) =>
     amount || 0
   );
 
+/**
+ * Get balance color based on amount sign
+ * Positive = Green (CR), Negative = Red (DR)
+ */
+const getBalanceColor = (amount) => {
+  if (amount > 0) return "#52c41a";
+  if (amount < 0) return "#f5222d";
+  return "#1890ff";
+};
+
+/**
+ * Process ledger transactions and calculate running balances
+ * @param {Array} transactions - Raw transactions from backend
+ * @param {number} openingBalance - Opening balance to start from
+ * @returns {Array} Transactions with calculated running balance
+ */
+const processLedgerTransactions = (transactions, openingBalance) => {
+  const txs = (transactions || []).slice();
+  
+  // Sort by transaction date
+  txs.sort((a, b) => new Date(a.transactionDate) - new Date(b.transactionDate));
+  
+  // Calculate running balance starting from opening balance
+  // Positive = We Owe Client (Credit), Negative = Client Owes Us (Debit)
+  let running = openingBalance;
+  return txs.map((t) => {
+    const debit = Number(t.debitAmount || 0);
+    const credit = Number(t.creditAmount || 0);
+    // New balance = Old Balance + Credit - Debit
+    running = running + credit - debit;
+    return { ...t, debit, credit, runningBalance: running };
+  });
+};
+
+/**
+ * Calculate closing balance from processed transactions
+ * @param {Array} processedTransactions - Transactions with running balance
+ * @param {number} openingBalance - Opening balance (used if no transactions)
+ * @returns {number} Closing balance
+ */
+const calculateClosingBalance = (processedTransactions, openingBalance) => {
+  if (processedTransactions.length > 0) {
+    return processedTransactions[processedTransactions.length - 1].runningBalance;
+  }
+  return openingBalance;
+};
+
 const buildWorkTypeSequenceMap = (project) => {
   const map = {};
 
@@ -741,34 +788,15 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                 const opening = Number(
                   range?.openingBalance ?? client.openingBalance ?? 0
                 );
-                const txs = (range?.transactions || []).slice();
 
-                // Debug: Log transaction data
-                if (txs.length > 0) {
-                  console.log(
-                    "ClientDetail Ledger transactions sample:",
-                    JSON.stringify(txs[0], null, 2)
-                  );
-                }
-
-                txs.sort(
-                  (a, b) =>
-                    new Date(a.transactionDate) - new Date(b.transactionDate)
+                // Use common utility for processing transactions
+                const txWithRunning = processLedgerTransactions(
+                  range?.transactions,
+                  opening
                 );
 
-                let running = opening;
-                const txWithRunning = txs.map((t) => {
-                  const debit = Number(t.debitAmount || 0);
-                  const credit = Number(t.creditAmount || 0);
-                  running = running + credit - debit;
-                  return { ...t, debit, credit, runningBalance: running };
-                });
-
-                // Calculate closing balance from opening + credits - debits
-                // Don't use backend's closingBalance as it uses transaction's balanceAfter which doesn't include client's openingBalance
-                const closing = txWithRunning.length > 0 
-                  ? txWithRunning[txWithRunning.length - 1].runningBalance 
-                  : opening;
+                // Calculate closing balance using common utility
+                const closing = calculateClosingBalance(txWithRunning, opening);
 
                 // Create opening and closing balance rows
                 const openingRow = {
@@ -991,8 +1019,8 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                           // width: 140,
                           align: "right",
                           render: (v, r) => {
-                            // Positive = Credit (green), Negative = Debit (red)
-                            const color = v > 0 ? "#52c41a" : v < 0 ? "#f5222d" : "#1890ff";
+                            // Use common utility for balance color
+                            const color = getBalanceColor(v);
                             const fontWeight = r.isBalanceRow ? 600 : 500;
                             const fontSize = r.isBalanceRow ? 14 : 12;
                             
