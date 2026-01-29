@@ -462,11 +462,14 @@ const LedgerReport = () => {
 
   const ledgerTableData = prepareLedgerData();
 
-  // Use backend-calculated opening and closing balances directly
+  // Use backend opening balance
   const opening = Number(ledgerData?.clientLedgerRange?.openingBalance ?? 0);
-  const closing = Number(
-    ledgerData?.clientLedgerRange?.closingBalance ?? opening
-  );
+  
+  // Calculate closing balance from last transaction's running balance
+  // Don't use backend's closingBalance as it uses transaction's balanceAfter which doesn't include client's openingBalance
+  const closing = ledgerTableData.length > 0 
+    ? ledgerTableData[ledgerTableData.length - 1].runningBalance 
+    : opening;
 
   // Calculate transaction totals
   const transactionDebit = ledgerTableData.reduce((sum, tx) => sum + tx.debit, 0);
@@ -1185,13 +1188,8 @@ const LedgerReport = () => {
       width: 90,
       align: "right",
       render: (value, record) => {
-        // If this is the currently selected client, use the calculated closing balance
-        // This ensures the sidebar list matches the detail view
-        let displayValue = value;
-        
-        if (selectedClient === record.clientId && ledgerData?.clientLedgerRange) {
-           displayValue = Number(ledgerData.clientLedgerRange.closingBalance ?? value);
-        }
+        // Show the client's overall current balance (not date-range filtered)
+        const displayValue = value;
 
         const color =
           displayValue > 0 ? "#52c41a" : displayValue < 0 ? "#f5222d" : "#1890ff";

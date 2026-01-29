@@ -764,8 +764,11 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                   return { ...t, debit, credit, runningBalance: running };
                 });
 
-                // Use backend-calculated closing balance
-                const closing = Number(range?.closingBalance ?? opening);
+                // Calculate closing balance from opening + credits - debits
+                // Don't use backend's closingBalance as it uses transaction's balanceAfter which doesn't include client's openingBalance
+                const closing = txWithRunning.length > 0 
+                  ? txWithRunning[txWithRunning.length - 1].runningBalance 
+                  : opening;
 
                 // Create opening and closing balance rows
                 const openingRow = {
