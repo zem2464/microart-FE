@@ -792,13 +792,6 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
 
                 const tableData = [openingRow, ...txWithRunning, closingRow];
 
-                const balanceLabel = (amt) => {
-                  if (amt > 0) return { text: "To Pay (DR)", color: "#f5222d" };
-                  if (amt < 0)
-                    return { text: "To Receive (CR)", color: "#52c41a" };
-                  return { text: "Settled", color: "#1890ff" };
-                };
-
                 return (
                   <div>
                     <Row gutter={16} style={{ marginBottom: 12 }}>
@@ -995,32 +988,15 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
                           // width: 140,
                           align: "right",
                           render: (v, r) => {
-                            const color = v > 0 ? "#f5222d" : v < 0 ? "#52c41a" : "#1890ff";
+                            // Positive = Credit (green), Negative = Debit (red)
+                            const color = v > 0 ? "#52c41a" : v < 0 ? "#f5222d" : "#1890ff";
                             const fontWeight = r.isBalanceRow ? 600 : 500;
-                            const fontSize = r.isBalanceRow ? 14 : undefined;
-                            
-                            if (r.isBalanceRow) {
-                              return (
-                                <div>
-                                  <Text style={{ color, fontWeight, fontSize }}>
-                                    {formatCurrency(v)}
-                                  </Text>
-                                </div>
-                              );
-                            }
+                            const fontSize = r.isBalanceRow ? 14 : 12;
                             
                             return (
-                              <div>
-                                <div>{formatCurrency(Math.abs(v))}</div>
-                                <div
-                                  style={{
-                                    color: balanceLabel(v).color,
-                                    fontSize: 11,
-                                  }}
-                                >
-                                  {balanceLabel(v).text}
-                                </div>
-                              </div>
+                              <Text style={{ color, fontWeight, fontSize }}>
+                                {formatCurrency(v)}
+                              </Text>
                             );
                           },
                         },
