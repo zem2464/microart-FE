@@ -497,15 +497,23 @@ const ClientList = () => {
         dataIndex: "clientType",
         key: "clientType",
         width: 120,
-        render: (type) => (
-          <Tag color={getClientTypeColor(type)}>
-            {type === "permanent"
-              ? "PERMANENT"
-              : type === "walkIn"
-                ? "WALK-IN"
-                : type?.toUpperCase()}
-          </Tag>
-        ),
+        render: (type, record) => {
+          const tooltipContent = record.preferredPaymentType
+            ? `Preferred Payment: ${record.preferredPaymentType.name} (${record.preferredPaymentType.type})`
+            : "No preferred payment type set";
+          
+          return (
+            <Tooltip title={tooltipContent}>
+              <Tag color={getClientTypeColor(type)}>
+                {type === "permanent"
+                  ? "PERMANENT"
+                  : type === "walkIn"
+                    ? "WALK-IN"
+                    : type?.toUpperCase()}
+              </Tag>
+            </Tooltip>
+          );
+        },
         filters: [
           { text: "Permanent Client", value: "permanent" },
           { text: "Walk-in Client", value: "walkIn" },
