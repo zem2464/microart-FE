@@ -167,6 +167,8 @@ export const GET_PROJECTS = gql`
         completedTaskCount
         isActive
         customFields
+        rawDataDeleted
+        editedImagesDeleted
         createdAt
         updatedAt
         deletedAt
@@ -359,6 +361,8 @@ export const UPDATE_PROJECT = gql`
       notes
       clientNotes
       customFields
+      rawDataDeleted
+      editedImagesDeleted
       isActive
       taskCount
       completedTaskCount
@@ -742,6 +746,8 @@ export const GET_PROJECT_DETAIL = gql`
       clientNotes
       customFields
       isActive
+      rawDataDeleted
+      editedImagesDeleted
       createdAt
       updatedAt
       

@@ -47,6 +47,12 @@ export const GET_CLIENTS = gql`
       totalPaid
       totalDue
       lastTransactionDate
+      preferredPaymentTypeId
+      preferredPaymentType {
+        id
+        name
+        type
+      }
       country {
         id
         name
@@ -116,6 +122,12 @@ export const GET_CLIENT = gql`
       totalPaid
       totalDue
       lastTransactionDate
+      preferredPaymentTypeId
+      preferredPaymentType {
+        id
+        name
+        type
+      }
       country {
         id
         name
@@ -311,6 +323,7 @@ export const CREATE_CLIENT = gql`
       priority
       transferMode
       isActive
+      preferredPaymentTypeId
       createdAt
     }
   }
@@ -330,6 +343,7 @@ export const UPDATE_CLIENT = gql`
       priority
       transferMode
       isActive
+      preferredPaymentTypeId
       updatedAt
     }
   }

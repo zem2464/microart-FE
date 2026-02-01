@@ -388,13 +388,23 @@ const ClientDetail = ({ client: clientProp, onEdit, onDelete, onClose }) => {
               client.creditDays ||
               client.creditAmountLimit ||
               client.openingBalance ||
-              client.accountMessage) && (
+              client.accountMessage ||
+              client.preferredPaymentType) && (
               <Card
                 title="Business Details"
                 size="small"
                 style={{ marginBottom: 16 }}
               >
                 <Row gutter={[16, 16]}>
+                  {client.preferredPaymentType && (
+                    <Col span={8}>
+                      <Text strong>Preferred Payment Type:</Text>
+                      <br />
+                      <Tag color="blue">
+                        {client.preferredPaymentType.name} ({client.preferredPaymentType.type})
+                      </Tag>
+                    </Col>
+                  )}
                   {client.isGstEnabled && (
                     <>
                       <Col span={8}>

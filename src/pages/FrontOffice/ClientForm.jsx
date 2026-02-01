@@ -33,6 +33,7 @@ import { buildGradingsPayload } from "./clientFormUtils";
 import { GET_WORK_TYPES } from "../../gql/workTypes";
 import { GET_USERS } from "../../gql/users";
 import { GET_GRADINGS_BY_WORK_TYPES } from "../../gql/gradings";
+import { GET_PAYMENT_TYPES } from "../../gql/paymentTypes";
 import TransferModeSelect from "../../components/TransferModeSelect";
 
 const { TextArea } = Input;
@@ -52,6 +53,9 @@ const ClientForm = ({
     fetchPolicy: "network-and-cache",
   });
   const { data: usersData, loading: usersLoading } = useQuery(GET_USERS, {
+    fetchPolicy: "network-and-cache",
+  });
+  const { data: paymentTypesData, loading: paymentTypesLoading } = useQuery(GET_PAYMENT_TYPES, {
     fetchPolicy: "network-and-cache",
   });
   const [selectedWorkTypes, setSelectedWorkTypes] = useState([]);
@@ -926,8 +930,8 @@ const ClientForm = ({
         // Remove read-only fields that are fetched but shouldn't be sent in update
         delete updateInput.__typename;
         delete updateInput.id;
-        delete updateInput.clientCode; // clientCode is auto-generated on type change
-        // clientType can now be updated - backend will generate new code if type changes
+        delete updateInput.clientCode; // clientCode is auto-generated and never changes
+        // clientType can be updated - client code remains unchanged
         delete updateInput.createdAt;
         delete updateInput.updatedAt;
         delete updateInput.totalBalance;
@@ -941,6 +945,7 @@ const ClientForm = ({
         delete updateInput.transactions;
         delete updateInput.creator;
         delete updateInput.phone; // 'phone' is used internally, backend expects contactNoWork
+        delete updateInput.preferredPaymentType; // Object is fetched but only ID should be sent
 
         console.log(
           "Submitting client UPDATE with input:",
@@ -1125,7 +1130,7 @@ const ClientForm = ({
                   ]}
                   tooltip={
                     client
-                      ? "Changing client type will generate a new client code (e.g., PC-00001 ↔ WC-00001)"
+                      ? "Client code remains the same when changing client type"
                       : undefined
                   }
                 >
@@ -1838,7 +1843,7 @@ const ClientForm = ({
 
             <Divider orientation="left">Financial Information</Divider>
             <Row gutter={16}>
-              <Col span={24}>
+              <Col span={12}>
                 <Form.Item
                   name="leader"
                   label="Leader"
@@ -1859,6 +1864,33 @@ const ClientForm = ({
                     {usersData?.users?.map((user) => (
                       <Option key={user.id} value={user.id}>
                         {user.firstName} {user.lastName}
+                      </Option>
+                    ))}
+                  </Select>
+                </Form.Item>
+              </Col>
+              <Col span={12}>
+                <Form.Item
+                  name="preferredPaymentTypeId"
+                  label="Preferred Payment Type"
+                  tooltip="Default payment type for this client"
+                >
+                  <Select
+                    placeholder="Select payment type"
+                    size="middle"
+                    showSearch
+                    allowClear
+                    optionFilterProp="children"
+                    loading={paymentTypesLoading}
+                    filterOption={(input, option) => {
+                      const label = (option?.children ?? "").toString().toLowerCase();
+                      const query = (input ?? "").toString().toLowerCase();
+                      return label.includes(query);
+                    }}
+                  >
+                    {paymentTypesData?.paymentTypes?.filter(pt => pt.isActive)?.map((pt) => (
+                      <Option key={pt.id} value={pt.id}>
+                        {pt.name} ({pt.type})
                       </Option>
                     ))}
                   </Select>

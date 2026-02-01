@@ -52,6 +52,8 @@ import {
   ExclamationCircleOutlined,
   FilePdfOutlined,
   ReloadOutlined,
+  FlagOutlined,
+  FlagFilled,
 } from "@ant-design/icons";
 import { useQuery, useMutation } from "@apollo/client";
 import {
@@ -1299,6 +1301,25 @@ const ProjectManagement = () => {
     }
   };
 
+  // Handler for toggling data deletion flags
+  const handleToggleDataFlag = async (projectId, flagName, newValue) => {
+    try {
+      await updateProjectStatus({
+        variables: {
+          id: projectId,
+          input: {
+            [flagName]: newValue,
+          },
+        },
+      });
+      message.success(
+        `${flagName === "rawDataDeleted" ? "Raw data" : "Edited images"} flag ${newValue ? "marked" : "unmarked"} successfully`
+      );
+    } catch (error) {
+      message.error(error.message || "Failed to update data deletion flag");
+    }
+  };
+
   // Table columns
   const columns = [
     {
@@ -1466,18 +1487,142 @@ const ProjectManagement = () => {
           color: "default",
         };
 
+        const showDataFlags = isDelivered && hasInvoice;
+
         return (
           <div className="group flex items-center justify-between">
-            <Tag color={statusConfig.color}>{statusConfig.label}</Tag>
-            {canEditProjects && (
-              <Button
-                type="text"
-                size="small"
-                icon={<EditOutlined />}
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={() => handleEditStatus(record.id, status)}
-              />
-            )}
+            <Space direction="vertical" size={4}>
+              <div className="flex items-center justify-between">
+                <Tag color={statusConfig.color}>{statusConfig.label}</Tag>
+                {canEditProjects && (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<EditOutlined />}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => handleEditStatus(record.id, status)}
+                  />
+                )}
+              </div>
+              {showDataFlags && (
+                <Space size={8}>
+                  <Tooltip
+                    title={
+                      record.rawDataDeleted
+                        ? "Raw data deleted ✓"
+                        : "Click to mark raw data as deleted"
+                    }
+                  >
+                    {record.rawDataDeleted ? (
+                      <FlagFilled
+                        style={{
+                          color: "#52c41a",
+                          fontSize: 16,
+                          cursor: canEditProjects ? "pointer" : "default",
+                        }}
+                        onClick={() =>
+                          canEditProjects &&
+                          handleToggleDataFlag(
+                            record.id,
+                            "rawDataDeleted",
+                            false
+                          )
+                        }
+                      />
+                    ) : (
+                      <FlagOutlined
+                        style={{
+                          color: "#d9d9d9",
+                          fontSize: 16,
+                          cursor: canEditProjects ? "pointer" : "default",
+                        }}
+                        onClick={() =>
+                          canEditProjects &&
+                          handleToggleDataFlag(record.id, "rawDataDeleted", true)
+                        }
+                      />
+                    )}
+                  </Tooltip>
+                  <Text
+                    type="secondary"
+                    style={{ 
+                      fontSize: 11, 
+                      minWidth: 85,
+                      cursor: canEditProjects ? "pointer" : "default",
+                    }}
+                    onClick={() =>
+                      canEditProjects &&
+                      handleToggleDataFlag(
+                        record.id,
+                        "rawDataDeleted",
+                        !record.rawDataDeleted
+                      )
+                    }
+                  >
+                    Raw Img Deleted
+                  </Text>
+                  <Tooltip
+                    title={
+                      record.editedImagesDeleted
+                        ? "Edited images deleted ✓"
+                        : "Click to mark edited images as deleted"
+                    }
+                  >
+                    {record.editedImagesDeleted ? (
+                      <FlagFilled
+                        style={{
+                          color: "#52c41a",
+                          fontSize: 16,
+                          cursor: canEditProjects ? "pointer" : "default",
+                        }}
+                        onClick={() =>
+                          canEditProjects &&
+                          handleToggleDataFlag(
+                            record.id,
+                            "editedImagesDeleted",
+                            false
+                          )
+                        }
+                      />
+                    ) : (
+                      <FlagOutlined
+                        style={{
+                          color: "#d9d9d9",
+                          fontSize: 16,
+                          cursor: canEditProjects ? "pointer" : "default",
+                        }}
+                        onClick={() =>
+                          canEditProjects &&
+                          handleToggleDataFlag(
+                            record.id,
+                            "editedImagesDeleted",
+                            true
+                          )
+                        }
+                      />
+                    )}
+                  </Tooltip>
+                  <Text
+                    type="secondary"
+                    style={{ 
+                      fontSize: 11, 
+                      minWidth: 95,
+                      cursor: canEditProjects ? "pointer" : "default",
+                    }}
+                    onClick={() =>
+                      canEditProjects &&
+                      handleToggleDataFlag(
+                        record.id,
+                        "editedImagesDeleted",
+                        !record.editedImagesDeleted
+                      )
+                    }
+                  >
+                    Edited Img Deleted
+                  </Text>
+                </Space>
+              )}
+            </Space>
           </div>
         );
       },
