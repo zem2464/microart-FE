@@ -18,6 +18,7 @@ const HolidayManagement = lazy(() => import('../pages/BackOffice/HolidayManageme
 const SalaryManagement = lazy(() => import('../pages/BackOffice/SalaryManagement'));
 const Finance = lazy(() => import('../pages/BackOffice/Finance'));
 const BackOfficeReminders = lazy(() => import('../pages/BackOffice/Reminders'));
+const PaymentTypeLedgerReport = lazy(() => import('../pages/BackOffice/PaymentTypeLedgerReport'));
 
 const FrontOfficeDashboard = lazy(() => import('../pages/FrontOffice/Dashboard'));
 const TaskTable = lazy(() => import('../pages/FrontOffice/TaskTable'));
@@ -138,6 +139,13 @@ export const backOfficeRoutes = [
     element: Reports,
     title: 'Reports',
     permission: generatePermission(MODULES.REPORTS, ACTIONS.MANAGE),
+    exact: true,
+  },
+  {
+    path: BACKOFFICE_ROUTES.PAYMENT_TYPE_LEDGER_REPORT,
+    element: PaymentTypeLedgerReport,
+    title: 'Payment Type Ledger Report',
+    permission: generatePermission(MODULES.FINANCE, ACTIONS.READ),
     exact: true,
   },
   {

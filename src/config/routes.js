@@ -26,6 +26,7 @@ export const BACKOFFICE_ROUTES = {
   HOLIDAYS: '/holidays',
   SALARY_MANAGEMENT: '/salary-management',
   REPORTS: '/reports',
+  PAYMENT_TYPE_LEDGER_REPORT: '/payment-type-ledger-report',
   SETTINGS: '/settings',
 };
 

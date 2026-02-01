@@ -110,6 +110,10 @@ const BackOfficeLayout = () => {
           key: "/payment-types",
           label: <Link to="/payment-types">Payment Types</Link>,
         },
+        canViewFinance && {
+          key: "/payment-type-ledger-report",
+          label: <Link to="/payment-type-ledger-report">Payment Ledger Report</Link>,
+        },
         canManageUsers && {
           key: "/salary-management",
           label: <Link to="/salary-management">Salary Management</Link>,

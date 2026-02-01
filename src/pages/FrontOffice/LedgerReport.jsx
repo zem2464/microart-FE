@@ -46,24 +46,24 @@ import { font } from "../../fonts/Noto_Sans/NotoSans.base64.js";
 import { boldFont } from "../../fonts/Noto_Sans/NotoSans-bold.js";
 
 const BRAND_COLORS = {
-  primary: '#667eea', // matches logo background
-  primaryDark: '#4c51bf',
-  accent: '#f6f8ff',
-  text: '#1f2a44',
+  primary: "#667eea", // matches logo background
+  primaryDark: "#4c51bf",
+  accent: "#f6f8ff",
+  text: "#1f2a44",
 };
 
 const COMPANY_DETAILS = {
-  name: 'The Image Care',
-  contactName: 'Rohit Ramani',
+  name: "The Image Care",
+  contactName: "Rohit Ramani",
   address:
-    '204 MBC, Meridian Business Centre, Lajamni Chowk, opposite Opera Business Center, Shanti Niketan Society, Mota Varachha, Surat, Gujarat 394105',
-  phone: '+91 9904530103',
-  upiId: 'asmitaramani99@okhdfcbank',
+    "204 MBC, Meridian Business Centre, Lajamni Chowk, opposite Opera Business Center, Shanti Niketan Society, Mota Varachha, Surat, Gujarat 394105",
+  phone: "+91 9904530103",
+  upiId: "asmitaramani99@okhdfcbank",
   bank: {
-    bankName: 'HDFC',
-    accountName: 'ASHMITABEN RAMANI',
-    accountNumber: '50100088829930',
-    ifsc: 'HDFC0001684',
+    bankName: "HDFC",
+    accountName: "ASHMITABEN RAMANI",
+    accountNumber: "50100088829930",
+    ifsc: "HDFC0001684",
   },
 };
 
@@ -79,7 +79,7 @@ const loadImageAsDataURL = async (path) => {
       reader.readAsDataURL(blob);
     });
   } catch (err) {
-    console.error('Error loading image', path, err);
+    console.error("Error loading image", path, err);
     return null;
   }
 };
@@ -126,7 +126,10 @@ const getBalanceColor = (amount) => {
 /**
  * Format balance with absolute value and CR/DR label
  */
-const formatBalanceWithLabel = (amount, formatter = formatCurrencyNoDecimal) => {
+const formatBalanceWithLabel = (
+  amount,
+  formatter = formatCurrencyNoDecimal,
+) => {
   const label = getBalanceLabel(amount);
   return `${formatter(Math.abs(amount))}${label ? ` ${label}` : ""}`;
 };
@@ -139,10 +142,10 @@ const formatBalanceWithLabel = (amount, formatter = formatCurrencyNoDecimal) => 
  */
 const processLedgerTransactions = (transactions, openingBalance) => {
   const txs = (transactions || []).slice();
-  
+
   // Sort by transaction date
   txs.sort((a, b) => new Date(a.transactionDate) - new Date(b.transactionDate));
-  
+
   // Calculate running balance starting from opening balance
   // Positive = We Owe Client (Credit), Negative = Client Owes Us (Debit)
   let running = openingBalance;
@@ -163,7 +166,8 @@ const processLedgerTransactions = (transactions, openingBalance) => {
  */
 const calculateClosingBalance = (processedTransactions, openingBalance) => {
   if (processedTransactions.length > 0) {
-    return processedTransactions[processedTransactions.length - 1].runningBalance;
+    return processedTransactions[processedTransactions.length - 1]
+      .runningBalance;
   }
   return openingBalance;
 };
@@ -195,8 +199,10 @@ const getSortedProjectGradings = (project) => {
   const workTypeSequenceMap = buildWorkTypeSequenceMap(project);
 
   return [...project.projectGradings].sort((a, b) => {
-    const orderA = workTypeSequenceMap[String(a?.grading?.workType?.id)] ?? 9999;
-    const orderB = workTypeSequenceMap[String(b?.grading?.workType?.id)] ?? 9999;
+    const orderA =
+      workTypeSequenceMap[String(a?.grading?.workType?.id)] ?? 9999;
+    const orderB =
+      workTypeSequenceMap[String(b?.grading?.workType?.id)] ?? 9999;
     if (orderA !== orderB) return orderA - orderB;
     const nameA = a?.grading?.name || "";
     const nameB = b?.grading?.name || "";
@@ -210,7 +216,7 @@ const LedgerReport = () => {
   // Check if user has limited read permission
   const hasLimitedRead = hasPermission(
     user,
-    generatePermission(MODULES.PROJECTS, ACTIONS.LIMTEREAD)
+    generatePermission(MODULES.PROJECTS, ACTIONS.LIMTEREAD),
   );
 
   // State for selected client and filters
@@ -432,7 +438,7 @@ const LedgerReport = () => {
         loadMoreClients();
       }
     },
-    [loadMoreClients]
+    [loadMoreClients],
   );
 
   // Handle date filter type change
@@ -503,19 +509,25 @@ const LedgerReport = () => {
 
   // Use backend opening balance
   const opening = Number(ledgerData?.clientLedgerRange?.openingBalance ?? 0);
-  
+
   // Process transactions using common utility function
   const ledgerTableData = processLedgerTransactions(
     ledgerData?.clientLedgerRange?.transactions,
-    opening
+    opening,
   );
-  
+
   // Calculate closing balance using common utility function
   const closing = calculateClosingBalance(ledgerTableData, opening);
 
   // Calculate transaction totals
-  const transactionDebit = ledgerTableData.reduce((sum, tx) => sum + tx.debit, 0);
-  const transactionCredit = ledgerTableData.reduce((sum, tx) => sum + tx.credit, 0);
+  const transactionDebit = ledgerTableData.reduce(
+    (sum, tx) => sum + tx.debit,
+    0,
+  );
+  const transactionCredit = ledgerTableData.reduce(
+    (sum, tx) => sum + tx.credit,
+    0,
+  );
 
   // Include opening balance in totals
   // In this system: Positive = we owe client (credit), Negative = client owes us (debit)
@@ -525,25 +537,29 @@ const LedgerReport = () => {
   const calculatedClosing = opening + transactionCredit - transactionDebit;
 
   // Debug logging for closing balance calculation
-  console.log('=== LEDGER BALANCE DEBUG ===', {
+  console.log("=== LEDGER BALANCE DEBUG ===", {
     opening,
     transactionDebit,
     transactionCredit,
     calculatedClosing,
     backendClosing: closing,
     difference: closing - calculatedClosing,
-    lastTxRunningBalance: ledgerTableData.length > 0 ? ledgerTableData[ledgerTableData.length - 1]?.runningBalance : null
+    lastTxRunningBalance:
+      ledgerTableData.length > 0
+        ? ledgerTableData[ledgerTableData.length - 1]?.runningBalance
+        : null,
   });
 
   // Verify backend closing matches calculated closing
   React.useEffect(() => {
     if (ledgerTableData.length > 0) {
-      const lastRunningBalance = ledgerTableData[ledgerTableData.length - 1]?.runningBalance;
+      const lastRunningBalance =
+        ledgerTableData[ledgerTableData.length - 1]?.runningBalance;
       if (Math.abs(lastRunningBalance - closing) > 0.01) {
-        console.warn('Closing balance mismatch:', {
+        console.warn("Closing balance mismatch:", {
           backend: closing,
           calculated: lastRunningBalance,
-          difference: closing - lastRunningBalance
+          difference: closing - lastRunningBalance,
         });
       }
     }
@@ -583,7 +599,7 @@ const LedgerReport = () => {
   // Get selected client details
   const selectedClientData =
     clientsBalanceData?.allClientsBalanceSummary?.clients?.find(
-      (c) => c.clientId === selectedClient
+      (c) => c.clientId === selectedClient,
     );
 
   // Export to Excel
@@ -597,14 +613,15 @@ const LedgerReport = () => {
     const excelData = [
       [`${COMPANY_DETAILS.name} - Client Ledger Report`],
       [
-        `Client: ${selectedClientData?.displayName ||
-        selectedClientData?.companyName ||
-        "N/A"
+        `Client: ${
+          selectedClientData?.displayName ||
+          selectedClientData?.companyName ||
+          "N/A"
         } (${selectedClientData?.clientCode || "N/A"})`,
       ],
       [
         `Period: ${dateRange[0].format("DD MMM YYYY")} to ${dateRange[1].format(
-          "DD MMM YYYY"
+          "DD MMM YYYY",
         )}`,
       ],
       [`Generated on: ${dayjs().format("DD MMM YYYY, HH:mm")}`],
@@ -636,7 +653,7 @@ const LedgerReport = () => {
       if (project?.createdAt && row.invoice?.invoiceDate) {
         const days = dayjs(row.invoice.invoiceDate).diff(
           dayjs(project.createdAt),
-          "day"
+          "day",
         );
         workDays = `${days}d`;
       }
@@ -654,9 +671,10 @@ const LedgerReport = () => {
       if (project?.projectGradings?.length > 0) {
         const lines = project.projectGradings.map((pg) => {
           const qty = pg.imageQuantity || 0;
-          const rate = (pg.customRate !== undefined && pg.customRate !== null)
-            ? pg.customRate
-            : (pg.grading?.defaultRate ?? 0);
+          const rate =
+            pg.customRate !== undefined && pg.customRate !== null
+              ? pg.customRate
+              : (pg.grading?.defaultRate ?? 0);
           const total = qty * rate;
           return `${pg.grading?.name || pg.grading?.shortCode} (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
         });
@@ -664,7 +682,10 @@ const LedgerReport = () => {
       }
 
       // Format running balance with DR/CR using common utility
-      const formattedBalance = formatBalanceWithLabel(row.runningBalance, formatCurrency);
+      const formattedBalance = formatBalanceWithLabel(
+        row.runningBalance,
+        formatCurrency,
+      );
 
       excelData.push([
         row.invoice?.project?.createdAt
@@ -686,18 +707,22 @@ const LedgerReport = () => {
     // Add closing balance section
     excelData.push([]);
     excelData.push(["CLOSING BALANCE"]);
-    excelData.push(["Closing Balance", formatBalanceWithLabel(closing, formatCurrency)]);
+    excelData.push([
+      "Closing Balance",
+      formatBalanceWithLabel(closing, formatCurrency),
+    ]);
 
     const ws = XLSX.utils.aoa_to_sheet(excelData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Client Ledger");
 
-    const fileName = `${selectedClientData?.displayName ||
+    const fileName = `${
+      selectedClientData?.displayName ||
       selectedClientData?.companyName ||
       "Client"
-      }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
-        "DD-MMM-YYYY"
-      )}.xlsx`;
+    }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
+      "DD-MMM-YYYY",
+    )}.xlsx`;
     XLSX.writeFile(wb, fileName);
     message.success("Excel file downloaded successfully");
   };
@@ -725,33 +750,40 @@ const LedgerReport = () => {
       let yPos = 8;
 
       // Load Logo
-      const logoPng = await loadImageAsDataURL(`${window.location.origin}/assets/icon.png`);
+      const logoPng = await loadImageAsDataURL(
+        `${window.location.origin}/assets/icon.png`,
+      );
 
       // ===== HEADER =====
       if (logoPng) {
         const logoSize = 26;
         const logoX = (pageWidth - logoSize) / 2;
-        doc.addImage(logoPng, 'PNG', logoX, yPos, logoSize, logoSize);
+        doc.addImage(logoPng, "PNG", logoX, yPos, logoSize, logoSize);
       }
 
       doc.setFontSize(14);
-      doc.setFont('NotoSans', 'bold');
+      doc.setFont("NotoSans", "bold");
       doc.setTextColor(BRAND_COLORS.primary);
-      doc.text('CLIENT LEDGER REPORT', pageWidth / 2, yPos + 22, { align: 'center' });
+      doc.text("CLIENT LEDGER REPORT", pageWidth / 2, yPos + 22, {
+        align: "center",
+      });
 
       yPos += 26;
 
       // ===== COMPANY AND CLIENT INFO =====
       // Left side - Company details
       doc.setFontSize(10);
-      doc.setFont('NotoSans', 'bold');
+      doc.setFont("NotoSans", "bold");
       doc.setTextColor(BRAND_COLORS.text);
       doc.text(COMPANY_DETAILS.name, 14, yPos);
 
       doc.setFontSize(8);
-      doc.setFont('NotoSans', 'normal');
+      doc.setFont("NotoSans", "normal");
       // Wrap address
-      const addressLines = doc.splitTextToSize(COMPANY_DETAILS.address, pageWidth / 2 - 30);
+      const addressLines = doc.splitTextToSize(
+        COMPANY_DETAILS.address,
+        pageWidth / 2 - 30,
+      );
       let leftBlockY = yPos + 5;
       addressLines.forEach((line, idx) => {
         doc.text(line, 14, leftBlockY + idx * 4);
@@ -763,16 +795,23 @@ const LedgerReport = () => {
       // Right side - Client Details
       const rightX = pageWidth / 2 + 20;
       doc.setFontSize(10);
-      doc.setFont('NotoSans', 'bold');
-      doc.text('Client Details:', rightX, yPos);
+      doc.setFont("NotoSans", "bold");
+      doc.text("Client Details:", rightX, yPos);
 
-      doc.setFont('NotoSans', 'normal');
+      doc.setFont("NotoSans", "normal");
       doc.setTextColor(BRAND_COLORS.text);
 
       // Client Name
-      const clientName = selectedClientData?.displayName || selectedClientData?.companyName || "N/A";
+      const clientName =
+        selectedClientData?.displayName ||
+        selectedClientData?.companyName ||
+        "N/A";
       doc.text(clientName, rightX, yPos + 5);
-      doc.text(`Client Code: ${selectedClientData?.clientCode || "N/A"}`, rightX, yPos + 9);
+      doc.text(
+        `Client Code: ${selectedClientData?.clientCode || "N/A"}`,
+        rightX,
+        yPos + 9,
+      );
 
       const periodText = `Period: ${dateRange[0].format("DD MMM YYYY")} to ${dateRange[1].format("DD MMM YYYY")}`;
       doc.text(periodText, rightX, yPos + 14);
@@ -785,7 +824,11 @@ const LedgerReport = () => {
       doc.setFont("NotoSans", "bold");
       doc.setTextColor(40);
 
-      doc.text(`Opening Balance: ${formatBalanceWithLabel(opening, formatCurrencyNoDecimal)}`, 14, yPos);
+      doc.text(
+        `Opening Balance: ${formatBalanceWithLabel(opening, formatCurrencyNoDecimal)}`,
+        14,
+        yPos,
+      );
 
       // Prepare table data
       const tableData = ledgerTableData.map((row) => {
@@ -797,7 +840,7 @@ const LedgerReport = () => {
         if (project?.createdAt && row.invoice?.invoiceDate) {
           const days = dayjs(row.invoice.invoiceDate).diff(
             dayjs(project.createdAt),
-            "day"
+            "day",
           );
           workDays = `${days}d`;
         }
@@ -815,23 +858,29 @@ const LedgerReport = () => {
         if (project?.projectGradings?.length > 0) {
           const lines = getSortedProjectGradings(project).map((pg) => {
             const qty = pg.imageQuantity || 0;
-            const rate = (pg.customRate !== undefined && pg.customRate !== null)
-              ? pg.customRate
-              : (pg.grading?.defaultRate ?? 0);
+            const rate =
+              pg.customRate !== undefined && pg.customRate !== null
+                ? pg.customRate
+                : (pg.grading?.defaultRate ?? 0);
             const total = qty * rate;
-            const gradingName = pg.grading?.name || pg.grading?.shortCode || "N/A";
-            const gradingCode = pg.grading?.shortCode || '';
-            const gradingLabel = gradingCode && gradingCode !== gradingName
-              ? `${gradingName} (${gradingCode})`
-              : gradingName;
+            const gradingName =
+              pg.grading?.name || pg.grading?.shortCode || "N/A";
+            const gradingCode = pg.grading?.shortCode || "";
+            const gradingLabel =
+              gradingCode && gradingCode !== gradingName
+                ? `${gradingName} (${gradingCode})`
+                : gradingName;
             // Format without work type name, just grading details
-            return `${gradingLabel}: ${qty} x ₹${Math.round(rate)} = ₹${Math.round(total)}`;
+            return `${gradingLabel}: ${qty} x ₹${rate} = ₹${total}`;
           });
           detailsText = lines.join("\n");
         }
 
         // Use common utility for balance formatting
-        const formattedBalance = formatBalanceWithLabel(row.runningBalance, formatCurrencyNoDecimal);
+        const formattedBalance = formatBalanceWithLabel(
+          row.runningBalance,
+          formatCurrencyNoDecimal,
+        );
 
         return [
           row.invoice?.project?.createdAt
@@ -877,9 +926,9 @@ const LedgerReport = () => {
         columnStyles: {
           2: { cellWidth: 15, halign: "center" },
           5: { cellWidth: 70 },
-          6: { halign: 'right' },
-          7: { halign: 'right' },
-          8: { halign: 'right' },
+          6: { halign: "right" },
+          7: { halign: "right" },
+          8: { halign: "right" },
         },
       });
 
@@ -889,7 +938,11 @@ const LedgerReport = () => {
       doc.setFont("NotoSans", "bold");
       doc.setTextColor(40);
 
-      doc.text(`Closing Balance: ${formatBalanceWithLabel(closing, formatCurrencyNoDecimal)}`, 14, finalY + 10);
+      doc.text(
+        `Closing Balance: ${formatBalanceWithLabel(closing, formatCurrencyNoDecimal)}`,
+        14,
+        finalY + 10,
+      );
 
       // Add footer with Generated on
       const pageHeight = doc.internal.pageSize.getHeight();
@@ -900,15 +953,16 @@ const LedgerReport = () => {
         `Generated on: ${dayjs().format("DD MMM YYYY, HH:mm")}`,
         pageWidth / 2,
         pageHeight - 10,
-        { align: "center" }
+        { align: "center" },
       );
 
-      const fileName = `${selectedClientData?.displayName ||
+      const fileName = `${
+        selectedClientData?.displayName ||
         selectedClientData?.companyName ||
         "Client"
-        }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
-          "DD-MMM-YYYY"
-        )}.pdf`;
+      }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
+        "DD-MMM-YYYY",
+      )}.pdf`;
       doc.save(fileName);
       hideLoading();
       message.success("PDF file downloaded successfully");
@@ -954,11 +1008,11 @@ const LedgerReport = () => {
       doc.setTextColor(100);
       doc.text(
         `Period: ${dateRange[0].format("DD MMM YYYY")} to ${dateRange[1].format(
-          "DD MMM YYYY"
+          "DD MMM YYYY",
         )}`,
         pageWidth / 2,
         22,
-        { align: "center" }
+        { align: "center" },
       );
 
       // Next line: MicroArt on left, Client Info on right
@@ -970,19 +1024,24 @@ const LedgerReport = () => {
       doc.setFontSize(10);
       doc.setFont("NotoSans", "normal");
       doc.text(
-        `Client: ${selectedClientData?.displayName ||
-        selectedClientData?.companyName ||
-        "N/A"
+        `Client: ${
+          selectedClientData?.displayName ||
+          selectedClientData?.companyName ||
+          "N/A"
         } (${selectedClientData?.clientCode || "N/A"})`,
         pageWidth - 14,
         30,
-        { align: "right" }
+        { align: "right" },
       );
 
       doc.setFontSize(10);
       doc.setFont("NotoSans", "bold");
       doc.setTextColor(40);
-      doc.text(`Opening Balance: ${formatBalanceWithLabel(opening, formatCurrency)}`, 14, 38);
+      doc.text(
+        `Opening Balance: ${formatBalanceWithLabel(opening, formatCurrency)}`,
+        14,
+        38,
+      );
 
       // Prepare table data
       const tableData = ledgerTableData.map((row) => {
@@ -995,7 +1054,7 @@ const LedgerReport = () => {
         if (project?.createdAt && row.invoice?.invoiceDate) {
           const days = dayjs(row.invoice.invoiceDate).diff(
             dayjs(project.createdAt),
-            "day"
+            "day",
           );
           workDays = `${days}d`;
         }
@@ -1012,12 +1071,14 @@ const LedgerReport = () => {
         if (project?.projectGradings?.length > 0) {
           const lines = project.projectGradings.map((pg) => {
             const qty = pg.imageQuantity || 0;
-            const rate = (pg.customRate !== undefined && pg.customRate !== null)
-              ? pg.customRate
-              : (pg.grading?.defaultRate ?? 0);
+            const rate =
+              pg.customRate !== undefined && pg.customRate !== null
+                ? pg.customRate
+                : (pg.grading?.defaultRate ?? 0);
             const total = qty * rate;
-            return `${pg.grading?.name || pg.grading?.shortCode
-              } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
+            return `${
+              pg.grading?.name || pg.grading?.shortCode
+            } (qty) ${qty} × ₹${rate.toFixed(2)} = ₹${total.toFixed(2)}`;
           });
           detailsText = lines.join("\n");
         }
@@ -1074,7 +1135,11 @@ const LedgerReport = () => {
       doc.setFontSize(10);
       doc.setFont("NotoSans", "bold");
       doc.setTextColor(40);
-      doc.text(`Closing Balance: ${formatBalanceWithLabel(closing, formatCurrency)}`, 14, finalY + 10);
+      doc.text(
+        `Closing Balance: ${formatBalanceWithLabel(closing, formatCurrency)}`,
+        14,
+        finalY + 10,
+      );
 
       // Add footer
       const pageHeight = doc.internal.pageSize.height;
@@ -1085,15 +1150,16 @@ const LedgerReport = () => {
         `Generated on: ${dayjs().format("DD MMM YYYY, HH:mm")}`,
         pageWidth / 2,
         pageHeight - 10,
-        { align: "center" }
+        { align: "center" },
       );
 
-      const fileName = `${selectedClientData?.displayName ||
+      const fileName = `${
+        selectedClientData?.displayName ||
         selectedClientData?.companyName ||
         "Client"
-        }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
-          "DD-MMM-YYYY"
-        )}.pdf`;
+      }_Ledger_${dateRange[0].format("DD-MMM-YYYY")}_to_${dateRange[1].format(
+        "DD-MMM-YYYY",
+      )}.pdf`;
 
       // Get PDF as blob
       const pdfBlob = doc.output("blob");
@@ -1105,16 +1171,21 @@ const LedgerReport = () => {
         if (navigator.canShare({ files: [file] })) {
           await navigator.share({
             title: "Client Ledger Report",
-            text: `*Client Ledger Report*\n\nClient: ${selectedClientData?.displayName ||
+            text: `*Client Ledger Report*\n\nClient: ${
+              selectedClientData?.displayName ||
               selectedClientData?.companyName ||
               "N/A"
-              }\nPeriod: ${dateRange[0].format(
-                "DD/MM/YYYY"
-              )} to ${dateRange[1].format(
-                "DD/MM/YYYY"
-              )}\nOpening Balance: ${formatBalanceWithLabel(opening, formatCurrency)
-              }\nClosing Balance: ${formatBalanceWithLabel(closing, formatCurrency)
-              }\nTotal Transactions: ${ledgerTableData.length}`,
+            }\nPeriod: ${dateRange[0].format(
+              "DD/MM/YYYY",
+            )} to ${dateRange[1].format(
+              "DD/MM/YYYY",
+            )}\nOpening Balance: ${formatBalanceWithLabel(
+              opening,
+              formatCurrency,
+            )}\nClosing Balance: ${formatBalanceWithLabel(
+              closing,
+              formatCurrency,
+            )}\nTotal Transactions: ${ledgerTableData.length}`,
             files: [file],
           });
           message.success("PDF shared successfully");
@@ -1125,19 +1196,21 @@ const LedgerReport = () => {
       // Fallback: Download PDF and open WhatsApp with text
       doc.save(fileName);
 
-      const whatsappMessage = `*Client Ledger Report*%0A%0A*Client:* ${selectedClientData?.displayName ||
+      const whatsappMessage = `*Client Ledger Report*%0A%0A*Client:* ${
+        selectedClientData?.displayName ||
         selectedClientData?.companyName ||
         "N/A"
-        }%0A*Period:* ${dateRange[0].format(
-          "DD/MM/YYYY"
-        )} to ${dateRange[1].format(
-          "DD/MM/YYYY"
-        )}%0A*Opening Balance:* ${formatCurrency(
-          opening
-        )}%0A*Closing Balance:* ${formatCurrency(
-          closing
-        )}%0A*Total Transactions:* ${ledgerTableData.length
-        }%0A%0APlease find the detailed ledger report attached.`;
+      }%0A*Period:* ${dateRange[0].format(
+        "DD/MM/YYYY",
+      )} to ${dateRange[1].format(
+        "DD/MM/YYYY",
+      )}%0A*Opening Balance:* ${formatCurrency(
+        opening,
+      )}%0A*Closing Balance:* ${formatCurrency(
+        closing,
+      )}%0A*Total Transactions:* ${
+        ledgerTableData.length
+      }%0A%0APlease find the detailed ledger report attached.`;
 
       const whatsappUrl = `https://wa.me/?text=${whatsappMessage}`;
 
@@ -1226,8 +1299,13 @@ const LedgerReport = () => {
         const displayValue = value;
 
         const color =
-          displayValue > 0 ? "#52c41a" : displayValue < 0 ? "#f5222d" : "#1890ff";
-        const label = displayValue > 0 ? "(CR)" : displayValue < 0 ? "(DR)" : "";
+          displayValue > 0
+            ? "#52c41a"
+            : displayValue < 0
+              ? "#f5222d"
+              : "#1890ff";
+        const label =
+          displayValue > 0 ? "(CR)" : displayValue < 0 ? "(DR)" : "";
         return (
           <Space direction="vertical" size={0} align="end">
             <Text strong style={{ color, fontSize: 11 }}>
@@ -1245,41 +1323,43 @@ const LedgerReport = () => {
 
   // Ledger table columns
   const columns = [
-    ...(hasLimitedRead ? [] : [
-      {
-        title: "Invoice",
-        key: "invoiceInfo",
-        width: 130,
-        render: (_, r) => {
-          if (r.isBalanceRow) return null;
+    ...(hasLimitedRead
+      ? []
+      : [
+          {
+            title: "Invoice",
+            key: "invoiceInfo",
+            width: 130,
+            render: (_, r) => {
+              if (r.isBalanceRow) return null;
 
-          // For payment records, show payment number and date
-          if (r.payment) {
-            return (
-              <div style={{ fontSize: 11 }}>
-                <div>{r.payment?.paymentNumber || "Payment"}</div>
-                <div style={{ color: "#999" }}>
-                  {r.payment?.paymentDate
-                    ? dayjs(r.payment.paymentDate).format("DD/MM/YY")
-                    : "-"}
+              // For payment records, show payment number and date
+              if (r.payment) {
+                return (
+                  <div style={{ fontSize: 11 }}>
+                    <div>{r.payment?.paymentNumber || "Payment"}</div>
+                    <div style={{ color: "#999" }}>
+                      {r.payment?.paymentDate
+                        ? dayjs(r.payment.paymentDate).format("DD/MM/YY")
+                        : "-"}
+                    </div>
+                  </div>
+                );
+              }
+
+              return (
+                <div style={{ fontSize: 11 }}>
+                  <div>{r.invoice?.invoiceNumber || "-"}</div>
+                  <div style={{ color: "#999" }}>
+                    {r.invoice?.invoiceDate
+                      ? dayjs(r.invoice.invoiceDate).format("DD/MM/YY")
+                      : "-"}
+                  </div>
                 </div>
-              </div>
-            );
-          }
-
-          return (
-            <div style={{ fontSize: 11 }}>
-              <div>{r.invoice?.invoiceNumber || "-"}</div>
-              <div style={{ color: "#999" }}>
-                {r.invoice?.invoiceDate
-                  ? dayjs(r.invoice.invoiceDate).format("DD/MM/YY")
-                  : "-"}
-              </div>
-            </div>
-          );
-        },
-      },
-    ]),
+              );
+            },
+          },
+        ]),
     {
       title: "Particulars",
       key: "particulars",
@@ -1302,18 +1382,26 @@ const LedgerReport = () => {
 
         // For payment records, show payment type and reference
         if (r.payment) {
-          const paymentType = r.payment?.paymentType?.name || r.payment?.paymentType?.type || "Payment";
-          const refNum = r.payment?.referenceNumber ? ` (${r.payment.referenceNumber})` : "";
+          const paymentType =
+            r.payment?.paymentType?.name ||
+            r.payment?.paymentType?.type ||
+            "Payment";
+          const refNum = r.payment?.referenceNumber
+            ? ` (${r.payment.referenceNumber})`
+            : "";
           return (
             <Tooltip title={`${paymentType}${refNum}`}>
-              <span style={{ fontSize: 11 }}>{paymentType}{refNum}</span>
+              <span style={{ fontSize: 11 }}>
+                {paymentType}
+                {refNum}
+              </span>
             </Tooltip>
           );
         }
 
         const project = r.invoice?.project;
         if (project) {
-          const fullText = `${project.projectCode}${project.name || project.description ? ' - ' + (project.name || project.description) : ''}`;
+          const fullText = `${project.projectCode}${project.name || project.description ? " - " + (project.name || project.description) : ""}`;
           return (
             <Tooltip title={fullText}>
               <div style={{ fontSize: 11 }}>
@@ -1341,12 +1429,23 @@ const LedgerReport = () => {
 
         // For payment records, show payment type and reference details
         if (r.payment) {
-          const paymentType = r.payment?.paymentType?.name || r.payment?.paymentType?.type || "Payment";
-          const refNum = r.payment?.referenceNumber ? `Ref: ${r.payment.referenceNumber}` : "";
-          const bankName = r.payment?.bankName ? `Bank: ${r.payment.bankName}` : "";
-          const chequeDate = r.payment?.chequeDate ? `Cheque: ${dayjs(r.payment.chequeDate).format("DD/MM/YY")}` : "";
+          const paymentType =
+            r.payment?.paymentType?.name ||
+            r.payment?.paymentType?.type ||
+            "Payment";
+          const refNum = r.payment?.referenceNumber
+            ? `Ref: ${r.payment.referenceNumber}`
+            : "";
+          const bankName = r.payment?.bankName
+            ? `Bank: ${r.payment.bankName}`
+            : "";
+          const chequeDate = r.payment?.chequeDate
+            ? `Cheque: ${dayjs(r.payment.chequeDate).format("DD/MM/YY")}`
+            : "";
 
-          const details = [paymentType, refNum, bankName, chequeDate].filter(Boolean);
+          const details = [paymentType, refNum, bankName, chequeDate].filter(
+            Boolean,
+          );
           return (
             <div style={{ fontSize: 10, lineHeight: "1.4" }}>
               {details.map((detail, idx) => (
@@ -1360,15 +1459,18 @@ const LedgerReport = () => {
         if (project?.projectGradings?.length > 0) {
           const lines = getSortedProjectGradings(project).map((pg) => {
             const qty = pg.imageQuantity || 0;
-            const rate = (pg.customRate !== undefined && pg.customRate !== null)
-              ? pg.customRate
-              : (pg.grading?.defaultRate ?? 0);
+            const rate =
+              pg.customRate !== undefined && pg.customRate !== null
+                ? pg.customRate
+                : (pg.grading?.defaultRate ?? 0);
             const total = qty * rate;
             const gradingName = pg.grading?.name || "N/A";
-            const gradingCode = pg.grading?.shortCode || '';
-            const gradingLabel = gradingCode ? `${gradingName} (${gradingCode})` : gradingName;
+            const gradingCode = pg.grading?.shortCode || "";
+            const gradingLabel = gradingCode
+              ? `${gradingName} (${gradingCode})`
+              : gradingName;
             // Format without work type name, just grading details
-            return `${gradingLabel}: ${qty} × ₹${Math.round(rate)} = ₹${Math.round(total)}`;
+            return `${gradingLabel}: ${qty} × ₹${rate} = ₹${total}`;
           });
           return (
             <div style={{ fontSize: 10, lineHeight: "1.4" }}>
@@ -1381,52 +1483,70 @@ const LedgerReport = () => {
         return <span style={{ fontSize: 11 }}>{r.description || "-"}</span>;
       },
     },
-    ...(hasLimitedRead ? [] : [
-      {
-        title: "Debit",
-        dataIndex: "debit",
-        key: "debit",
-        width: 90,
-        align: "right",
-        render: (v, r) => {
-          if (r.isBalanceRow) return null;
-          return v > 0 ? <span style={{ fontSize: 11, color: "#ff4d4f", fontWeight: 500 }}>{formatCurrencyNoDecimal(v)}</span> : "-";
-        },
-      },
-      {
-        title: "Credit",
-        dataIndex: "credit",
-        key: "credit",
-        width: 90,
-        align: "right",
-        render: (v, r) => {
-          if (r.isBalanceRow) return null;
-          return v > 0 ? <span style={{ fontSize: 11, color: "#52c41a", fontWeight: 500 }}>{formatCurrencyNoDecimal(v)}</span> : "-";
-        },
-      },
-      {
-        title: "Balance",
-        dataIndex: "runningBalance",
-        key: "runningBalance",
-        width: 100,
-        align: "right",
-        render: (v, r) => {
-          const color = v > 0 ? "#52c41a" : v < 0 ? "#f5222d" : "#1890ff";
-          const fontWeight = r.isBalanceRow ? 600 : 500;
-          const fontSize = r.isBalanceRow ? 13 : 11;
-          return (
-            <Text style={{ color, fontWeight, fontSize }}>
-              {formatCurrencyNoDecimal(v)}
-            </Text>
-          );
-        },
-      },
-    ]),
+    ...(hasLimitedRead
+      ? []
+      : [
+          {
+            title: "Debit",
+            dataIndex: "debit",
+            key: "debit",
+            width: 90,
+            align: "right",
+            render: (v, r) => {
+              if (r.isBalanceRow) return null;
+              return v > 0 ? (
+                <span
+                  style={{ fontSize: 11, color: "#ff4d4f", fontWeight: 500 }}
+                >
+                  {formatCurrencyNoDecimal(v)}
+                </span>
+              ) : (
+                "-"
+              );
+            },
+          },
+          {
+            title: "Credit",
+            dataIndex: "credit",
+            key: "credit",
+            width: 90,
+            align: "right",
+            render: (v, r) => {
+              if (r.isBalanceRow) return null;
+              return v > 0 ? (
+                <span
+                  style={{ fontSize: 11, color: "#52c41a", fontWeight: 500 }}
+                >
+                  {formatCurrencyNoDecimal(v)}
+                </span>
+              ) : (
+                "-"
+              );
+            },
+          },
+          {
+            title: "Balance",
+            dataIndex: "runningBalance",
+            key: "runningBalance",
+            width: 100,
+            align: "right",
+            render: (v, r) => {
+              const color = v > 0 ? "#52c41a" : v < 0 ? "#f5222d" : "#1890ff";
+              const fontWeight = r.isBalanceRow ? 600 : 500;
+              const fontSize = r.isBalanceRow ? 13 : 11;
+              return (
+                <Text style={{ color, fontWeight, fontSize }}>
+                  {formatCurrencyNoDecimal(v)}
+                </Text>
+              );
+            },
+          },
+        ]),
   ];
 
   return (
     <div className="ledger-report">
-      <Card bodyStyle={{ padding: '8px' }}>
+      <Card bodyStyle={{ padding: "8px" }}>
         {/* Two Column Layout */}
         <Row gutter={8}>
           {/* Left Column - All Clients List */}
@@ -1434,8 +1554,8 @@ const LedgerReport = () => {
             <Card
               title="All Clients Summary"
               size="small"
-              bodyStyle={{ padding: '8px' }}
-              headStyle={{ padding: '0 12px', minHeight: '38px' }}
+              bodyStyle={{ padding: "8px" }}
+              headStyle={{ padding: "0 12px", minHeight: "38px" }}
               style={{ height: "calc(100vh - 100px)", position: "relative" }}
             >
               <Input
@@ -1497,7 +1617,7 @@ const LedgerReport = () => {
                       // Handle filter changes
                       if (filters.financeManagerName !== undefined) {
                         setFinanceManagerFilter(
-                          filters.financeManagerName?.[0] || null
+                          filters.financeManagerName?.[0] || null,
                         );
                       }
 
@@ -1530,15 +1650,20 @@ const LedgerReport = () => {
             <Card
               title={
                 selectedClientData
-                  ? `${selectedClientData.clientCode} - ${selectedClientData.displayName ||
-                  selectedClientData.companyName
-                  }`
+                  ? `${selectedClientData.clientCode} - ${
+                      selectedClientData.displayName ||
+                      selectedClientData.companyName
+                    }`
                   : "Client Detail Ledger"
               }
               size="small"
-              bodyStyle={{ padding: '8px' }}
-              headStyle={{ padding: '0 12px', minHeight: '38px' }}
-              style={{ height: "calc(100vh - 100px)", overflow: "auto", position: "relative" }}
+              bodyStyle={{ padding: "8px" }}
+              headStyle={{ padding: "0 12px", minHeight: "38px" }}
+              style={{
+                height: "calc(100vh - 100px)",
+                overflow: "auto",
+                position: "relative",
+              }}
             >
               {!selectedClient ? (
                 <Empty
@@ -1577,7 +1702,11 @@ const LedgerReport = () => {
                     </div>
                   )}
                   {/* Date Filters */}
-                  <Space direction="horizontal" style={{ width: "100%", marginBottom: 8 }} size={4}>
+                  <Space
+                    direction="horizontal"
+                    style={{ width: "100%", marginBottom: 8 }}
+                    size={4}
+                  >
                     <Select
                       value={dateFilterType}
                       onChange={handleDateFilterChange}
@@ -1614,19 +1743,19 @@ const LedgerReport = () => {
                     )}
                     {(dateFilterType === "custom" ||
                       dateFilterType === "fy") && (
-                        <RangePicker
-                          value={
-                            dateFilterType === "custom"
-                              ? customDateRange
-                              : dateRange
-                          }
-                          onChange={handleCustomDateChange}
-                          disabled={dateFilterType === "fy"}
-                          style={{ width: 260 }}
-                          format="DD/MM/YY"
-                          size="small"
-                        />
-                      )}
+                      <RangePicker
+                        value={
+                          dateFilterType === "custom"
+                            ? customDateRange
+                            : dateRange
+                        }
+                        onChange={handleCustomDateChange}
+                        disabled={dateFilterType === "fy"}
+                        style={{ width: 260 }}
+                        format="DD/MM/YY"
+                        size="small"
+                      />
+                    )}
 
                     <Button
                       icon={<ReloadOutlined />}
@@ -1648,59 +1777,152 @@ const LedgerReport = () => {
                     <>
                       <Row gutter={4} style={{ marginBottom: 8 }}>
                         <Col span={5}>
-                          <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
-                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>
-                              Opening {opening > 0 ? "(CR)" : opening < 0 ? "(DR)" : ""}
+                          <Card
+                            size="small"
+                            bodyStyle={{ padding: "6px 10px" }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "#999",
+                                marginBottom: 1,
+                              }}
+                            >
+                              Opening{" "}
+                              {opening > 0 ? "(CR)" : opening < 0 ? "(DR)" : ""}
                             </div>
-                            <div style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: opening > 0 ? "#52c41a" : opening < 0 ? "#f5222d" : "#1890ff"
-                            }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color:
+                                  opening > 0
+                                    ? "#52c41a"
+                                    : opening < 0
+                                      ? "#f5222d"
+                                      : "#1890ff",
+                              }}
+                            >
                               {formatCurrencyNoDecimal(Math.abs(opening))}
                               <span style={{ fontSize: 9, marginLeft: 2 }}>
-                                {opening > 0 ? "Credit" : opening < 0 ? "Debit" : ""}
+                                {opening > 0
+                                  ? "Credit"
+                                  : opening < 0
+                                    ? "Debit"
+                                    : ""}
                               </span>
                             </div>
                           </Card>
                         </Col>
                         <Col span={5}>
-                          <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
-                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>Total Debit</div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "#ff4d4f" }}>
+                          <Card
+                            size="small"
+                            bodyStyle={{ padding: "6px 10px" }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "#999",
+                                marginBottom: 1,
+                              }}
+                            >
+                              Total Debit
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "#ff4d4f",
+                              }}
+                            >
                               {formatCurrencyNoDecimal(totalDebit)}
                             </div>
                           </Card>
                         </Col>
                         <Col span={5}>
-                          <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
-                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>Total Credit</div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "#52c41a" }}>
+                          <Card
+                            size="small"
+                            bodyStyle={{ padding: "6px 10px" }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "#999",
+                                marginBottom: 1,
+                              }}
+                            >
+                              Total Credit
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "#52c41a",
+                              }}
+                            >
                               {formatCurrencyNoDecimal(totalCredit)}
                             </div>
                           </Card>
                         </Col>
                         <Col span={5}>
-                          <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
-                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>
-                              Closing {closing > 0 ? "(CR)" : closing < 0 ? "(DR)" : ""}
+                          <Card
+                            size="small"
+                            bodyStyle={{ padding: "6px 10px" }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "#999",
+                                marginBottom: 1,
+                              }}
+                            >
+                              Closing{" "}
+                              {closing > 0 ? "(CR)" : closing < 0 ? "(DR)" : ""}
                             </div>
-                            <div style={{
-                              fontSize: 13,
-                              fontWeight: 600,
-                              color: closing > 0 ? "#52c41a" : closing < 0 ? "#f5222d" : "#1890ff"
-                            }}>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color:
+                                  closing > 0
+                                    ? "#52c41a"
+                                    : closing < 0
+                                      ? "#f5222d"
+                                      : "#1890ff",
+                              }}
+                            >
                               {formatCurrencyNoDecimal(Math.abs(closing))}
                               <span style={{ fontSize: 9, marginLeft: 2 }}>
-                                {closing > 0 ? "Credit balance" : closing < 0 ? "Debit balance" : ""}
+                                {closing > 0
+                                  ? "Credit balance"
+                                  : closing < 0
+                                    ? "Debit balance"
+                                    : ""}
                               </span>
                             </div>
                           </Card>
                         </Col>
                         <Col span={4}>
-                          <Card size="small" bodyStyle={{ padding: '6px 10px' }}>
-                            <div style={{ fontSize: 10, color: '#999', marginBottom: 1 }}>Txns</div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "#1890ff" }}>
+                          <Card
+                            size="small"
+                            bodyStyle={{ padding: "6px 10px" }}
+                          >
+                            <div
+                              style={{
+                                fontSize: 10,
+                                color: "#999",
+                                marginBottom: 1,
+                              }}
+                            >
+                              Txns
+                            </div>
+                            <div
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 600,
+                                color: "#1890ff",
+                              }}
+                            >
                               {ledgerTableData.length}
                             </div>
                           </Card>
